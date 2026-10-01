@@ -233,6 +233,11 @@ h3 {
   .input:focus-visible {
     outline-offset: 0;
   }
+  /* Edge ajoute son propre œil : un seul bouton (celui de PasswordInput). */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
   textarea.input {
     min-height: 6rem;
     resize: vertical;

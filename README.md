@@ -28,6 +28,19 @@ npm run dev
 
 Sans `ANTHROPIC_API_KEY`, l'IA est simulée (`AI_PROVIDER=mock`) : le parcours complet fonctionne, avec des contenus factices. Pour de vrais contenus, renseigner `ANTHROPIC_API_KEY` et `AI_PROVIDER=anthropic`.
 
+## Connexion avec Google
+
+Facultative : sans les deux variables, le bouton « Continuer avec Google » n'apparaît pas.
+
+1. Créer un projet sur https://console.cloud.google.com.
+2. *API et services → Écran de consentement OAuth* : type **Externe**, laisser en mode **Test** et ajouter son adresse Google dans les **utilisateurs test**.
+3. *Identifiants → Créer des identifiants → ID client OAuth*, type **Application Web** :
+   - origine JavaScript autorisée : `http://localhost:3000` ;
+   - URI de redirection autorisée : `http://localhost:3000/api/auth/callback/google`.
+4. Copier l'ID client et le secret dans `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), puis redémarrer `npm run dev`.
+
+Seuls les scopes `openid`, `email` et `profile` sont demandés. Un compte créé par e-mail et mot de passe ne peut pas (encore) être relié à Google : la connexion Google sur la même adresse est refusée avec un message invitant à utiliser le mot de passe. Il faudra une vérification d'e-mail à l'inscription pour activer cette liaison.
+
 ## Vérifications
 
 | Commande | Rôle |
