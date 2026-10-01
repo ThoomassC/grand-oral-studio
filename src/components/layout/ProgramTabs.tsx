@@ -4,7 +4,7 @@ import { Button } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { tabLinkClass } from "./MainNav";
+import { TAB_LINK_CLASS } from "./MainNav";
 import { useUnsavedRef } from "./UnsavedChanges";
 
 const GROUPS = [
@@ -82,7 +82,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
                           setPendingHref(href);
                           window.setTimeout(() => stayRef.current?.focus(), 0);
                         }}
-                        className={tabLinkClass(active)}
+                        className={TAB_LINK_CLASS}
                       >
                         {tab.label}
                       </Link>

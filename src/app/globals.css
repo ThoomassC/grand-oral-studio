@@ -135,6 +135,49 @@
 
 @layer components {
   /*
+   * Onglet-lien, repris de la barre de la vitrine d'Opale (.tc-doc-topbar__tab) :
+   * repos en texte secondaire, survol et page courante sur un lavis primaire
+   * à 12 % découpé en squircle, page courante en graisse 600.
+   */
+  .app-tab {
+    --app-tab-fill: transparent;
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.45rem 0.85rem;
+    color: var(--opale-text-secondary);
+    font-family: var(--opale-font-body);
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.3;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .app-tab::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: var(--app-tab-fill);
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .app-tab:hover,
+  .app-tab[aria-current="page"] {
+    --app-tab-fill: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+    color: var(--opale-primary-on-surface);
+  }
+  .app-tab[aria-current="page"] {
+    font-weight: 600;
+  }
+  .app-tab:focus-visible {
+    outline-offset: -3px;
+  }
+
+  /*
    * `aria-disabled` : Opale ne grise un bouton que sous `disabled` ou
    * `aria-busy`. Nos actions indisponibles restent focalisables
    * (`aria-disabled`, pour ne pas perdre le focus) : même rendu que `disabled`.
