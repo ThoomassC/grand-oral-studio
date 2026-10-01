@@ -85,5 +85,11 @@ export const ACCOUNT_LINKING_OPTIONS = {
   allowDifferentEmails: false,
 } as const;
 
-/** Points d'entrée Better Auth fermés (404) : la liaison explicite n'est pas proposée par l'interface. */
-export const DISABLED_AUTH_PATHS = ["/link-social"];
+/**
+ * Points d'entrée HTTP de Better Auth fermés (404) :
+ * - `/link-social` : la liaison explicite n'est pas proposée par l'interface ;
+ * - `/update-user` : Better Auth n'y borne pas le nom ; l'app passe par l'action
+ *   serveur de /profil, validée par zod, qui appelle `auth.api.updateUser`
+ *   directement (les appels internes ne passent pas par ce filtre HTTP).
+ */
+export const DISABLED_AUTH_PATHS = ["/link-social", "/update-user"];

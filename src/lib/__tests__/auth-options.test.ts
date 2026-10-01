@@ -76,6 +76,10 @@ describe("DISABLED_AUTH_PATHS", () => {
   it("devrait fermer la liaison explicite /link-social, inutilisée par l'interface", () => {
     expect(DISABLED_AUTH_PATHS).toContain("/link-social");
   });
+
+  it("devrait fermer /update-user : Better Auth n'y borne pas le nom, l'app passe par une action validée", () => {
+    expect(DISABLED_AUTH_PATHS).toContain("/update-user");
+  });
 });
 
 describe("googleButtonState", () => {
