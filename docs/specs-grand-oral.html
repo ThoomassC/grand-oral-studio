@@ -1,0 +1,250 @@
+<title>Specs Grand Oral Studio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout : colonne de lecture unique, une piste d'étapes numérotées (le parcours est réellement séquentiel) */
+:root{
+  --bg:#f7f7f4; --surface:#ffffff; --fg:#17171b; --muted:#5d5d66; --line:#e2e2dc;
+  --accent:#ffcc00; --on-accent:#17171b; --todo:#8a8a93; --doing:#b07800; --done:#2f7d4f; --risk:#b3412e;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Source Sans 3",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131316; --surface:#1c1c21; --fg:#ededea; --muted:#a3a3ab; --line:#2e2e35;
+  --accent:#ffd42a; --on-accent:#131316; --todo:#8e8e98; --doing:#f0b429; --done:#5cc48a; --risk:#f07b66; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131316; --surface:#1c1c21; --fg:#ededea; --muted:#a3a3ab; --line:#2e2e35;
+  --accent:#ffd42a; --on-accent:#131316; --todo:#8e8e98; --doing:#f0b429; --done:#5cc48a; --risk:#f07b66; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:400 1.0625rem/1.6 var(--body);padding:0 16px}
+main{max-width:46rem;margin:0 auto;padding-block:3rem 4rem;display:flex;flex-direction:column;gap:2.75rem}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(2rem,6vw,2.9rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:1.5rem;font-weight:800;margin-bottom:.9rem}
+h3{font-size:1.1rem;font-weight:600}
+p{margin:0}
+.eyebrow,.label{font:500 .75rem/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+header{display:flex;flex-direction:column;gap:.9rem}
+.mark{display:inline-block;background:var(--accent);color:var(--on-accent);padding:0 .25em}
+.lede{color:var(--muted);max-width:40rem}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:.5rem}
+.facts div{background:var(--surface);padding:.85rem 1rem;display:flex;flex-direction:column;gap:.35rem}
+.facts b{font:800 1.5rem/1 var(--display);font-variant-numeric:tabular-nums}
+.facts span{font-size:.9rem;color:var(--muted);line-height:1.3}
+ul{margin:0;padding-left:1.15rem;display:flex;flex-direction:column;gap:.35rem}
+.concepts{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.75rem 1.5rem}
+.concepts div{border-top:2px solid var(--fg);padding-top:.6rem;display:flex;flex-direction:column;gap:.25rem;min-width:0}
+.concepts p{color:var(--muted);font-size:.95rem}
+code{font:500 .85em var(--mono);background:var(--line);padding:.05em .3em;border-radius:3px}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.step{display:grid;grid-template-columns:2.6rem 1fr;gap:0 1rem;padding-bottom:1.6rem;position:relative}
+.step::before{content:"";position:absolute;left:1.25rem;top:2.6rem;bottom:0;width:2px;background:var(--line)}
+.step:last-child::before{display:none}
+.num{width:2.6rem;height:2.6rem;display:grid;place-items:center;font:800 1.1rem var(--display);border:2px solid var(--fg);border-radius:50%;background:var(--bg);font-variant-numeric:tabular-nums}
+.step.ia .num{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.step-body{display:flex;flex-direction:column;gap:.5rem;min-width:0;padding-top:.3rem}
+.step-head{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem}
+.pill{font:500 .7rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:.35em .6em;border:1px solid currentColor;border-radius:999px}
+.todo{color:var(--todo)} .doing{color:var(--doing)} .done{color:var(--done)}
+.step ul{font-size:.97rem}
+.accept{font-size:.92rem;color:var(--muted)}
+.accept strong{color:var(--fg);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;font-size:.9rem;color:var(--muted);margin-bottom:1.2rem;align-items:center}
+.dot{display:inline-block;width:.8rem;height:.8rem;border-radius:50%;vertical-align:-.05em;margin-right:.35rem}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+.tablewrap{overflow-x:auto}
+th,td{text-align:left;padding:.55rem .75rem .55rem 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 .72rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+td:first-child{font-weight:600;white-space:nowrap}
+.risk{border-left:3px solid var(--risk);padding:.2rem 0 .2rem 1rem;display:flex;flex-direction:column;gap:.3rem}
+.risk h3{color:var(--risk)}
+.stack{display:flex;flex-direction:column;gap:1rem}
+.guard li::marker{content:"✕  ";color:var(--risk)}
+.q li::marker{content:"?  ";color:var(--doing);font-weight:700}
+footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padding-top:1rem}
+</style>
+
+<main>
+<header>
+  <p class="eyebrow">Cahier des charges · v0.3 · 1 oct. 2026</p>
+  <h1>Grand Oral <span class="mark">Studio</span></h1>
+  <p class="lede">Une app web qui prépare à l'avance un diaporama générique par thème du grand oral, puis, le jour J, transforme la problématique tirée au sort en diaporama complet, en reconnaissant le thème si personne ne l'a donné.</p>
+  <div class="facts">
+    <div><b>9</b><span>thèmes à préparer (MAALSI, configurable)</span></div>
+    <div><b>1 h 30</b><span>de préparation le jour J, génération incluse</span></div>
+    <div><b>&lt; 3 min</b><span>cible : problématique → deck prêt</span></div>
+    <div><b>N</b><span>utilisateurs, chacun ses programmes</span></div>
+  </div>
+</header>
+
+<section>
+  <h2>Le besoin en une phrase</h2>
+  <p>Arriver au grand oral avec une structure déjà maîtrisée pour chaque thème, et ne consacrer les 1 h 30 qu'au fond : l'app produit le support, l'étudiant prépare son discours.</p>
+</section>
+
+<section>
+  <h2>Les objets de l'app</h2>
+  <div class="concepts">
+    <div><h3>Programme</h3><p>Une formation et son oral : « MAALSI 2026 », la liste de ses thèmes, la durée de l'oral. Partageable entre étudiants d'une même promo.</p></div>
+    <div><h3>Thème</h3><p>Nom, description, mots-clés, notions et exemples attendus. Sert de référence à l'IA pour reconnaître le thème d'une problématique.</p></div>
+    <div><h3>Charte graphique</h3><p>Couleurs, polices, logo, gabarits de mise en page. Une charte « CESI » fournie par défaut, d'autres créables.</p></div>
+    <div><h3>Gabarit de prompt</h3><p>Format (16:9), nombre de diapos, structure des sections, ton, contraintes. Variables <code>{{theme}}</code>, <code>{{problematique}}</code>, <code>{{duree}}</code>.</p></div>
+    <div><h3>Deck squelette</h3><p>Un diaporama générique par thème, généré à partir du gabarit et de la charte. C'est ce qu'on révise avant le jour J.</p></div>
+    <div><h3>Deck final</h3><p>Le squelette du thème reconnu, rempli pour une problématique précise, avec notes d'orateur.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Étapes de construction</h2>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--todo)"></span>À faire</span>
+    <span><span class="dot" style="background:var(--doing)"></span>En cours</span>
+    <span><span class="dot" style="background:var(--done)"></span>Fait</span>
+    <span><span class="dot" style="background:var(--accent)"></span>Étape qui appelle l'IA</span>
+  </div>
+  <ol class="steps">
+    <li class="step">
+      <span class="num">1</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Socle : comptes et programmes</h3><span class="pill done">Fait</span></div>
+        <ul>
+          <li>Connexion, chaque utilisateur ne voit que ses programmes (contrôle côté serveur).</li>
+          <li>Créer un programme, saisir ses thèmes, ou dupliquer un programme partagé par la promo.</li>
+          <li>Import des thèmes par collage d'une liste ou d'un fichier.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> deux comptes différents ont chacun leur programme MAALSI à 9 thèmes sans voir celui de l'autre.</p>
+      </div>
+    </li>
+    <li class="step">
+      <span class="num">2</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Charte graphique</h3><span class="pill done">Fait</span></div>
+        <ul>
+          <li>Charte CESI par défaut : palette jaune et noir, polices, emplacement du logo, gabarits titre / contenu / section / conclusion.</li>
+          <li>Éditeur simple : couleurs, polices, logo importé par l'utilisateur.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> un aperçu des 4 gabarits s'affiche dans la charte choisie.</p>
+      </div>
+    </li>
+    <li class="step">
+      <span class="num">3</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Gabarit de prompt configurable</h3><span class="pill done">Fait</span></div>
+        <ul>
+          <li>Formulaire : format, durée de l'oral, nombre de diapos, sections ordonnées (intro, problématique, plan, parties, conclusion, ouverture), ton, contraintes.</li>
+          <li>Le nombre de diapos se calcule depuis la durée, modifiable à la main.</li>
+          <li>Aperçu du prompt final assemblé, avec ses variables.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> changer la durée ou une section met à jour l'aperçu du prompt en direct.</p>
+      </div>
+    </li>
+    <li class="step ia">
+      <span class="num">4</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Génération des decks squelettes</h3><span class="pill done">Fait</span></div>
+        <ul>
+          <li>Un deck par thème du programme : 9 thèmes donnent 9 decks.</li>
+          <li>L'IA produit le contenu générique de chaque diapo (titres, angles d'attaque, notions clés du thème) en JSON validé par un schéma.</li>
+          <li>Relance d'un seul thème ou d'une seule diapo possible.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> les 9 squelettes sont générés, consultables et exportables.</p>
+      </div>
+    </li>
+    <li class="step ia">
+      <span class="num">5</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Problématique et reconnaissance du thème</h3><span class="pill doing">À valider avec l'IA réelle</span></div>
+        <ul>
+          <li>Saisie de la problématique tirée, avec ou sans thème indiqué.</li>
+          <li>L'IA classe la problématique parmi les thèmes du programme : top 3 avec score de confiance et justification courte.</li>
+          <li>L'utilisateur confirme ou corrige le thème avant la génération.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> sur un jeu de 20 problématiques étiquetées, le bon thème est premier au moins 17 fois.</p>
+      </div>
+    </li>
+    <li class="step ia">
+      <span class="num">6</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Deck final complet</h3><span class="pill doing">À valider avec l'IA réelle</span></div>
+        <ul>
+          <li>Part du squelette du thème reconnu et le remplit pour la problématique : plan argumenté, exemples, conclusion, ouverture.</li>
+          <li>Notes d'orateur par diapo, calées sur la durée de l'oral.</li>
+          <li>Écran de relecture : modifier une diapo, en régénérer une seule.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> problématique saisie → deck relisible en moins de 3 minutes.</p>
+      </div>
+    </li>
+    <li class="step">
+      <span class="num">7</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Export PowerPoint</h3><span class="pill done">Fait</span></div>
+        <ul>
+          <li>Fichier .pptx généré depuis le modèle de deck, charte appliquée, notes d'orateur incluses.</li>
+          <li>Plan B retenu : c'est ce fichier qui sert aussi de passerelle vers Canva.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> le .pptx s'ouvre sans erreur dans PowerPoint et Keynote.</p>
+      </div>
+    </li>
+    <li class="step">
+      <span class="num">8</span>
+      <div class="step-body">
+        <div class="step-head"><h3>Passage dans Canva</h3><span class="pill doing">À tester dans Canva</span></div>
+        <ul>
+          <li>Import du .pptx dans Canva, avec la marche à suivre affichée dans l'app.</li>
+          <li>Prompt prêt à coller dans l'IA de Canva : charte et contenu diapo par diapo.</li>
+          <li>Plus tard : création directe par l'API Canva, si l'offre le permet.</li>
+        </ul>
+        <p class="accept"><strong>Validé quand</strong> le deck importé s'ouvre dans Canva avec ses textes et ses couleurs.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>Choix techniques proposés</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Brique</th><th>Choix</th><th>Pourquoi</th></tr></thead>
+    <tbody>
+      <tr><td>App</td><td>Next.js + TypeScript</td><td>Front et API dans un seul projet, typage de bout en bout.</td></tr>
+      <tr><td>Données</td><td>PostgreSQL + Prisma</td><td>Multi-utilisateurs, programmes partagés, historique des decks.</td></tr>
+      <tr><td>IA</td><td>API Claude, sortie JSON validée</td><td>Classification du thème et rédaction ; un schéma rejette toute réponse mal formée.</td></tr>
+      <tr><td>Modèle de deck</td><td>Format JSON interne unique</td><td>Une seule source pour Canva, PowerPoint et l'aperçu dans l'app.</td></tr>
+      <tr><td>Export</td><td>API Canva Connect, puis pptxgenjs</td><td>Canva d'abord comme demandé, PowerPoint ensuite sans refaire la génération.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="stack">
+  <h2>Risques et points ouverts</h2>
+  <div class="risk">
+    <h3>API Canva : plan B retenu</h3>
+    <p>Le remplissage de modèles par l'API (Autofill, brand templates) est réservé à certaines offres Canva. Décision du 1 oct. : on génère un .pptx que l'on importe dans Canva, et on fournit en plus un prompt prêt à coller dans l'IA de Canva. L'API Canva directe devient une option ultérieure.</p>
+  </div>
+  <div class="risk">
+    <h3>Le règlement de l'oral</h3>
+    <p>Vérifier que l'usage d'un outil d'IA pendant les 1 h 30 est autorisé. Sinon, l'app sert à la préparation en amont (squelettes, entraînement sur des problématiques blanches) et non le jour J.</p>
+  </div>
+  <div>
+    <h3 style="margin-bottom:.5rem">Questions à trancher</h3>
+    <ul class="q">
+            <li>Liste exacte des 9 thèmes MAALSI et durée de l'oral (pour le test réel).</li>
+      <li>Clé API Anthropic pour valider la qualité des decks et la reconnaissance du thème.</li>
+      <li>La charte CESI : fichiers officiels disponibles (logo, polices) ou reconstitution approximative ?</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Garde-fous contre la dérive</h2>
+  <ul class="guard">
+    <li>Rien de spécifique à MAALSI dans le code : thèmes, charte et gabarit sont des données.</li>
+    <li>Pas d'éditeur de diapos complet : on relit et on régénère, la mise en forme fine se fait dans Canva.</li>
+    <li>Pas d'intégration directe à l'API Canva tant que l'import .pptx et le prompt Canva ne fonctionnent pas de bout en bout.</li>
+    <li>Pas de fonctionnalité qui rallonge le parcours du jour J au-delà de 3 minutes.</li>
+  </ul>
+</section>
+
+<footer>Document de référence suivi pendant le développement. Chaque étape passe à « Fait » seulement quand son critère de validation est vérifié.</footer>
+</main>
