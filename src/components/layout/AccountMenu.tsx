@@ -18,6 +18,10 @@ import { LiveRegion } from "@/components/ui/LiveRegion";
  * fermer, focus rendu au bouton). Le titre — nom et e-mail — est la légende
  * du groupe d'actions (`role="group"`), non interactive.
  *
+ * Apparence : celle du sélecteur de langue de l'en-tête d'Opale (boîte
+ * encadrée + chevron, liste en carte) — voir `.header-control` et
+ * `.header-menu` dans globals.css.
+ *
  * Opale n'a pas d'élément de menu-lien : « Informations du profil » navigue
  * par le routeur à l'activation.
  */
@@ -28,27 +32,37 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
   return (
     <div className="flex items-center gap-2">
       <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Compte : ${email}`}
-          className="opale-button opale-button--text opale-icon-action-button"
-        >
+        <DropdownMenuTrigger aria-label={`Compte : ${email}`} className="header-control header-control--menu">
           <span aria-hidden="true" className="inline-flex">
             <Icon name="user" />
           </span>
+          <span aria-hidden="true" className="header-control__caret" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent aria-label="Compte" placement="bottom" align="end" className="min-w-[16rem] max-w-[min(20rem,calc(100vw-2rem))]">
+        <DropdownMenuContent
+          aria-label="Compte"
+          placement="bottom"
+          align="end"
+          className="header-menu min-w-[16rem] max-w-[min(20rem,calc(100vw-2rem))]"
+        >
           <DropdownMenuGroup
+            className="grid gap-[var(--opale-space-2xs)]"
             label={
-              <span className="block px-1 py-1">
+              <span className="header-menu__title block">
                 {name ? <span className="block truncate font-semibold text-text">{name}</span> : null}
-                <span className="block truncate text-sm text-muted">{email}</span>
+                <span className="block truncate text-sm font-normal text-muted">{email}</span>
               </span>
             }
           >
-            <DropdownMenuItem value="profil" onSelect={() => router.push("/profil")}>
+            <DropdownMenuItem className="header-menu__item" value="profil" onSelect={() => router.push("/profil")}>
               Informations du profil
             </DropdownMenuItem>
-            <DropdownMenuItem value="deconnexion" closeOnSelect={false} disabled={pending} onSelect={signOut}>
+            <DropdownMenuItem
+              className="header-menu__item"
+              value="deconnexion"
+              closeOnSelect={false}
+              disabled={pending}
+              onSelect={signOut}
+            >
               {pending ? "Déconnexion…" : "Se déconnecter"}
             </DropdownMenuItem>
           </DropdownMenuGroup>

@@ -135,6 +135,157 @@
 
 @layer components {
   /*
+   * Contrôles de l'en-tête : la boîte encadrée de l'en-tête d'Opale
+   * (`HeaderThemeToggle`, déclencheur de `LanguageSelector`, non exportés par
+   * le paquet — repris de header-controls/HeaderControls.module.css avec les
+   * mêmes jetons). Filet et fond peints par deux pseudo-éléments en squircle ;
+   * le filet passe au primaire au survol et menu ouvert.
+   */
+  .header-control {
+    --header-control-border: var(--opale-divider);
+    position: relative;
+    isolation: isolate;
+    min-height: var(--opale-control-md);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--opale-text);
+    cursor: pointer;
+    font: inherit;
+  }
+  .header-control::before,
+  .header-control::after {
+    position: absolute;
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+  }
+  .header-control::before {
+    z-index: -2;
+    inset: 0;
+    background: var(--header-control-border);
+  }
+  .header-control::after {
+    z-index: -1;
+    inset: 1px;
+    background: var(--opale-surface);
+  }
+  .header-control:hover,
+  .header-control[aria-expanded="true"] {
+    --header-control-border: var(--opale-primary);
+  }
+  .header-control:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: var(--opale-focus-ring-offset);
+  }
+  /* Bouton carré (thème) : `.theme` d'Opale. */
+  .header-control--square {
+    display: grid;
+    width: var(--opale-control-md);
+    place-items: center;
+    font-size: var(--opale-text-md);
+  }
+  .header-control__moon,
+  .header-control__sun {
+    font-size: var(--opale-text-lg);
+  }
+  .header-control__moon {
+    color: var(--opale-primary-on-surface);
+  }
+  .header-control__sun {
+    color: var(--opale-accent-graphic);
+  }
+  /* Bouton à libellé et chevron (menu du compte) : `.languageTrigger` d'Opale. */
+  .header-control--menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--opale-space-xs);
+    padding-inline: var(--opale-space-sm);
+    font-size: var(--opale-text-lg);
+  }
+  .header-control__caret {
+    width: 0.4rem;
+    height: 0.4rem;
+    flex: none;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    color: var(--opale-text-secondary);
+    transform: translateY(-0.1rem) rotate(45deg);
+    transition: transform var(--opale-motion) var(--opale-ease);
+  }
+  .header-control[aria-expanded="true"] .header-control__caret {
+    transform: translateY(0.1rem) rotate(-135deg);
+  }
+  .header-control:hover .header-control__caret {
+    color: var(--opale-primary-on-surface);
+  }
+
+  /*
+   * Panneau du menu du compte : la liste de `LanguageSelector` d'Opale
+   * (`.languageList` / `.option`), posée sur `DropdownMenuContent` /
+   * `DropdownMenuItem`. L'élément focalisé prend le lavis « actif » d'Opale ;
+   * un anneau de focus s'y ajoute au clavier (le lavis seul ne tient pas 3:1
+   * sur la surface).
+   */
+  .header-menu {
+    display: grid;
+    min-width: 100%;
+    gap: var(--opale-space-2xs);
+    margin: 0;
+    padding: var(--opale-space-2xs);
+    border: 1px solid var(--opale-divider);
+    border-radius: var(--opale-radius-md);
+    background: var(--opale-surface);
+    box-shadow: var(--opale-shadow-4);
+  }
+  .header-menu__title {
+    padding: var(--opale-space-xs) var(--opale-space-sm);
+  }
+  .header-menu__item {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    min-height: var(--opale-control-sm);
+    align-items: center;
+    padding-inline: var(--opale-space-sm);
+    border-radius: 0;
+    background: transparent;
+    color: var(--opale-text);
+    cursor: pointer;
+    outline: none;
+  }
+  .header-menu__item::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: transparent;
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .header-menu__item:hover::before,
+  .header-menu__item:focus::before {
+    background: color-mix(in srgb, var(--opale-primary) 34%, transparent);
+  }
+  .header-menu__item:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: calc(-1 * var(--opale-focus-ring-width));
+    border-radius: calc(var(--opale-squircle-radius) * 0.68);
+  }
+  .header-menu__item[aria-disabled="true"] {
+    cursor: progress;
+    opacity: var(--opale-disabled-opacity);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .header-control__caret,
+    .header-menu__item::before {
+      transition: none;
+    }
+  }
+
+  /*
    * Onglet-lien, repris de la barre de la vitrine d'Opale (.tc-doc-topbar__tab) :
    * repos en texte secondaire, survol et page courante sur un lavis primaire
    * à 12 % découpé en squircle, page courante en graisse 600.
