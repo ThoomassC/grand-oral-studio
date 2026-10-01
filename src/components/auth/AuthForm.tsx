@@ -8,6 +8,7 @@ import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import type { GoogleButtonState } from "@/lib/auth-options";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { PasswordInput } from "./PasswordInput";
 
@@ -49,12 +50,12 @@ interface AuthFormProps {
   mode: Mode;
   next: string;
   /** Connexion Google configurée côté serveur (booléen seul, aucun identifiant). */
-  googleEnabled: boolean;
+  google: GoogleButtonState;
   /** Message d'erreur à afficher dès l'arrivée (retour d'échec OAuth). */
   initialError?: string | null;
 }
 
-export function AuthForm({ mode, next, googleEnabled, initialError = null }: AuthFormProps) {
+export function AuthForm({ mode, next, google, initialError = null }: AuthFormProps) {
   const router = useRouter();
   const isSignup = mode === "signup";
   const ids = { name: useId(), email: useId(), password: useId(), hint: useId() };
@@ -208,14 +209,18 @@ export function AuthForm({ mode, next, googleEnabled, initialError = null }: Aut
         </button>
       </form>
 
-      {googleEnabled ? (
+      {google !== "hidden" ? (
         <>
           <div className="flex items-center gap-3 text-sm text-muted">
             <span aria-hidden="true" className="h-px flex-1 bg-border" />
             ou
             <span aria-hidden="true" className="h-px flex-1 bg-border" />
           </div>
-          <GoogleSignInButton next={next} onStart={() => setOauthErrorDismissed(true)} />
+          <GoogleSignInButton
+            next={next}
+            configured={google === "enabled"}
+            onStart={() => setOauthErrorDismissed(true)}
+          />
         </>
       ) : null}
 

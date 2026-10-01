@@ -56,6 +56,18 @@ export function isGoogleSignInEnabled(env: Record<string, string | undefined>): 
   return googleProviderOptions(env) !== undefined;
 }
 
+export type GoogleButtonState = "enabled" | "unconfigured" | "hidden";
+
+/**
+ * Affichage du bouton Google : actif s'il est configuré ; en développement,
+ * visible mais inactif pour signaler qu'il reste à configurer ; masqué en
+ * production plutôt que d'afficher un bouton inutilisable.
+ */
+export function googleButtonState(env: Record<string, string | undefined>): GoogleButtonState {
+  if (isGoogleSignInEnabled(env)) return "enabled";
+  return env.NODE_ENV === "production" ? "hidden" : "unconfigured";
+}
+
 /**
  * Liaison d'un compte Google à un compte e-mail/mot de passe de même adresse :
  * REFUSÉE tant que l'app ne vérifie pas les adresses à l'inscription.

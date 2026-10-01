@@ -4,7 +4,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthForm } from "@/components/auth/AuthForm";
 import { safeNextPath } from "@/components/auth/next-path";
 import { oauthErrorMessage } from "@/components/auth/oauth-error";
-import { isGoogleSignInEnabled } from "@/lib/auth-options";
+import { googleButtonState } from "@/lib/auth-options";
 import { getUser } from "@/server/session";
 
 export async function generateMetadata({ searchParams }: PageProps<"/connexion">): Promise<Metadata> {
@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/connexion"
       <AuthForm
         mode="signin"
         next={next}
-        googleEnabled={isGoogleSignInEnabled(process.env)}
+        google={googleButtonState(process.env)}
         initialError={oauthErrorMessage(params.error)}
       />
     </AuthCard>

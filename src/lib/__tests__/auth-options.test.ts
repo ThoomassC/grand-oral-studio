@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  googleButtonState,
   ACCOUNT_LINKING_OPTIONS,
   DISABLED_AUTH_PATHS,
   googleProviderOptions,
@@ -74,5 +75,21 @@ describe("ACCOUNT_LINKING_OPTIONS", () => {
 describe("DISABLED_AUTH_PATHS", () => {
   it("devrait fermer la liaison explicite /link-social, inutilisée par l'interface", () => {
     expect(DISABLED_AUTH_PATHS).toContain("/link-social");
+  });
+});
+
+describe("googleButtonState", () => {
+  const keys = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
+
+  it("vaut enabled quand les deux identifiants sont définis", () => {
+    expect(googleButtonState({ ...keys, NODE_ENV: "production" })).toBe("enabled");
+  });
+
+  it("vaut unconfigured en développement sans identifiants, pour montrer le bouton à configurer", () => {
+    expect(googleButtonState({ NODE_ENV: "development" })).toBe("unconfigured");
+  });
+
+  it("vaut hidden en production sans identifiants, pour ne pas afficher un bouton inutilisable", () => {
+    expect(googleButtonState({ NODE_ENV: "production" })).toBe("hidden");
   });
 });

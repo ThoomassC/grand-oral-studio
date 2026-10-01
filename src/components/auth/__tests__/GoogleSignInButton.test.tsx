@@ -49,4 +49,15 @@ describe("GoogleSignInButton", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("La connexion avec Google n'a pas pu démarrer. Réessayez.");
   });
+
+  it("ne devrait rien lancer et expliquer quoi faire quand Google n'est pas configuré", async () => {
+    const user = userEvent.setup();
+    render(<GoogleSignInButton next="/programmes" configured={false} />);
+
+    const button = screen.getByRole("button", { name: "Continuer avec Google" });
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAccessibleDescription(/pas encore configurée/);
+    await user.click(button);
+    expect(social).not.toHaveBeenCalled();
+  });
 });
