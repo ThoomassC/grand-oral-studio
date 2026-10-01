@@ -1,6 +1,7 @@
 import { getDeck as repoGetDeck, listFinalDecks as repoListFinalDecks } from "./repo/decks";
 import { getProgram as repoGetProgram, listPrograms as repoListPrograms } from "./repo/programs";
-import type { AiSettingsView, DeckWithProgram, FinalDeckSummary, ProgramDetail, ProgramSummary } from "./repo/types";
+import { getProfile as repoGetProfile } from "./repo/profile";
+import type { AiSettingsView, DeckWithProgram, FinalDeckSummary, ProfileView, ProgramDetail, ProgramSummary } from "./repo/types";
 import { listOllamaModels } from "./ai/ollama";
 import { createLogger } from "./logger";
 import { getAiSettingsView } from "./services/ai-settings";
@@ -12,8 +13,13 @@ import { getAiSettingsView } from "./services/ai-settings";
  */
 
 export type { DeckWithProgram, FinalDeckSummary, ProgramDetail, ProgramSummary } from "./repo/types";
-export type { AiSettingsView, DeckView, ThemeView, ThemeWithSkeleton } from "./repo/types";
+export type { AiSettingsView, DeckView, ProfileView, SignInMethod, ThemeView, ThemeWithSkeleton } from "./repo/types";
 export { NotFoundError } from "./errors";
+
+/** Profil de l'utilisateur connecté (page /profil) ; null si le compte n'existe plus. */
+export function getProfile(userId: string): Promise<ProfileView | null> {
+  return repoGetProfile(userId);
+}
 
 export function listPrograms(userId: string): Promise<ProgramSummary[]> {
   return repoListPrograms(userId);

@@ -113,3 +113,16 @@ export interface AiSettingsView {
     };
   };
 }
+
+/** Méthode de connexion d'un compte : e-mail et mot de passe, ou Google. */
+export type SignInMethod = "password" | "google";
+
+/** Profil de l'utilisateur (page /profil). Aucun secret ni identifiant de compte. */
+export interface ProfileView {
+  name: string;
+  email: string;
+  /** ISO 8601. */
+  createdAt: string;
+  signInMethods: SignInMethod[];
+  projectCount: number;
+}

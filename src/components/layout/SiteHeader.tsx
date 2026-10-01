@@ -1,16 +1,16 @@
-import { Icon, Topbar, TopbarActions, TopbarBrand } from "@thomascaron/opale-ui";
+import { Topbar, TopbarActions, TopbarBrand } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { getUser } from "@/server/session";
-import { SignOutButton } from "@/components/auth/SignOutButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { AccountMenu } from "./AccountMenu";
 import { BrandMark } from "./BrandMark";
 import { MainNav } from "./MainNav";
 
 /**
  * En-tête global : la `Topbar` d'Opale (parties nommées : Server Component).
- * Ordre de tabulation : logo → Projets → Paramètres → thème → Se déconnecter
- * (le compte, entre les deux, est un texte).
+ * Ordre de tabulation : logo → Projets → Paramètres → thème → menu du compte
+ * (e-mail, informations du profil, déconnexion).
  */
 export async function SiteHeader() {
   const user = await getUser();
@@ -32,14 +32,7 @@ export async function SiteHeader() {
       <TopbarActions className="ml-auto flex-wrap">
         <ThemeToggle />
         {user ? (
-          <>
-            {/* Le compte : l'icône de profil (décorative) et l'adresse, masquée à l'œil sur mobile mais toujours lue. */}
-            <p className="flex min-w-0 items-center gap-1.5 px-1 text-sm text-muted" title={user.email}>
-              <Icon name="user" aria-hidden="true" />
-              <span className="max-w-[14rem] truncate max-md:sr-only">{user.email}</span>
-            </p>
-            <SignOutButton />
-          </>
+          <AccountMenu name={user.name} email={user.email} />
         ) : (
           <>
             <ButtonLink href="/connexion" variant="text" size="small">
