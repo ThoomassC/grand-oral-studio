@@ -367,6 +367,28 @@
     margin-top: var(--opale-space-2xs);
   }
 
+  /*
+   * Sommaire des Paramètres (Sidebar d'Opale). Sous 768 px il passe au-dessus
+   * du contenu : pleine largeur déplié, en ligne (bascule + icônes) replié,
+   * pour ne pas occuper toute la hauteur de l'écran.
+   */
+  @media (max-width: 767px) {
+    .settings-toc {
+      width: 100%;
+      max-width: 100%;
+    }
+    .settings-toc[data-collapsed] {
+      flex-direction: row;
+      align-items: center;
+      width: auto;
+      gap: var(--opale-space-xs);
+    }
+    .settings-toc[data-collapsed] .opale-sidebar__items {
+      flex-direction: row;
+      gap: var(--opale-space-xs);
+    }
+  }
+
   /* Zone de texte dans la coquille d'Opale (voir components/ui/Field.tsx). */
   .opale-input-shell--textarea {
     align-items: stretch;
