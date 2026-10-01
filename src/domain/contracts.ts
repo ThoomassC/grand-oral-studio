@@ -34,7 +34,7 @@ export interface RankedTheme {
 
 export interface ClassificationResult {
   reformulatedProblem: string;
-  /** Au plus 3, triés par confiance décroissante, uniquement des thèmes du programme. */
+  /** Au plus 3, uniquement des thèmes du programme, triés par confiance décroissante — sauf le thème annoncé (hintedThemeId), toujours placé en tête. */
   ranked: RankedTheme[];
 }
 

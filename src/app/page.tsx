@@ -1,69 +1,69 @@
-import Image from "next/image";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getUser } from "@/server/session";
 
-export default function Home() {
+const STEPS = [
+  {
+    title: "Configurer le programme",
+    text: "Listez les thèmes de votre programme, puis réglez la charte graphique et le gabarit : format, durée de l'oral, sections attendues.",
+  },
+  {
+    title: "Réviser les squelettes",
+    text: "L'IA prépare un diaporama squelette par thème. Vous les relisez et les complétez avant le jour J.",
+  },
+  {
+    title: "Le jour J",
+    text: "Saisissez la problématique tirée au sort : l'IA reconnaît le thème, vous confirmez, et le deck complet avec notes d'orateur est prêt à exporter vers PowerPoint ou Canva.",
+  },
+] as const;
+
+export default async function HomePage() {
+  const user = await getUser();
+  if (user) redirect("/programmes");
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
+      <div className="max-w-2xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-accent-strong">Préparation du grand oral</p>
+        <h1 className="mt-3 text-4xl font-bold sm:text-5xl">
+          Une problématique tirée au sort, un diaporama prêt en quelques minutes.
+        </h1>
+        <p className="mt-5 text-lg text-muted">
+          Grand Oral Studio vous aide à préparer chaque thème à l&apos;avance, puis à produire le jour J un support
+          fidèle à votre charte, que vous relisez et ajustez pendant votre temps de préparation.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link href="/inscription" className="btn btn-primary">
+            Créer un compte
+          </Link>
+          <Link href="/connexion" className="btn btn-secondary">
+            J&apos;ai déjà un compte
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
+
+      <section aria-labelledby="etapes" className="mt-16">
+        <h2 id="etapes" className="text-xl font-semibold">
+          En trois étapes
+        </h2>
+        <ol className="mt-6 grid gap-4 md:grid-cols-3">
+          {STEPS.map((step, i) => (
+            <li key={step.title} className="card p-5">
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft font-display font-bold text-accent-strong"
+              >
+                {i + 1}
+              </span>
+              <h3 className="mt-4 text-lg font-semibold">
+                <span className="sr-only">Étape {i + 1} : </span>
+                {step.title}
+              </h3>
+              <p className="mt-2 text-muted">{step.text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }

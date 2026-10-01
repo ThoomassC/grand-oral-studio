@@ -16,7 +16,8 @@
     "db:validate": "prisma validate",
     "db:studio": "prisma studio",
     "db:test:migrate": "PRISMA_DB=test prisma migrate deploy",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:int": "VITEST_INTEGRATION=1 vitest run --project integration"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

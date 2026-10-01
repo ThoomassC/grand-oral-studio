@@ -22,6 +22,8 @@ function createClient(): PrismaClient {
     statement_timeout: 15_000,
     lock_timeout: 5_000,
     idle_in_transaction_session_timeout: 15_000,
+    // Session en UTC : sinon les dates envoyées par l'adaptateur et now() divergent du décalage du serveur.
+    options: "-c TimeZone=UTC",
   });
   return new PrismaClient({ adapter });
 }

@@ -1,0 +1,240 @@
+"use client";
+
+import { useOptimistic, useState, useTransition } from "react";
+import type { ThemeInput } from "@/domain/schemas";
+import { addTheme, deleteTheme, reorderThemes, updateTheme } from "@/server/actions/themes";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { ThemeForm } from "./ThemeForm";
+import { ThemeImport } from "./ThemeImport";
+
+export interface ThemeItem {
+  id: string;
+  name: string;
+  description: string;
+  keywords: string[];
+  hasSkeleton: boolean;
+}
+
+function moveButtonId(themeId: string, dir: "up" | "down") {
+  return `move-${dir}-${themeId}`;
+}
+
+export function ThemeManager({ programId, themes }: { programId: string; themes: ThemeItem[] }) {
+  const [optimisticThemes, setOptimisticThemes] = useOptimistic(themes);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"none" | "add" | "import">(themes.length === 0 ? "add" : "none");
+  const [announce, setAnnounce] = useState("");
+  const [reorderError, setReorderError] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function closeEditor(themeId: string) {
+    setEditingId(null);
+    requestAnimationFrame(() => document.getElementById(`edit-${themeId}`)?.focus());
+  }
+
+  function move(index: number, dir: "up" | "down") {
+    const target = dir === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= optimisticThemes.length) return;
+    const next = [...optimisticThemes];
+    const [moved] = next.splice(index, 1);
+    if (!moved) return;
+    next.splice(target, 0, moved);
+    setReorderError(null);
+    setAnnounce(`« ${moved.name} » déplacé en position ${target + 1} sur ${next.length}.`);
+
+    // Le bouton déplacé change de place dans le DOM : on lui rend le focus,
+    // ou à son voisin s'il devient inactif (premier / dernier rang).
+    const atEdge = target === 0 || target === next.length - 1;
+    const focusDir = atEdge ? (dir === "up" ? "down" : "up") : dir;
+    requestAnimationFrame(() => document.getElementById(moveButtonId(moved.id, focusDir))?.focus());
+
+    startTransition(async () => {
+      setOptimisticThemes(next);
+      const result = await reorderThemes(
+        programId,
+        next.map((t) => t.id),
+      );
+      if (!result.ok) {
+        setReorderError(`Le nouvel ordre n'a pas été enregistré : ${result.error}`);
+        setAnnounce("");
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Thèmes</h2>
+          <p className="text-sm text-muted">
+            L&apos;ordre des thèmes est celui de votre programme. Les mots-clés aident l&apos;IA à reconnaître le
+            thème d&apos;une problématique.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={panel === "add" ? "btn btn-secondary" : "btn btn-primary"}
+            aria-expanded={panel === "add"}
+            aria-controls="panel-ajout-theme"
+            onClick={() => setPanel(panel === "add" ? "none" : "add")}
+          >
+            Ajouter un thème
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            aria-expanded={panel === "import"}
+            aria-controls="panel-import-themes"
+            onClick={() => setPanel(panel === "import" ? "none" : "import")}
+          >
+            Importer une liste
+          </button>
+        </div>
+      </div>
+
+      {panel === "add" ? (
+        <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="card p-5">
+          <h3 id="titre-ajout-theme" className="text-lg font-semibold">
+            Nouveau thème
+          </h3>
+          <div className="mt-4">
+            <ThemeForm
+              submitLabel="Ajouter le thème"
+              pendingLabel="Ajout…"
+              successMessage="Thème ajouté. Vous pouvez en saisir un autre."
+              resetOnSuccess
+              onSubmit={(value: ThemeInput) => addTheme(programId, value)}
+              onCancel={() => setPanel("none")}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {panel === "import" ? (
+        <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="card p-5">
+          <h3 id="titre-import-themes" className="text-lg font-semibold">
+            Importer des thèmes
+          </h3>
+          <ThemeImport programId={programId} />
+        </section>
+      ) : null}
+
+      <p role="status" className="sr-only">
+        {announce}
+      </p>
+      <div role="alert">
+        {reorderError ? (
+          <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+            {reorderError}
+          </p>
+        ) : null}
+      </div>
+
+      {optimisticThemes.length === 0 ? (
+        <div className="card border-dashed p-6">
+          <p className="font-display text-lg font-semibold">Aucun thème</p>
+          <p className="mt-1 text-muted">
+            Ajoutez les thèmes de votre programme un par un, ou importez-les en une fois depuis une liste.
+          </p>
+        </div>
+      ) : (
+        <ol className="flex flex-col gap-3" aria-label="Thèmes du programme">
+          {optimisticThemes.map((theme, index) => (
+            <li key={theme.id} className="card p-4 sm:p-5">
+              {editingId === theme.id ? (
+                <section aria-label={`Modifier ${theme.name}`}>
+                  <ThemeForm
+                    initial={{ name: theme.name, description: theme.description, keywords: theme.keywords }}
+                    submitLabel="Enregistrer"
+                    pendingLabel="Enregistrement…"
+                    successMessage="Thème enregistré."
+                    onSubmit={(value) => updateTheme(theme.id, value)}
+                    onSaved={() => closeEditor(theme.id)}
+                    onCancel={() => closeEditor(theme.id)}
+                  />
+                </section>
+              ) : (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-sm font-bold tabular-nums"
+                    aria-hidden="true"
+                  >
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold">
+                      <span className="sr-only">Thème {index + 1} : </span>
+                      {theme.name}
+                    </h3>
+                    {theme.description ? <p className="mt-1 text-muted">{theme.description}</p> : null}
+                    {theme.keywords.length > 0 ? (
+                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">
+                        {theme.keywords.map((kw) => (
+                          <li key={kw} className="rounded-md bg-surface-2 px-2 py-0.5 text-sm">
+                            {kw}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <p className="mt-2 text-sm text-muted">
+                      Squelette : {theme.hasSkeleton ? "généré" : "à générer"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2 sm:justify-end">
+                    <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
+                      <button
+                        id={moveButtonId(theme.id, "up")}
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        onClick={() => move(index, "up")}
+                        disabled={index === 0}
+                        aria-label={`Monter ${theme.name}`}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+                          <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <button
+                        id={moveButtonId(theme.id, "down")}
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        onClick={() => move(index, "down")}
+                        disabled={index === optimisticThemes.length - 1}
+                        aria-label={`Descendre ${theme.name}`}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+                          <path d="M8 3v10M3.5 8.5L8 13l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      id={`edit-${theme.id}`}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setEditingId(theme.id)}
+                      aria-label={`Modifier ${theme.name}`}
+                    >
+                      Modifier
+                    </button>
+                    <ConfirmAction
+                      triggerLabel="Supprimer"
+                      triggerAccessibleLabel={`Supprimer ${theme.name}`}
+                      question={`Supprimer « ${theme.name} »${theme.hasSkeleton ? " et son squelette" : ""} ?`}
+                      confirmLabel="Supprimer"
+                      onConfirm={async () => {
+                        const result = await deleteTheme(theme.id);
+                        if (result.ok) setAnnounce(`Thème « ${theme.name} » supprimé.`);
+                        return result.ok ? null : result.error;
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}

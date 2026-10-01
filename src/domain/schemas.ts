@@ -27,10 +27,10 @@ export const BrandSchema = z.object({
     heading: z.string().trim().min(1).max(60),
     body: z.string().trim().min(1).max(60),
   }),
-  /** Logo en data URL PNG/JPEG/SVG, 500 Ko max une fois encodé. */
+  /** Logo en data URL PNG ou JPEG, 500 Ko max une fois encodé (SVG exclu : non rastérisable côté serveur pour le .pptx). */
   logoDataUrl: z
     .string()
-    .regex(/^data:image\/(png|jpeg|svg\+xml);base64,[A-Za-z0-9+/=]+$/)
+    .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/)
     .max(700_000)
     .nullable()
     .default(null),

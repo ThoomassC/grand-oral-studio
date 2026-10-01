@@ -45,11 +45,13 @@ async function nextPosition(tx: Tx, programId: string): Promise<{ position: numb
 }
 
 export async function listThemes(userId: string, programId: string): Promise<ThemeView[]> {
-  const rows = await db().theme.findMany({
-    where: { programId, program: ownedProgram(userId) },
-    orderBy: { position: "asc" },
+  const program = await db().program.findFirst({
+    where: { id: programId, ...ownedProgram(userId) },
+    select: { themes: { orderBy: { position: "asc" } } },
   });
-  return rows.map(toThemeView);
+  // Programme absent ou étranger : même réponse, pour ne pas révéler son existence.
+  if (!program) throw new NotFoundError("programme");
+  return program.themes.map(toThemeView);
 }
 
 export async function addTheme(userId: string, programId: string, input: ThemeInput): Promise<ThemeView> {
