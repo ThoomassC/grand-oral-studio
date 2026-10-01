@@ -24,7 +24,7 @@ export async function listPrograms(userId: string): Promise<ProgramSummary[]> {
       description: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { themes: true } },
+      _count: { select: { themes: true, decks: { where: { kind: "SKELETON" } } } },
     },
   });
   return rows.map((r) => ({
@@ -34,6 +34,8 @@ export async function listPrograms(userId: string): Promise<ProgramSummary[]> {
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     themeCount: r._count.themes,
+    // Un squelette au plus par thème (index unique partiel) : compter les decks SKELETON = compter les thèmes couverts.
+    skeletonCount: r._count.decks,
   }));
 }
 
@@ -44,7 +46,10 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     include: {
       themes: {
         orderBy: { position: "asc" },
-        include: { decks: { where: { kind: "SKELETON" }, take: 1 } },
+        include: {
+          decks: { where: { kind: "SKELETON" }, take: 1 },
+          _count: { select: { decks: { where: { kind: "FINAL" } } } },
+        },
       },
     },
   });
@@ -59,7 +64,7 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     updatedAt: row.updatedAt,
     themes: row.themes.map((t) => {
       const skeleton = t.decks[0];
-      return { ...toThemeView(t), skeleton: skeleton ? toDeckView(skeleton) : null };
+      return { ...toThemeView(t), skeleton: skeleton ? toDeckView(skeleton) : null, finalDeckCount: t._count.decks };
     }),
   };
 }

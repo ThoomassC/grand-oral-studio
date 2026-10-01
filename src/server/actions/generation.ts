@@ -1,6 +1,6 @@
 "use server";
 
-import type { z } from "zod";
+import { z } from "zod";
 import type { ClassificationResult } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { getAiProvider } from "../ai";
@@ -15,20 +15,29 @@ type ProblemFormInput = z.input<typeof ProblemInputSchema>;
 const deps = (ctx: ActionContext): service.GenerationDeps => ({ ai: getAiProvider(), log: ctx.log });
 
 /** Génère (ou régénère) le squelette d'un thème. Rejouable : un seul squelette par thème. */
-export async function generateSkeleton(themeId: string): Promise<ActionResult<service.SkeletonResult>> {
+export async function generateSkeleton(themeId: string): Promise<ActionResult<{ deckId: string; warnings: string[] }>> {
   return runAction("generateSkeleton", async (ctx) => {
     const id = parseInput(IdSchema, themeId);
-    const result = await service.generateSkeleton(ctx.user.id, id, deps(ctx));
-    revalidatePrograms();
-    return result;
+    const { deckId, warnings, programId } = await service.generateSkeleton(ctx.user.id, id, deps(ctx));
+    revalidatePrograms(programId);
+    return { deckId, warnings };
   });
 }
 
-/** Squelettes de tous les thèmes (3 en parallèle au plus) ; résultat par thème. */
-export async function generateAllSkeletons(programId: string): Promise<ActionResult<service.BatchItemResult[]>> {
+const BatchModeSchema = z.enum(["missing", "all"], "Mode attendu : missing ou all.");
+
+/**
+ * Squelettes du programme (3 en parallèle au plus) ; résultat par thème.
+ * `missing` (défaut) : seulement les thèmes sans squelette ; `all` : tout régénérer.
+ */
+export async function generateAllSkeletons(
+  programId: string,
+  mode: service.BatchMode = "missing",
+): Promise<ActionResult<service.BatchItemResult[]>> {
   return runAction("generateAllSkeletons", async (ctx) => {
     const id = parseInput(IdSchema, programId);
-    const results = await service.generateAllSkeletons(ctx.user.id, id, deps(ctx));
+    const m = parseInput(BatchModeSchema, mode);
+    const results = await service.generateAllSkeletons(ctx.user.id, id, deps(ctx), m);
     revalidatePrograms(id);
     return results;
   });

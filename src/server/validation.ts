@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { stripControlChars } from "@/domain/schemas";
 import { DataIntegrityError, ValidationError } from "./errors";
 
 // Messages d'erreur zod en français pour tout le serveur.
@@ -21,7 +22,7 @@ export function toFieldErrors(error: z.ZodError): Record<string, string[]> {
 export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new ValidationError("Certaines valeurs sont invalides.", toFieldErrors(result.error));
+    throw new ValidationError("Certaines valeurs sont invalides : corrigez les champs signalés.", toFieldErrors(result.error));
   }
   return result.data;
 }
@@ -65,8 +66,18 @@ export function assertWritable<S extends z.ZodType>(schema: S, value: unknown, e
 export const IdSchema = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/, "Identifiant invalide");
 
 export const ProgramMetaSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  description: z.string().trim().max(2000).default(""),
+  name: z
+    .string()
+    .overwrite(stripControlChars)
+    .trim()
+    .min(2, "Le nom du programme doit faire au moins 2 caractères.")
+    .max(120, "Le nom du programme ne doit pas dépasser 120 caractères."),
+  description: z
+    .string()
+    .overwrite(stripControlChars)
+    .trim()
+    .max(2000, "La description ne doit pas dépasser 2000 caractères.")
+    .default(""),
 });
 export type ProgramMeta = z.output<typeof ProgramMetaSchema>;
 

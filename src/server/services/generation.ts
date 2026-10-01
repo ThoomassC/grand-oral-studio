@@ -7,12 +7,13 @@ import type { ProblemInput } from "@/domain/schemas";
 import type { AiProvider } from "../ai/types";
 import { isAppError, NotFoundError, ValidationError } from "../errors";
 import type { Logger } from "../logger";
-import { AI_QUOTA, aiQuotaKey, consumeQuota } from "../rate-limit";
+import { consumeAiQuota } from "../rate-limit";
 import {
   createFinalDeck,
   findRecentFinalDeck,
   getGenerationContext,
   getThemeGenerationContext,
+  listSkeletonThemeIds,
   upsertSkeleton,
 } from "../repo/decks";
 import { singleFlight } from "../single-flight";
@@ -33,6 +34,8 @@ export interface GenerationDeps {
 
 export interface SkeletonResult {
   deckId: string;
+  /** Programme du thème (pour l'invalidation des pages). */
+  programId: string;
   /** Écarts entre le deck produit et le gabarit (non bloquants). */
   warnings: string[];
 }
@@ -40,7 +43,7 @@ export interface SkeletonResult {
 export async function generateSkeleton(userId: string, themeId: string, deps: GenerationDeps): Promise<SkeletonResult> {
   return singleFlight(`skeleton:${userId}:${themeId}`, async () => {
     const g = await getThemeGenerationContext(userId, themeId);
-    await consumeQuota(aiQuotaKey(userId), 1, AI_QUOTA);
+    await consumeAiQuota(userId, 1);
 
     const prompt = buildSkeletonPrompt(g.ctx, g.theme);
     const spec = await deps.ai.generateDeck(prompt, {
@@ -53,7 +56,7 @@ export async function generateSkeleton(userId: string, themeId: string, deps: Ge
 
     const { deckId } = await upsertSkeleton(userId, themeId, spec);
     deps.log.info("deck.skeleton_saved", { themeId, deckId, provider: deps.ai.name });
-    return { deckId, warnings };
+    return { deckId, programId: g.programId, warnings };
   });
 }
 
@@ -63,25 +66,33 @@ export type BatchItemResult =
 
 export const SKELETON_CONCURRENCY = 3;
 
-/** Génère les squelettes de tous les thèmes, concurrence bornée ; un échec n'arrête pas les autres. */
+export type BatchMode = "missing" | "all";
+
+/**
+ * Génère les squelettes, concurrence bornée ; un échec n'arrête pas les autres.
+ * `missing` (défaut) ne traite que les thèmes sans squelette ; `all` régénère tout.
+ */
 export async function generateAllSkeletons(
   userId: string,
   programId: string,
   deps: GenerationDeps,
+  mode: BatchMode = "missing",
 ): Promise<BatchItemResult[]> {
   const g = await getGenerationContext(userId, programId);
-  const results: BatchItemResult[] = new Array(g.themes.length);
+  const done = mode === "missing" ? await listSkeletonThemeIds(userId, programId) : new Set<string>();
+  const themes = g.themes.filter((t) => !done.has(t.id));
+  const results: BatchItemResult[] = new Array(themes.length);
   let next = 0;
 
   async function worker(): Promise<void> {
-    while (next < g.themes.length) {
+    while (next < themes.length) {
       const i = next;
       next += 1;
-      const theme = g.themes[i];
+      const theme = themes[i];
       if (!theme) continue;
       try {
         const r = await generateSkeleton(userId, theme.id, deps);
-        results[i] = { themeId: theme.id, themeName: theme.name, ok: true, ...r };
+        results[i] = { themeId: theme.id, themeName: theme.name, ok: true, deckId: r.deckId, warnings: r.warnings };
       } catch (error) {
         if (!isAppError(error)) {
           deps.log.error("deck.skeleton_failed", { themeId: theme.id, error });
@@ -96,7 +107,7 @@ export async function generateAllSkeletons(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(SKELETON_CONCURRENCY, g.themes.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(SKELETON_CONCURRENCY, themes.length) }, () => worker()));
   return results;
 }
 
@@ -110,7 +121,7 @@ export async function classifyProblem(
   if (g.themes.length === 0) {
     throw new ValidationError("Ajoutez au moins un thème au programme avant la reconnaissance.");
   }
-  await consumeQuota(aiQuotaKey(userId), 1, AI_QUOTA);
+  await consumeAiQuota(userId, 1);
 
   const prompt = buildClassificationPrompt(g.ctx, input.problem);
   const raw = await deps.ai.classify(prompt, {
@@ -142,7 +153,7 @@ export async function generateFinalDeck(
       return { deckId: recent.deckId, warnings: [], reused: true };
     }
 
-    await consumeQuota(aiQuotaKey(userId), 1, AI_QUOTA);
+    await consumeAiQuota(userId, 1);
     const prompt = buildFinalDeckPrompt(g.ctx, g.theme, g.skeleton, input.problem);
     const spec = await deps.ai.generateDeck(prompt, {
       template: g.ctx.template,

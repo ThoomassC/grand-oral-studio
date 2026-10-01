@@ -2,7 +2,7 @@ import type { ProgramContext, ThemeRef } from "@/domain/contracts";
 import { replaceSlide } from "@/domain/deck";
 import { DeckSpecSchema, type Brand, type DeckSpec, type Slide } from "@/domain/schemas";
 import { db } from "../db/client";
-import { NotFoundError, ValidationError } from "../errors";
+import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { parseStored } from "../validation";
 import { readBrand, readTemplate, specJson, toDeckView } from "./mappers";
 import { lockOwnedDeck, ownedProgram, prismaErrorCode } from "./ownership";
@@ -167,19 +167,29 @@ export async function findRecentFinalDeck(
   return row ? { deckId: row.id } : null;
 }
 
+export const DECK_CHANGED_MESSAGE =
+  "Ce diaporama a changé entre-temps (régénération ou autre onglet). Rechargez la page pour voir la dernière version.";
+
 /**
- * Remplace une diapo. read → modify → write sous verrou de ligne (FOR UPDATE)
- * pour ne pas perdre une modification concurrente d'une autre diapo.
+ * Remplace une diapo. read → modify → write sous verrou de ligne (FOR UPDATE).
+ *
+ * Concurrence optimiste : si `expectedUpdatedAt` (ISO) est fourni et que le deck
+ * a été modifié depuis (autre onglet, régénération du squelette), l'écriture
+ * est refusée (ConflictError) au lieu d'écraser silencieusement l'autre version.
  */
 export async function updateDeckSlide(
   userId: string,
   deckId: string,
   index: number,
   slide: Slide,
-): Promise<{ programId: string; spec: DeckSpec }> {
+  expectedUpdatedAt?: string,
+): Promise<{ programId: string; spec: DeckSpec; updatedAt: string }> {
   return db().$transaction(async (tx) => {
     const { programId } = await lockOwnedDeck(tx, userId, deckId);
-    const row = await tx.deck.findUniqueOrThrow({ where: { id: deckId }, select: { spec: true } });
+    const row = await tx.deck.findUniqueOrThrow({ where: { id: deckId }, select: { spec: true, updatedAt: true } });
+    if (expectedUpdatedAt !== undefined && row.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()) {
+      throw new ConflictError(DECK_CHANGED_MESSAGE);
+    }
     const current = parseStored(DeckSpecSchema, row.spec, "Deck.spec", deckId);
     if (index < 0 || index >= current.slides.length) {
       throw new ValidationError("Cette diapo n'existe pas.", {
@@ -187,9 +197,22 @@ export async function updateDeckSlide(
       });
     }
     const next = replaceSlide(current, index, slide);
-    await tx.deck.update({ where: { id: deckId }, data: { spec: specJson(next) }, select: { id: true } });
-    return { programId, spec: next };
+    const updated = await tx.deck.update({
+      where: { id: deckId },
+      data: { spec: specJson(next) },
+      select: { updatedAt: true },
+    });
+    return { programId, spec: next, updatedAt: updated.updatedAt.toISOString() };
   });
+}
+
+/** Thèmes du programme (possédé) qui ont déjà un squelette. */
+export async function listSkeletonThemeIds(userId: string, programId: string): Promise<Set<string>> {
+  const rows = await db().deck.findMany({
+    where: { programId, kind: "SKELETON", program: ownedProgram(userId) },
+    select: { themeId: true },
+  });
+  return new Set(rows.map((r) => r.themeId));
 }
 
 export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string }> {
@@ -221,6 +244,7 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   const view: DeckView = toDeckView(row);
   return {
     ...view,
+    updatedAt: view.updatedAt.toISOString(),
     themeName: row.theme.name,
     program: {
       id: row.program.id,

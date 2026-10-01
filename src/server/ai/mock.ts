@@ -2,6 +2,7 @@ import type { PromptPair, ThemeRef } from "@/domain/contracts";
 import {
   ClassificationSchema,
   DeckSpecSchema,
+  LIMITS,
   type Classification,
   type DeckSpec,
   type Slide,
@@ -73,10 +74,10 @@ function buildDeck(h: DeckHints): DeckSpec {
       const kw = keywords.length > 0 ? keywords[(si + k) % keywords.length] : theme.name;
       const skeletonSlide = h.skeleton?.slides.find((s) => s.sectionId === section.id);
       const bullets = [
-        clip(`${section.title} — ${kw}`, 300),
-        clip(section.guidance || (en ? `Key idea on ${theme.name}` : `Idée clé sur ${theme.name}`), 300),
+        clip(`${section.title} — ${kw}`, LIMITS.bullet),
+        clip(section.guidance || (en ? `Key idea on ${theme.name}` : `Idée clé sur ${theme.name}`), LIMITS.bullet),
         ...(skeletonSlide?.bullets.slice(0, 2) ?? []),
-      ].slice(0, 4);
+      ].slice(0, Math.min(4, LIMITS.bullets));
       slides.push({
         layout: layoutFor(si, sections.length, k),
         sectionId: section.id,

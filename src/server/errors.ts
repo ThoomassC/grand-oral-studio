@@ -72,9 +72,16 @@ export class LimitExceededError extends AppError {
 export class RateLimitedError extends AppError {
   readonly code = "RATE_LIMITED" as const;
   readonly status = 429;
-  constructor(readonly retryAfterSeconds: number) {
+  constructor(
+    readonly retryAfterSeconds: number,
+    /** "user" : quota de l'utilisateur ; "global" : plafond de coût de toute l'application. */
+    readonly scope: "user" | "global" = "user",
+  ) {
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
     super(
-      `Trop de générations en peu de temps. Réessayez dans ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} min.`,
+      scope === "global"
+        ? `Le service de génération est très sollicité en ce moment. Réessayez dans ${minutes} min.`
+        : `Trop de générations en peu de temps. Réessayez dans ${minutes} min.`,
     );
   }
 }

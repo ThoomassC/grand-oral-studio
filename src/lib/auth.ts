@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/server/db/client";
+import { ipAddressOptions, SESSION_OPTIONS } from "./auth-options";
 
 /**
  * Better Auth (serveur) : e-mail + mot de passe, sessions en base (tables
@@ -27,10 +28,7 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
     autoSignIn: true,
   },
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 jours
-    updateAge: 60 * 60 * 24, // prolongée au plus une fois par jour
-  },
+  session: SESSION_OPTIONS,
   rateLimit: {
     enabled: true,
     storage: "database",
@@ -40,6 +38,9 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 3600, max: 10 },
     },
+  },
+  advanced: {
+    ipAddress: ipAddressOptions(process.env),
   },
   // nextCookies doit rester le dernier plugin (pose les cookies depuis les Server Actions).
   plugins: [nextCookies()],

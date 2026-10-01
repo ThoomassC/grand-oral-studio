@@ -59,7 +59,7 @@ const T = {
     layouts:
       "Layouts : \"title\" pour la seule couverture ; \"section\" pour ouvrir une partie ; \"content\" pour une liste de puces ; " +
       "\"two-columns\" pour une comparaison (les puces seront réparties sur deux colonnes) ; \"conclusion\" pour la dernière section.",
-    bullets: "Puces : six au plus par diapo, courtes (une idée, douze mots environ), sans phrase complète ni ponctuation finale.",
+    bullets: "Puces : six au plus par diapo, courtes (une idée, douze mots environ, 180 caractères au plus), sans phrase complète ni ponctuation finale. Titres de diapo : 140 caractères au plus.",
     notes:
       "Notes d'orateur : le texte à dire, à l'oral, pour chaque diapo, en commençant par un minutage indicatif entre crochets " +
       "(ex. [2:30–4:00]). Les minutages se suivent et couvrent la durée totale de l'oral.",
@@ -118,7 +118,7 @@ const T = {
     layouts:
       "Layouts: \"title\" for the cover only; \"section\" to open a part; \"content\" for a bullet list; \"two-columns\" for a " +
       "comparison (bullets will be split into two columns); \"conclusion\" for the last section.",
-    bullets: "Bullets: at most six per slide, short (one idea, about twelve words), no full sentences or final punctuation.",
+    bullets: "Bullets: at most six per slide, short (one idea, about twelve words, 180 characters max), no full sentences or final punctuation. Slide titles: 140 characters max.",
     notes:
       "Speaker notes: what to say out loud for each slide, starting with an indicative timing in brackets (e.g. [2:30–4:00]). " +
       "Timings follow each other and cover the whole duration of the talk.",

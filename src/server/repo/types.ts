@@ -14,6 +14,8 @@ export interface ProgramSummary {
   name: string;
   description: string;
   themeCount: number;
+  /** Thèmes disposant d'un squelette. */
+  skeletonCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +38,8 @@ export interface ThemeView extends ThemeRef {
 
 export interface ThemeWithSkeleton extends ThemeView {
   skeleton: DeckView | null;
+  /** Nombre de decks finaux (jour J) du thème. */
+  finalDeckCount: number;
 }
 
 export interface ProgramDetail {
@@ -49,8 +53,12 @@ export interface ProgramDetail {
   themes: ThemeWithSkeleton[];
 }
 
-/** Deck accompagné de ce qu'il faut pour l'exporter (charte et gabarit du programme). */
-export interface DeckWithProgram extends DeckView {
+/**
+ * Deck accompagné de ce qu'il faut pour l'exporter (charte et gabarit du
+ * programme). `updatedAt` en ISO : c'est la version à renvoyer à updateDeckSlide.
+ */
+export interface DeckWithProgram extends Omit<DeckView, "updatedAt"> {
+  updatedAt: string;
   themeName: string;
   program: { id: string; name: string; brand: Brand; template: PromptTemplate };
 }
