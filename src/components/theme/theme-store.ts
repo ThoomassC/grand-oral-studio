@@ -93,3 +93,23 @@ function subscribe(onChange: () => void): () => void {
 export function useThemePreference(serverPreference: ThemePreference): ThemePreference {
   return useSyncExternalStore(subscribe, readPreference, () => serverPreference);
 }
+
+function subscribeResolved(onChange: () => void): () => void {
+  const unsubscribe = subscribe(onChange);
+  const media = window.matchMedia?.(DARK_QUERY);
+  media?.addEventListener?.("change", onChange);
+  return () => {
+    unsubscribe();
+    media?.removeEventListener?.("change", onChange);
+  };
+}
+
+/**
+ * Thème réellement affiché, y compris en mode système (suit aussi les
+ * changements du réglage de l'appareil). Rendu serveur : le choix du cookie,
+ * sinon « light » (le mode système n'est pas connu du serveur) ; corrigé dès
+ * l'hydratation, sans écart signalé.
+ */
+export function useResolvedTheme(serverTheme: ExplicitTheme | null = null): ExplicitTheme {
+  return useSyncExternalStore(subscribeResolved, () => resolvedTheme(), () => serverTheme ?? "light");
+}

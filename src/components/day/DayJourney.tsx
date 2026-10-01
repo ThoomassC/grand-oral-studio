@@ -450,7 +450,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                       <label
                         key={r.themeId}
                         className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
-                          checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border hover:border-border-strong"
+                          checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border-strong hover:border-text"
                         }`}
                       >
                         <input
@@ -508,7 +508,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                   })}
 
                   <div
-                    className={`rounded-lg border p-4 ${choice === OTHER ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border"}`}
+                    className={`rounded-lg border p-4 ${choice === OTHER ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border-strong"}`}
                   >
                     <label className="flex cursor-pointer items-center gap-3">
                       <input

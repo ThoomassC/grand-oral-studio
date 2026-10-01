@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PrepDial, PrepTimeBadge } from "@/components/day/PrepClock";
+import { Duration, PREP_MINUTES, PrepDial, PrepTimeBadge } from "@/components/day/PrepClock";
 import { SlidePreview, type SlideBrand, type SlidePreviewData } from "@/components/slides/SlidePreview";
 import { getUser } from "@/server/session";
 
@@ -137,7 +137,9 @@ export default async function HomePage() {
         <div className="flex items-center gap-4 md:flex-col md:items-center">
           <PrepDial className="h-24 w-24 shrink-0 sm:h-32 sm:w-32" />
           <p className="text-sm text-muted md:text-center">
-            <span className="num block text-2xl font-bold text-text">1 h 30</span>
+            <span className="block text-2xl font-bold text-text">
+              <Duration minutes={PREP_MINUTES} className="num" />
+            </span>
             de préparation
           </p>
         </div>
@@ -157,7 +159,7 @@ export default async function HomePage() {
             ))}
           </ol>
           <p className="mt-6 font-semibold">
-            Il vous reste environ <span className="num">1 h 27</span> pour vous approprier le support et répéter.
+            Il vous reste environ <Duration minutes={87} className="num" /> pour vous approprier le support et répéter.
           </p>
           <p className="mt-2 text-sm text-muted">
             Sans clé API : une trame gratuite à compléter. Avec Claude : un diaporama rédigé.

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DayJourney, type DayTheme, type RecentDeck } from "@/components/day/DayJourney";
-import { PrepDial } from "@/components/day/PrepClock";
+import { Duration, PREP_MINUTES, PrepDial } from "@/components/day/PrepClock";
 import { getAiSettings, listFinalDecks, NotFoundError, type AiSettingsView, type FinalDeckSummary } from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
@@ -58,7 +58,9 @@ export default async function DayPage({ params }: PageProps<"/programmes/[id]/jo
         <p className="flex items-center gap-3 rounded-lg border border-border bg-surface py-2 pr-4 pl-2 shadow-card">
           <PrepDial usedMinutes={0} className="h-10 w-10 shrink-0" />
           <span className="leading-tight">
-            <span className="num block text-lg font-bold">1 h 30</span>
+            <span className="block text-lg font-bold">
+              <Duration minutes={PREP_MINUTES} className="num" />
+            </span>
             <span className="text-sm text-muted">de préparation</span>
           </span>
         </p>

@@ -30,6 +30,8 @@ const GROUPS = [
  * style ne repose pas que sur la couleur (surlignage jaune + soulignement
  * épais à l'encre + graisse).
  * Une seule ligne, défilante sur mobile ; l'onglet actif est ramené en vue.
+ * L'anneau de focus est tracé à l'intérieur de l'onglet : la barre défilante
+ * (overflow) le rognerait sinon en haut et en bas.
  * Si l'éditeur ouvert a des modifications non enregistrées, le changement
  * d'onglet demande confirmation.
  */
@@ -77,7 +79,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
                           setPendingHref(href);
                           window.setTimeout(() => stayRef.current?.focus(), 0);
                         }}
-                        className={`inline-flex min-h-11 items-center rounded-t-md border-b-[3px] px-3 transition-colors ${
+                        className={`inline-flex min-h-11 items-center rounded-t-md border-b-[3px] px-3 transition-colors focus-visible:outline-offset-[-3px] ${
                           active
                             ? "hl border-on-highlight font-bold"
                             : "border-transparent font-medium text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text"

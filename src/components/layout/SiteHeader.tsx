@@ -1,12 +1,17 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getUser } from "@/server/session";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { parseExplicitTheme, THEME_COOKIE } from "@/components/theme/theme";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { BrandMark } from "./BrandMark";
+import { SettingsLink } from "./SettingsLink";
 
 /** En-tête global : identité de l'app, thème, paramètres et état de connexion. */
 export async function SiteHeader() {
-  const user = await getUser();
+  const [user, cookieStore] = await Promise.all([getUser(), cookies()]);
+  // Choix explicite (cookie) : aria-pressed du bouton juste dès le rendu serveur.
+  const serverTheme = parseExplicitTheme(cookieStore.get(THEME_COOKIE)?.value);
 
   return (
     <header className="border-b border-border bg-surface">
@@ -29,16 +34,13 @@ export async function SiteHeader() {
               <span className="hidden max-w-[16rem] truncate px-1 text-sm text-muted lg:inline" title={user.email}>
                 {user.email}
               </span>
-              <ThemeToggle />
-              <Link href="/parametres" className="btn btn-ghost btn-icon">
-                <GearIcon />
-                <span className="sr-only">Paramètres</span>
-              </Link>
+              <ThemeToggle serverTheme={serverTheme} />
+              <SettingsLink />
               <SignOutButton />
             </>
           ) : (
             <>
-              <ThemeToggle />
+              <ThemeToggle serverTheme={serverTheme} />
               <Link href="/connexion" className="btn btn-ghost btn-sm">
                 Connexion
               </Link>
@@ -51,14 +53,5 @@ export async function SiteHeader() {
         </nav>
       </div>
     </header>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.3 3.2h3.4l.5 2.4a7 7 0 0 1 1.9 1.1l2.3-.8 1.7 2.9-1.8 1.6a7 7 0 0 1 0 2.2l1.8 1.6-1.7 2.9-2.3-.8a7 7 0 0 1-1.9 1.1l-.5 2.4h-3.4l-.5-2.4a7 7 0 0 1-1.9-1.1l-2.3.8-1.7-2.9 1.8-1.6a7 7 0 0 1 0-2.2L4 8.8l1.7-2.9 2.3.8a7 7 0 0 1 1.9-1.1Z" />
-      <circle cx="12" cy="12" r="2.8" />
-    </svg>
   );
 }

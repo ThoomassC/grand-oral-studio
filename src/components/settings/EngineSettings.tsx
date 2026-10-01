@@ -62,14 +62,14 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
   const { ollama } = status.available;
   const ollamaUsable = ollama.configured && ollama.reachable && ollama.models.length > 0;
   const ollamaNote = !ollama.configured ? (
-    <>Ollama n&apos;est pas configuré sur ce serveur : voir README.</>
+    <>Indisponible : Ollama n&apos;est pas configuré sur ce serveur (voir README).</>
   ) : !ollama.reachable ? (
     <>
-      Ollama ne répond pas : lancez <code className="num rounded-sm bg-surface-2 px-1">ollama serve</code>.
+      Indisponible : Ollama ne répond pas. Lancez <code className="num rounded-sm bg-surface-2 px-1">ollama serve</code>.
     </>
   ) : ollama.models.length === 0 ? (
     <>
-      Installez un modèle : <code className="num rounded-sm bg-surface-2 px-1">ollama pull mistral</code>.
+      Indisponible : aucun modèle installé. Lancez <code className="num rounded-sm bg-surface-2 px-1">ollama pull mistral</code>.
     </>
   ) : null;
 
@@ -80,6 +80,8 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
     const ollamaModel = String(formData.get("ollamaModel") ?? "").trim();
     if (!engine) {
       const message = "Choisissez un moteur disponible.";
+      // Le choix coché est désactivé : focus sur le premier moteur utilisable.
+      formRef.current?.querySelector<HTMLInputElement>('input[name="engine"]:not(:disabled)')?.focus();
       return { status: { kind: "error", message }, fieldErrors: { engine: [message] } };
     }
     if (engine === "ollama" && !ollamaModel) {

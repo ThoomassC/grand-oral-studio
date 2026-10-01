@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
 import { EngineBadge } from "@/components/decks/EngineBadge";
+import { FocusOnMount } from "@/components/ui/FocusOnMount";
 import { formatDateTime } from "@/components/ui/format";
 import { loadDeck } from "../../../_lib/load";
 
@@ -37,7 +38,15 @@ export async function DeckPageContent({
         <p className="eyebrow mt-4 text-accent-strong">
           {isSkeleton ? "Squelette" : "Deck final"} · {deck.themeName}
         </p>
-        <h2 className="mt-2 text-2xl sm:text-3xl">{deck.spec.title}</h2>
+        <h2
+          id="titre-deck"
+          tabIndex={-1}
+          aria-describedby={isNew ? "deck-pret" : undefined}
+          className="mt-2 text-2xl focus:outline-none sm:text-3xl">
+          {deck.spec.title}
+        </h2>
+        {/* Arrivée après génération : le focus quitte <body> pour le titre du deck. */}
+        {isNew ? <FocusOnMount targetId="titre-deck" /> : null}
         {deck.engine ? (
           <p className="mt-2">
             <EngineBadge engine={deck.engine} />
@@ -54,17 +63,17 @@ export async function DeckPageContent({
       </div>
 
       {deck.engine === "free" ? (
-        <div className="flex gap-3 rounded-lg border border-border-strong bg-surface p-4">
-          <span aria-hidden="true" className="mt-1.5 h-3 w-6 shrink-0 rounded-sm bg-highlight" />
+        <div className="rounded-lg border border-border-strong bg-surface p-4">
           <p>
-            Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces « À compléter » sont
-            à remplacer par vos contenus.
+            Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces{" "}
+            <mark className="rounded-sm bg-highlight-soft px-1 text-text">« À compléter »</mark> sont à remplacer par vos
+            contenus.
           </p>
         </div>
       ) : null}
 
       {isNew ? (
-        <div role="status" className="rounded-lg border border-success/40 bg-success-soft p-4">
+        <div id="deck-pret" role="status" className="rounded-lg border border-success/40 bg-success-soft p-4">
           <p className="font-semibold">
             {deck.engine === "free"
               ? `Votre trame est prête : ${deck.spec.slides.length} diapos à compléter.`

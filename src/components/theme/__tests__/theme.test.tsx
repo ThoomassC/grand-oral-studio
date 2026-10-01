@@ -105,6 +105,25 @@ describe("script inline", () => {
   });
 });
 
+describe("ThemeToggle", () => {
+  it("devrait garder un nom fixe et exposer le thème affiché par aria-pressed", async () => {
+    const user = userEvent.setup();
+    render(<ThemeToggle />);
+    const button = screen.getByRole("button", { name: "Mode sombre" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    await user.click(button);
+    expect(screen.getByRole("button", { name: "Mode sombre" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("devrait refléter le mode système sombre", () => {
+    mockSystemDark(true);
+    render(<ThemeToggle />);
+    expect(screen.getByRole("button", { name: "Mode sombre" })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
 describe("bouton de l'en-tête et page Paramètres", () => {
   it("devrait rester synchronisés", async () => {
     const user = userEvent.setup();
@@ -116,8 +135,7 @@ describe("bouton de l'en-tête et page Paramètres", () => {
     );
     expect(screen.getByRole("radio", { name: /Système/ })).toBeChecked();
 
-    // jsdom ne charge pas le CSS : les deux libellés sont présents, on vise le bouton par son rôle.
-    await user.click(screen.getAllByRole("button")[0]!);
+    await user.click(screen.getByRole("button", { name: "Mode sombre" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(screen.getByRole("radio", { name: /Sombre/ })).toBeChecked();
 

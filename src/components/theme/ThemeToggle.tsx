@@ -1,35 +1,40 @@
 "use client";
 
 import { useLayoutEffect } from "react";
-import { reapplyStoredPreference, toggleTheme } from "./theme-store";
+import type { ExplicitTheme } from "./theme";
+import { reapplyStoredPreference, toggleTheme, useResolvedTheme } from "./theme-store";
 
 /**
- * Bouton clair / sombre de l'en-tête : une lune en mode clair (« Passer en
- * mode sombre »), un soleil en mode sombre (« Passer en mode clair »).
+ * Bouton clair / sombre de l'en-tête : bouton bascule de nom fixe « Mode
+ * sombre », `aria-pressed` = thème sombre affiché (mode système compris). Un
+ * seul nom à tout instant ; l'état change, pas le libellé.
  *
- * Icône et nom accessible sont choisis par le CSS (variante `dark:`), pas par
- * l'état React : le rendu serveur ne connaît pas toujours le thème affiché
- * (mode système), et le bouton est juste dès la première peinture, sans
- * écart d'hydratation. L'icône masquée est en `visibility: hidden`, donc
- * exclue du nom accessible. Le retour au mode « Système » se fait dans
- * Paramètres > Apparence.
+ * L'icône (lune en clair, soleil en sombre) est choisie par le CSS (variante
+ * `dark:`) : juste dès la première peinture, avant l'hydratation. Le retour au
+ * mode « Système » se fait dans Paramètres > Apparence.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ serverTheme = null }: { serverTheme?: ExplicitTheme | null }) {
+  const theme = useResolvedTheme(serverTheme);
+
   // Synchronisation avec le DOM : voir reapplyStoredPreference (double montage en développement).
   useLayoutEffect(() => {
     reapplyStoredPreference();
   }, []);
 
   return (
-    <button type="button" className="btn btn-ghost btn-icon" onClick={() => toggleTheme()}>
-      <span className="grid h-5 w-5 place-items-center">
+    <button
+      type="button"
+      className="btn btn-ghost btn-icon"
+      aria-label="Mode sombre"
+      aria-pressed={theme === "dark"}
+      onClick={() => toggleTheme()}
+    >
+      <span aria-hidden="true" className="grid h-5 w-5 place-items-center">
         <span className="flex transition-[opacity,transform,visibility] duration-300 ease-out [grid-area:1/1] dark:invisible dark:scale-50 dark:rotate-90 dark:opacity-0">
           <MoonIcon />
-          <span className="sr-only">Passer en mode sombre</span>
         </span>
         <span className="invisible flex scale-50 -rotate-90 opacity-0 transition-[opacity,transform,visibility] duration-300 ease-out [grid-area:1/1] dark:visible dark:scale-100 dark:rotate-0 dark:opacity-100">
           <SunIcon />
-          <span className="sr-only">Passer en mode clair</span>
         </span>
       </span>
     </button>

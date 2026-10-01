@@ -13,6 +13,27 @@ export function formatDuration(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m.toString().padStart(2, "0")}`;
 }
 
+/** « 1 heure 30 », « 20 minutes » : forme lue par les lecteurs d'écran (« 1 h 30 » est mal prononcé). */
+export function spokenDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} minute${m > 1 ? "s" : ""}`;
+  const hours = `${h} heure${h > 1 ? "s" : ""}`;
+  return m === 0 ? hours : `${hours} ${m.toString().padStart(2, "0")}`;
+}
+
+/** Durée : forme visuelle compacte masquée, forme lisible pour les technologies d'assistance. */
+export function Duration({ minutes, className = "" }: { minutes: number; className?: string }) {
+  return (
+    <>
+      <span aria-hidden="true" className={className}>
+        {formatDuration(minutes)}
+      </span>
+      <span className="sr-only">{spokenDuration(minutes)}</span>
+    </>
+  );
+}
+
 /**
  * Cadran de chronomètre : graduations tous les quarts d'heure sur 1 h 30, et
  * le secteur surligné des premières minutes (`usedMinutes`). Décoratif : le
@@ -63,7 +84,9 @@ export function PrepTimeBadge({ minutes = PREP_MINUTES }: { minutes?: number }) 
         <path d="M12 13.5V9.5M10 2.5h4M18.5 6l1.5-1.5" />
       </svg>
       <span className="text-muted">Préparation</span>
-      <strong className="num font-bold">{formatDuration(minutes)}</strong>
+      <strong className="font-bold">
+        <Duration minutes={minutes} className="num" />
+      </strong>
     </p>
   );
 }

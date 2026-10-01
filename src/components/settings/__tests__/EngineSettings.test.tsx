@@ -96,4 +96,20 @@ describe("EngineSettings", () => {
     expect(await screen.findByText(/Ajoutez d'abord votre clé API/)).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("Le moteur n'a pas pu être enregistré.");
   });
+
+  it("devrait préfixer chaque raison d'indisponibilité par « Indisponible : »", () => {
+    render(<EngineSettings status={status({}, { configured: true })} />);
+    expect(screen.getByText(/Ollama ne répond pas/).closest("p")).toHaveTextContent(/^Indisponible : Ollama ne répond pas/);
+    expect(screen.getByText(/aucune clé API/).closest("p")).toHaveTextContent(/^Indisponible :/);
+  });
+
+  it("devrait ramener le focus sur le premier moteur disponible si le choix coché est indisponible", async () => {
+    const user = userEvent.setup();
+    // Claude enregistré, puis devenu indisponible (clé supprimée) : coché mais désactivé.
+    render(<EngineSettings status={status({ selected: "claude", effective: "claude" })} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer le moteur" }));
+    expect((await screen.findAllByText(/Choisissez un moteur disponible/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("radio", { name: /Gratuit/ })).toHaveFocus();
+    expect(setEngine).not.toHaveBeenCalled();
+  });
 });
