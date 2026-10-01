@@ -1,0 +1,46 @@
+import { unstable_rethrow } from "next/navigation";
+import { isAppError, ValidationError } from "../errors";
+import { createLogger, type Logger } from "../logger";
+import { requireUser, type SessionUser } from "../session";
+import type { ActionResult } from "./result";
+
+/**
+ * Enveloppe commune des Server Actions : session obligatoire, journalisation
+ * corrélée, traduction des erreurs.
+ *  - AppError (attendue)  → { ok: false, error: message FR, fieldErrors? }
+ *  - redirect/notFound Next → relancées telles quelles (unstable_rethrow)
+ *  - toute autre erreur (panne) → journalisée avec contexte, message générique
+ *    portant la référence de corrélation, jamais le message brut.
+ */
+
+export interface ActionContext {
+  user: SessionUser;
+  log: Logger;
+}
+
+export async function runAction<T>(name: string, fn: (ctx: ActionContext) => Promise<T>): Promise<ActionResult<T>> {
+  const log = createLogger({ action: name });
+  const started = Date.now();
+  try {
+    const user = await requireUser();
+    const scoped = log.child({ userId: user.id });
+    const data = await fn({ user, log: scoped });
+    scoped.info("action.ok", { durationMs: Date.now() - started });
+    return { ok: true, data };
+  } catch (error) {
+    unstable_rethrow(error);
+    if (isAppError(error)) {
+      log.info("action.rejected", { code: error.code, durationMs: Date.now() - started });
+      return {
+        ok: false,
+        error: error.userMessage,
+        ...(error instanceof ValidationError && error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
+      };
+    }
+    log.error("action.failed", { error, durationMs: Date.now() - started });
+    return {
+      ok: false,
+      error: `Une erreur inattendue est survenue. Réessayez ; si le problème persiste, communiquez la référence ${log.correlationId}.`,
+    };
+  }
+}
