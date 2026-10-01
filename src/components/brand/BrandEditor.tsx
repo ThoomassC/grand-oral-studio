@@ -1,5 +1,7 @@
 "use client";
 
+import { SelectInput, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { BrandSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import { updateBrand } from "@/server/actions/programs";
@@ -177,12 +179,11 @@ export function BrandEditor({
         </div>
 
         <div>
-          <label htmlFor={nameId} className="field-label">
+          <label htmlFor={nameId} className="opale-field__label">
             Nom de la charte
           </label>
-          <input
+          <TextInput
             id={nameId}
-            className="input"
             value={brand.name}
             maxLength={80}
             onChange={(e) => {
@@ -195,7 +196,7 @@ export function BrandEditor({
         </div>
 
         <fieldset>
-          <legend className="field-label">Couleurs</legend>
+          <legend className="opale-field__label">Couleurs</legend>
           <div className="flex flex-col gap-4">
             {COLOR_FIELDS.map(({ key, label, hint }) => {
               const value = brand.colors[key];
@@ -203,7 +204,7 @@ export function BrandEditor({
               const errKey = `colors.${key}`;
               return (
                 <div key={key}>
-                  <label htmlFor={id} className="field-label">
+                  <label htmlFor={id} className="opale-field__label">
                     {label} <span className="font-normal text-muted">(hexadécimal)</span>
                   </label>
                   <div className="flex items-center gap-3">
@@ -217,9 +218,9 @@ export function BrandEditor({
                         patch((b) => ({ ...b, colors: { ...b.colors, [key]: v } }));
                       }}
                     />
-                    <input
+                    <TextInput
                       id={id}
-                      className="input min-w-0 flex-1 font-mono uppercase"
+                      className="font-mono uppercase" shellClassName="min-w-0 flex-1"
                       value={value}
                       maxLength={7}
                       spellCheck={false}
@@ -232,7 +233,7 @@ export function BrandEditor({
                       {...errorProps(fieldErrors, errKey, `${id}-err`, `${id}-hint`)}
                     />
                   </div>
-                  <p id={`${id}-hint`} className="field-hint">
+                  <p id={`${id}-hint`} className="opale-field__helper">
                     {hint}
                   </p>
                   <FieldError id={`${id}-err`} message={firstError(fieldErrors, errKey)} />
@@ -256,7 +257,7 @@ export function BrandEditor({
         </LiveRegion>
 
         <fieldset>
-          <legend className="field-label">Polices</legend>
+          <legend className="opale-field__label">Polices</legend>
           <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
@@ -269,12 +270,11 @@ export function BrandEditor({
               const known = SAFE_FONTS.includes(current);
               return (
                 <div key={key}>
-                  <label htmlFor={id} className="field-label">
+                  <label htmlFor={id} className="opale-field__label">
                     {label}
                   </label>
-                  <select
+                  <SelectInput
                     id={id}
-                    className="input"
                     value={current}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -288,20 +288,20 @@ export function BrandEditor({
                         {f}
                       </option>
                     ))}
-                  </select>
+                  </SelectInput>
                   <FieldError id={`${id}-err`} message={firstError(fieldErrors, `fonts.${key}`)} />
                 </div>
               );
             })}
           </div>
-          <p className="field-hint">
+          <p className="opale-field__helper">
             Polices disponibles dans PowerPoint et Canva. L&apos;aperçu les affiche si elles sont installées sur votre
             appareil.
           </p>
         </fieldset>
 
         <fieldset>
-          <legend className="field-label">Logo</legend>
+          <legend className="opale-field__label">Logo</legend>
           <div className="flex flex-wrap items-center gap-3">
             {brand.logoDataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- data URL locale
@@ -314,8 +314,8 @@ export function BrandEditor({
               <p className="text-sm text-muted">Aucun logo.</p>
             )}
             <div className="flex flex-wrap gap-2">
-              <label className="btn btn-secondary btn-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent">
-                {brand.logoDataUrl ? "Remplacer le logo" : "Choisir un logo"}
+              <label className="opale-button opale-button--ghost opale-button--small has-[:focus-visible]:outline-[length:var(--opale-focus-ring-width)] has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring has-[:focus-visible]:outline-solid">
+                <span>{brand.logoDataUrl ? "Remplacer le logo" : "Choisir un logo"}</span>
                 <input
                   ref={fileRef}
                   type="file"
@@ -326,20 +326,20 @@ export function BrandEditor({
                 />
               </label>
               {brand.logoDataUrl ? (
-                <button
+                <Button
                   type="button"
-                  className="btn btn-danger-ghost btn-sm"
+                  variant="ghost" size="small" className="danger-outline"
                   onClick={() => {
                     patch((b) => ({ ...b, logoDataUrl: null }));
                     fileRef.current?.focus();
                   }}
                 >
                   Retirer le logo
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
-          <p id={`${baseId}-logo-hint`} className="field-hint">
+          <p id={`${baseId}-logo-hint`} className="opale-field__helper">
             PNG ou JPEG, 500 Ko au plus. Un fond transparent (PNG) s&apos;intègre mieux.
           </p>
           <LiveRegion className="mt-1 text-sm font-medium text-warning">
@@ -359,14 +359,14 @@ export function BrandEditor({
         <div className="sticky bottom-0 -mx-1 flex flex-col gap-2 border-t border-border bg-bg/95 px-1 py-3 backdrop-blur">
           <FormStatus state={status} />
           <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+            <Button type="submit" aria-disabled={pending || undefined}>
               <ButtonLabel idle="Enregistrer la charte" busy="Enregistrement…" isBusy={pending} />
-            </button>
+            </Button>
             {dirty ? (
               <>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-ghost"
+                  variant="text"
                   onClick={() => {
                     if (pending) return;
                     setBrand(saved);
@@ -377,7 +377,7 @@ export function BrandEditor({
                   aria-disabled={pending || undefined}
                 >
                   Annuler les modifications
-                </button>
+                </Button>
                 <span className="text-sm text-muted">Modifications non enregistrées</span>
               </>
             ) : null}

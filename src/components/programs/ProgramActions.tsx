@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteProgram, duplicateProgram } from "@/server/actions/programs";
@@ -43,18 +44,18 @@ export function ProgramActions({
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
       <div className="flex flex-wrap items-start gap-2">
-        <button
+        <Button
           type="button"
-          className="btn btn-ghost btn-sm"
+          variant="text" size="small"
           onClick={duplicate}
           aria-disabled={pending || undefined}
-          aria-label={pending ? `Duplication de ${programName} en cours` : `Dupliquer le programme ${programName}`}
+          aria-label={pending ? `Duplication de ${programName} en cours` : `Dupliquer le projet ${programName}`}
         >
           <ButtonLabel idle="Dupliquer" busy="Duplication…" isBusy={pending} />
-        </button>
+        </Button>
         <ConfirmAction
           triggerLabel="Supprimer"
-          triggerAccessibleLabel={`Supprimer le programme ${programName}`}
+          triggerAccessibleLabel={`Supprimer le projet ${programName}`}
           question={`Supprimer « ${programName} », ses thèmes, squelettes et decks ? Cette action est définitive.`}
           confirmLabel="Supprimer définitivement"
           requireText={programName}

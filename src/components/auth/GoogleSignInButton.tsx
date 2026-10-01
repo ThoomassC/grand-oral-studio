@@ -1,5 +1,6 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
 import { useId, useState } from "react";
 import { signIn } from "@/lib/auth-client";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -73,7 +74,7 @@ export function GoogleSignInButton({
       <LiveRegion className="sr-only">{pending ? "Redirection vers Google…" : null}</LiveRegion>
       <LiveRegion role="alert">
         {error ? (
-          <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">{error}</p>
+          <Notice tone="error">{error}</Notice>
         ) : null}
       </LiveRegion>
     </div>

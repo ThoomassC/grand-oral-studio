@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@thomascaron/opale-ui";
 import { useEffect, useRef } from "react";
 
 /** Contenu commun des fichiers error.tsx : message, référence, bouton Réessayer. */
@@ -10,7 +11,7 @@ export function ErrorPanel({
   retry,
 }: {
   title?: string;
-  /** Niveau du titre : 2 sous le layout d'un programme (qui porte déjà le h1). */
+  /** Niveau du titre : 2 sous le layout d'un projet (qui porte déjà le h1). */
   level?: 1 | 2;
   error: Error & { digest?: string };
   retry: () => void;
@@ -24,7 +25,7 @@ export function ErrorPanel({
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-12">
-      <div className="card border-danger/40 p-6">
+      <div className="opale-card opale-card--e1 block border-danger/40 p-6">
         <Heading ref={headingRef} tabIndex={-1} className="text-xl font-bold focus:outline-none">
           {title}
         </Heading>
@@ -36,9 +37,9 @@ export function ErrorPanel({
             Référence : <code className="font-mono">{error.digest}</code>
           </p>
         ) : null}
-        <button type="button" className="btn btn-primary mt-5" onClick={() => retry()}>
+        <Button type="button" className="mt-5" onClick={() => retry()}>
           Réessayer
-        </button>
+        </Button>
       </div>
     </div>
   );

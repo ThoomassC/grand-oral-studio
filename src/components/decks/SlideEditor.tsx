@@ -1,5 +1,8 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
+import { TextArea, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { LIMITS, SlideSchema, type DeckSpec, type Slide } from "@/domain/schemas";
 import { updateDeckSlide } from "@/server/actions/decks";
@@ -152,12 +155,11 @@ export function SlideEditor({
       }}
     >
       <div>
-        <label htmlFor={ids.title} className="field-label">
+        <label htmlFor={ids.title} className="opale-field__label">
           Titre
         </label>
-        <input
+        <TextInput
           id={ids.title}
-          className="input"
           value={title}
           maxLength={LIMITS.slideTitle}
           onChange={(e) => setTitle(e.target.value)}
@@ -167,12 +169,11 @@ export function SlideEditor({
         <FieldError id={`${ids.title}-err`} message={firstError(fieldErrors, "title")} />
       </div>
       <div>
-        <label htmlFor={ids.subtitle} className="field-label">
+        <label htmlFor={ids.subtitle} className="opale-field__label">
           Sous-titre <span className="font-normal text-muted">(facultatif)</span>
         </label>
-        <input
+        <TextInput
           id={ids.subtitle}
-          className="input"
           value={subtitle}
           maxLength={LIMITS.slideSubtitle}
           onChange={(e) => setSubtitle(e.target.value)}
@@ -182,8 +183,8 @@ export function SlideEditor({
       </div>
 
       <fieldset aria-describedby={`${ids.bullets}-hint`}>
-        <legend className="field-label">Puces</legend>
-        <p id={`${ids.bullets}-hint`} className="field-hint mt-0 mb-2">
+        <legend className="opale-field__label">Puces</legend>
+        <p id={`${ids.bullets}-hint`} className="opale-field__helper mt-0 mb-2">
           {bullets.length}/{MAX_BULLETS} puces, {MAX_BULLET_CHARS} caractères au plus chacune. Les puces vides sont ignorées.
         </p>
         <ol className="flex flex-col gap-2">
@@ -198,9 +199,9 @@ export function SlideEditor({
                     <label htmlFor={id} className="sr-only">
                       Puce {i + 1}
                     </label>
-                    <input
+                    <TextInput
                       id={id}
-                      className={`input ${isToComplete(b.text) ? "bg-highlight-soft" : ""}`}
+                      shellClassName={isToComplete(b.text) ? "bg-highlight-soft" : ""}
                       value={b.text}
                       onChange={(e) => {
                         const text = e.target.value;
@@ -217,39 +218,39 @@ export function SlideEditor({
                     />
                     <p
                       id={`${id}-count`}
-                      className={`field-hint tabular-nums ${length > MAX_BULLET_CHARS ? "font-semibold text-danger" : ""}`}
+                      className={`opale-field__helper tabular-nums ${length > MAX_BULLET_CHARS ?"font-semibold text-danger" : ""}`}
                     >
                       {length}/{MAX_BULLET_CHARS} caractères
                     </p>
                     <FieldError id={`${id}-err`} message={err} />
                   </div>
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-ghost btn-icon"
+                    variant="text" className="opale-icon-action-button"
                     onClick={() => removeBullet(i)}
                     aria-label={`Retirer la puce ${i + 1}`}
                   >
                     <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
                       <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
-                  </button>
+                  </Button>
                 </div>
               </li>
             );
           })}
         </ol>
-        <button
+        <Button
           id={ids.add}
           type="button"
-          className="btn btn-secondary btn-sm mt-2"
+          variant="ghost" size="small" className="mt-2"
           onClick={addBullet}
           aria-disabled={full || undefined}
           aria-describedby={full ? `${ids.add}-full` : undefined}
         >
           Ajouter une puce
-        </button>
+        </Button>
         {full ? (
-          <p id={`${ids.add}-full`} className="field-hint">
+          <p id={`${ids.add}-full`} className="opale-field__helper">
             Limite de {MAX_BULLETS} puces atteinte.
           </p>
         ) : null}
@@ -257,12 +258,11 @@ export function SlideEditor({
       </fieldset>
 
       <div>
-        <label htmlFor={ids.notes} className="field-label">
+        <label htmlFor={ids.notes} className="opale-field__label">
           Notes d&apos;orateur
         </label>
-        <textarea
+        <TextArea
           id={ids.notes}
-          className="input"
           rows={5}
           value={notes}
           maxLength={LIMITS.notes}
@@ -275,17 +275,17 @@ export function SlideEditor({
       <LiveRegion>{announce}</LiveRegion>
       <LiveRegion role="alert">
         {error ? (
-          <div className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
+          <Notice tone="error">
             <p className="font-medium">{error.message}</p>
             {error.reload ? (
               <>
-                <button type="button" className="btn btn-secondary btn-sm mt-2" onClick={() => window.location.reload()}>
+                <Button type="button" variant="ghost" size="small" className="mt-2" onClick={() => window.location.reload()}>
                   Recharger le diaporama
-                </button>
+                </Button>
                 <p className="mt-1 text-muted">Le rechargement abandonne les modifications non enregistrées de cette diapo.</p>
               </>
             ) : null}
-          </div>
+          </Notice>
         ) : null}
       </LiveRegion>
 
@@ -295,31 +295,31 @@ export function SlideEditor({
             Abandonner vos modifications de la diapo {index + 1} ?
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-danger-ghost btn-sm" onClick={onCancel}>
+            <Button type="button" variant="ghost" size="small" className="danger-outline" onClick={onCancel}>
               Abandonner
-            </button>
-            <button
+            </Button>
+            <Button
               id={ids.keep}
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="ghost" size="small"
               onClick={() => {
                 setConfirmDiscard(false);
                 focusLater([ids.title]);
               }}
             >
               Continuer l&apos;édition
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+        <Button type="submit" aria-disabled={pending || undefined}>
           <ButtonLabel idle="Enregistrer la diapo" busy="Enregistrement…" isBusy={pending} />
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={requestCancel} aria-disabled={pending || undefined}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={requestCancel} aria-disabled={pending || undefined}>
           Annuler
-        </button>
+        </Button>
       </div>
     </form>
   );

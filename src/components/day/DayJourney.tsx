@@ -1,5 +1,9 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
+import { SelectInput, TextArea } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
@@ -88,7 +92,7 @@ function StepTitle({ n, children, id, state }: { n: number; children: React.Reac
         aria-hidden="true"
         className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
           state === "current"
-            ? "hl ring-2 ring-on-highlight ring-offset-2 ring-offset-surface"
+            ? "bg-highlight text-on-highlight ring-2 ring-highlight ring-offset-2 ring-offset-surface"
             : state === "done"
               ? "bg-success-soft text-success ring-1 ring-success"
               : "bg-surface-2 text-muted ring-1 ring-border-strong"
@@ -277,12 +281,12 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
 
   if (themes.length === 0) {
     return (
-      <div className="card-empty p-6">
-        <h2 className="font-display text-lg font-semibold">Aucun thème dans ce programme</h2>
-        <p className="mt-1 text-muted">La reconnaissance a besoin des thèmes du programme. Ajoutez-les d&apos;abord.</p>
-        <Link href={`/programmes/${programId}`} className="btn btn-primary mt-4">
+      <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
+        <h2 className="font-display text-lg font-semibold">Aucun thème dans ce projet</h2>
+        <p className="mt-1 text-muted">La reconnaissance a besoin des thèmes du projet. Ajoutez-les d&apos;abord.</p>
+        <ButtonLink href={`/programmes/${programId}`} className="mt-4">
           Ajouter des thèmes
-        </Link>
+        </ButtonLink>
       </div>
     );
   }
@@ -299,14 +303,14 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             Votre dernier diaporama (« {recentDeck.title} », il y a{" "}
             {recentDeck.minutesAgo < 1 ? "moins d'une minute" : `${recentDeck.minutesAgo} min`}) est prêt.
           </p>
-          <Link href={`/programmes/${programId}/decks/${recentDeck.id}`} className="btn btn-secondary btn-sm shrink-0">
+          <ButtonLink href={`/programmes/${programId}/decks/${recentDeck.id}`} variant="ghost" size="small" className="shrink-0">
             Ouvrir le diaporama
-          </Link>
+          </ButtonLink>
         </div>
       ) : null}
 
       {/* Étape 1 */}
-      <section aria-labelledby={ids.s1} className="card p-5 sm:p-6">
+      <section aria-labelledby={ids.s1} className="opale-card opale-card--e1 block p-5 sm:p-6">
         <StepTitle n={1} id={ids.s1} state={step1State}>
           La problématique
         </StepTitle>
@@ -321,12 +325,12 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             className="mt-4 flex flex-col gap-4"
           >
             <div>
-              <label htmlFor={ids.problem} className="field-label">
+              <label htmlFor={ids.problem} className="opale-field__label">
                 Problématique tirée au sort
               </label>
-              <textarea
+              <TextArea
                 id={ids.problem}
-                className="input text-lg"
+                className="text-lg"
                 rows={4}
                 value={problem}
                 maxLength={PROBLEM_MAX}
@@ -334,18 +338,17 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 placeholder="Recopiez l'intitulé exact"
                 {...errorProps(fieldErrors, "problem", `${ids.problem}-err`, ids.counter)}
               />
-              <p id={ids.counter} className="field-hint tabular-nums">
+              <p id={ids.counter} className="opale-field__helper tabular-nums">
                 {problem.length.toLocaleString("fr-FR")}/{PROBLEM_MAX.toLocaleString("fr-FR")} caractères
               </p>
               <FieldError id={`${ids.problem}-err`} message={firstError(fieldErrors, "problem")} />
             </div>
             <div>
-              <label htmlFor={ids.hint} className="field-label">
+              <label htmlFor={ids.hint} className="opale-field__label">
                 Thème indiqué sur le sujet <span className="font-normal text-muted">(facultatif)</span>
               </label>
-              <select
+              <SelectInput
                 id={ids.hint}
-                className="input"
                 value={hintedThemeId}
                 onChange={(e) => update({ hintedThemeId: e.target.value })}
               >
@@ -355,34 +358,34 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                     {t.name}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             </div>
             <LiveRegion role="alert">
               {classifyError ? (
-                <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+                <Notice tone="error">
                   {classifyError}
-                </p>
+                </Notice>
               ) : null}
             </LiveRegion>
             <div className="flex flex-wrap items-center gap-3">
               {hintedTheme ? (
                 <>
-                  <button type="submit" className="btn btn-primary" aria-disabled={classifying || undefined}>
+                  <Button type="submit" aria-disabled={classifying || undefined}>
                     Continuer avec ce thème
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="btn btn-secondary"
+                    variant="ghost"
                     onClick={classify}
                     aria-disabled={classifying || undefined}
                   >
                     <ButtonLabel idle="Vérifier avec l'IA" busy="Vérification…" isBusy={classifying} />
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button type="submit" className="btn btn-primary" aria-disabled={classifying || undefined}>
+                <Button type="submit" aria-disabled={classifying || undefined}>
                   <ButtonLabel idle="Reconnaître le thème" busy="Reconnaissance en cours…" isBusy={classifying} />
-                </button>
+                </Button>
               )}
               <LiveRegion className="text-sm text-muted">
                 {classifying ? "Analyse de la problématique, quelques secondes…" : null}
@@ -393,14 +396,14 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
           <div className="mt-4 flex flex-col gap-3">
             <blockquote className="border-l-4 border-accent pl-4 text-lg">{problem.trim()}</blockquote>
             <div>
-              <button
+              <Button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                variant="text" size="small"
                 onClick={editProblem}
                 aria-disabled={generating || undefined}
               >
                 Modifier la problématique
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -408,7 +411,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
 
       {/* Étape 2 */}
       {stage === "chosen" ? (
-        <section aria-labelledby={ids.s2} className="card p-5 sm:p-6">
+        <section aria-labelledby={ids.s2} className="opale-card opale-card--e1 block p-5 sm:p-6">
           <StepTitle n={2} id={ids.s2} state={step2State}>
             Le thème
           </StepTitle>
@@ -432,7 +435,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               ) : null}
 
               <fieldset className="mt-5">
-                <legend className="field-label">Thème retenu pour le diaporama</legend>
+                <legend className="opale-field__label">Thème retenu pour le diaporama</legend>
                 {result.ranked.length === 0 ? (
                   <p className="mb-3 text-sm text-muted">
                     Aucun thème n&apos;a été reconnu avec assez de confiance. Choisissez-le dans la liste.
@@ -466,7 +469,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                           aria-describedby={[r.rationale ? `${cid}-why` : null, theme && !theme.hasSkeleton ? `${cid}-noskel` : null]
                             .filter(Boolean)
                             .join(" ") || undefined}
-                          className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                          className="mt-1 h-4 w-4 shrink-0 accent-[var(--opale-primary)]"
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -521,18 +524,17 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                           update({ choice: OTHER, otherThemeId: otherThemeId || themes[0]?.id || "" });
                         }}
                         aria-disabled={generating || undefined}
-                        className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                        className="h-4 w-4 shrink-0 accent-[var(--opale-primary)]"
                       />
-                      <span className="font-semibold">Un autre thème du programme</span>
+                      <span className="font-semibold">Un autre thème du projet</span>
                     </label>
                     {choice === OTHER ? (
                       <div className="mt-3 pl-7">
-                        <label htmlFor={ids.other} className="field-label">
+                        <label htmlFor={ids.other} className="opale-field__label">
                           Thème
                         </label>
-                        <select
+                        <SelectInput
                           id={ids.other}
-                          className="input"
                           value={otherThemeId}
                           onChange={(e) => {
                             if (!generating) update({ otherThemeId: e.target.value });
@@ -544,7 +546,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                               {t.hasSkeleton ? "" : " (sans squelette)"}
                             </option>
                           ))}
-                        </select>
+                        </SelectInput>
                       </div>
                     ) : null}
                   </div>
@@ -554,12 +556,11 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
           ) : (
             <div className="mt-4 flex flex-col gap-3">
               <div>
-                <label htmlFor={ids.direct} className="field-label">
+                <label htmlFor={ids.direct} className="opale-field__label">
                   Thème indiqué sur votre sujet
                 </label>
-                <select
+                <SelectInput
                   id={ids.direct}
-                  className="input"
                   value={otherThemeId}
                   onChange={(e) => {
                     if (!generating) update({ otherThemeId: e.target.value, choice: OTHER });
@@ -571,12 +572,12 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                       {t.hasSkeleton ? "" : " (sans squelette)"}
                     </option>
                   ))}
-                </select>
+                </SelectInput>
               </div>
               <div>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  variant="text" size="small"
                   onClick={() => {
                     if (generating) return;
                     update({ stage: "input" });
@@ -585,7 +586,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                   aria-disabled={generating || undefined}
                 >
                   Vérifier avec l&apos;IA
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -594,7 +595,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
 
       {/* Étape 3 */}
       {stage === "chosen" ? (
-        <section aria-labelledby={ids.s3} className="card p-5 sm:p-6">
+        <section aria-labelledby={ids.s3} className="opale-card opale-card--e1 block p-5 sm:p-6">
           <StepTitle n={3} id={ids.s3} state={step3State}>
             Le diaporama
           </StepTitle>
@@ -608,10 +609,10 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             </p>
           ) : null}
           {selectedTheme && !selectedTheme.hasSkeleton ? (
-            <p className="mt-2 rounded-lg border border-warning/60 bg-warning-soft px-3 py-2 text-sm">
+            <Notice tone="warning" className="mt-2">
               <strong className="text-warning">Ce thème n&apos;a pas de squelette.</strong> La génération fonctionne
               quand même, mais sans votre travail de préparation.
-            </p>
+            </Notice>
           ) : null}
 
           <p className="mt-4 flex flex-wrap items-baseline gap-x-2 text-sm">
@@ -619,27 +620,27 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               <span className="text-muted">Rédaction : </span>
               <strong>{writer.label}</strong>
             </span>
-            <Link href="/parametres" className="link">
+            <Link href="/parametres" className="opale-link">
               Changer<span className="sr-only"> le moteur de rédaction</span>
             </Link>
           </p>
 
           <div className="mt-4">
-            <button
+            <Button
               id={ids.generate}
               type="button"
-              className="btn btn-primary min-h-12 px-6 text-lg"
+              size="large"
               onClick={generate}
               aria-disabled={generating || !selectedThemeId || undefined}
               aria-describedby={generating ? `${ids.s3}-progress` : undefined}
             >
               <ButtonLabel idle="Générer le diaporama" busy="Génération en cours…" isBusy={generating} />
-            </button>
+            </Button>
           </div>
 
           <LiveRegion className="mt-4">
             {generating ? (
-              <div className="rounded-lg border border-accent/40 bg-accent-soft p-4">
+              <Notice tone="info">
                 <p id={`${ids.s3}-progress`} className="font-semibold text-accent-strong">
                   Génération du diaporama en cours. Cela prend en général 1 à 3 minutes.
                 </p>
@@ -653,7 +654,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                     problématique est conservée.
                   </p>
                 ) : null}
-              </div>
+              </Notice>
             ) : null}
           </LiveRegion>
           {generation.kind === "running" ? (
@@ -664,15 +665,15 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               {elapsed > SLOW_AFTER_MS ? (
                 // Une Server Action en cours ne s'annule pas : on recharge la page, la saisie est restaurée
                 // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau.
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>
+                <Button type="button" variant="ghost" size="small" onClick={() => window.location.reload()}>
                   Relancer
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}
           <LiveRegion role="alert" className="mt-2">
             {generation.kind === "error" ? (
-              <div className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
+              <Notice tone="error">
                 <p className="font-semibold">{generation.message}</p>
                 <p className="mt-1 text-sm">
                   Votre problématique et votre choix sont conservés : relancez la génération, ou{" "}
@@ -681,7 +682,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                   </Link>
                   .
                 </p>
-              </div>
+              </Notice>
             ) : null}
           </LiveRegion>
         </section>

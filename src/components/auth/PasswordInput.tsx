@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { flushSync } from "react-dom";
+import { Button, Icon } from "@thomascaron/opale-ui";
 
 type PasswordInputProps = Omit<ComponentProps<"input">, "type" | "ref"> & { id: string };
 
@@ -42,7 +43,7 @@ export function PasswordInput({ id, className = "", ...inputProps }: PasswordInp
   }
 
   return (
-    <div className="relative">
+    <div className="opale-input-shell pr-1">
       <input
         {...inputProps}
         ref={inputRef}
@@ -52,38 +53,20 @@ export function PasswordInput({ id, className = "", ...inputProps }: PasswordInp
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="none"
-        className={`input pr-12 ${className}`}
+        className={`opale-input ${className}`}
       />
-      <button
-        type="button"
-        className="absolute inset-y-0 right-0 my-auto mr-0.5 inline-flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:text-text aria-pressed:bg-surface-2 aria-pressed:text-text"
+      <Button
+        variant="text"
+        size="small"
+        className="opale-icon-action-button shrink-0"
         aria-label="Afficher le mot de passe"
         title="Afficher le mot de passe"
         aria-pressed={visible}
         aria-controls={id}
         onClick={(e) => toggle(e.currentTarget)}
       >
-        {visible ? <EyeOffIcon /> : <EyeIcon />}
-      </button>
+        <Icon name={visible ? "eye-off" : "eye"} />
+      </Button>
     </div>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.6 5.1A9.7 9.7 0 0 1 12 5c6 0 9.5 7 9.5 7a17 17 0 0 1-2.6 3.5M6.6 6.6C3.9 8.4 2.5 12 2.5 12S6 19 12 19a9.4 9.4 0 0 0 5.4-1.6" />
-      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
-      <path d="m3 3 18 18" />
-    </svg>
   );
 }

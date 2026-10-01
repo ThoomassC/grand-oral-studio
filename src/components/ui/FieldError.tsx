@@ -2,7 +2,7 @@
 export function FieldError({ id, message }: { id: string; message: string | undefined }) {
   if (!message) return null;
   return (
-    <p id={id} className="field-error">
+    <p id={id} className="opale-field__helper opale-field__helper--error">
       <span aria-hidden="true">Erreur : </span>
       {message}
     </p>

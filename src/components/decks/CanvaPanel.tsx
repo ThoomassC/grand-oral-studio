@@ -1,5 +1,7 @@
 "use client";
 
+import { TextArea } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState } from "react";
 
 type CopyState = { kind: "idle" } | { kind: "copied" } | { kind: "manual" };
@@ -27,7 +29,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
   }
 
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="card p-5 sm:p-6">
+    <section id={id} aria-labelledby={`${id}-title`} className="opale-card opale-card--e1 block p-5 sm:p-6">
       <h2 id={`${id}-title`} className="text-lg font-semibold">
         Importer dans Canva
       </h2>
@@ -37,7 +39,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
         </li>
         <li>
           Ouvrez{" "}
-          <a href="https://www.canva.com" target="_blank" rel="noopener noreferrer" className="link">
+          <a href="https://www.canva.com" target="_blank" rel="noopener noreferrer" className="opale-link">
             canva.com<span className="sr-only"> (nouvel onglet)</span>
           </a>{" "}
           et connectez-vous.
@@ -54,20 +56,20 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
 
       <div className="mt-5">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <label htmlFor={textareaId} className="field-label mb-0">
+          <label htmlFor={textareaId} className="opale-field__label mb-0">
             Prompt Canva
           </label>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={copyPrompt}>
+          <Button type="button" variant="ghost" size="small" onClick={copyPrompt}>
             Copier le prompt Canva
-          </button>
+          </Button>
         </div>
-        <textarea
+        <TextArea
           ref={textareaRef}
           id={textareaId}
           readOnly
           value={prompt}
           rows={12}
-          className="input mt-2 max-h-80 font-mono text-sm"
+          className="max-h-80 font-mono text-sm" shellClassName="mt-2"
           aria-describedby={`${textareaId}-status`}
         />
         <p id={`${textareaId}-status`} role="status" className="mt-2 text-sm font-medium">

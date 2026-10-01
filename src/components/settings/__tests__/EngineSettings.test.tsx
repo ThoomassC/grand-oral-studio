@@ -38,7 +38,7 @@ afterEach(() => {
 describe("EngineSettings", () => {
   it("devrait présenter trois moteurs dans un groupe nommé, avec le moteur utilisé et le défaut", () => {
     render(<EngineSettings status={status()} />);
-    const group = screen.getByRole("group", { name: "Choix du moteur" });
+    const group = screen.getByRole("radiogroup", { name: "Choix du moteur" });
     expect(within(group).getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByText(/Moteur utilisé :/)).toHaveTextContent("Gratuit (sans IA)");
     expect(screen.getByText(/Par défaut : Claude si une clé est disponible, sinon Gratuit/)).toBeInTheDocument();
@@ -99,8 +99,8 @@ describe("EngineSettings", () => {
 
   it("devrait préfixer chaque raison d'indisponibilité par « Indisponible : »", () => {
     render(<EngineSettings status={status({}, { configured: true })} />);
-    expect(screen.getByText(/Ollama ne répond pas/).closest("p")).toHaveTextContent(/^Indisponible : Ollama ne répond pas/);
-    expect(screen.getByText(/aucune clé API/).closest("p")).toHaveTextContent(/^Indisponible :/);
+    expect(screen.getByRole("radio", { name: /Ollama/ })).toHaveAccessibleDescription(/Indisponible : Ollama ne répond pas/);
+    expect(screen.getByRole("radio", { name: /Claude/ })).toHaveAccessibleDescription(/Indisponible : aucune clé API/);
   });
 
   it("devrait ramener le focus sur le premier moteur disponible si le choix coché est indisponible", async () => {

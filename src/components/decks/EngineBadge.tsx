@@ -1,22 +1,24 @@
+import { Badge, type BadgeTone } from "@thomascaron/opale-ui";
+
 export type DeckEngine = "claude" | "ollama" | "free" | "mock";
 
-const BADGE: Record<DeckEngine, { label: string; className: string }> = {
-  // Trame sans IA : surlignée (à compléter), sans ton d'alerte.
-  free: { label: "Sans IA · à compléter", className: "hl ring-1 ring-inset ring-on-highlight/25" },
-  ollama: { label: "Modèle local", className: "bg-surface-2 text-text ring-1 ring-inset ring-border-strong" },
-  claude: { label: "Claude", className: "bg-surface-2 text-text ring-1 ring-inset ring-border-strong" },
-  mock: { label: "Démo", className: "bg-surface text-muted ring-1 ring-inset ring-border-strong" },
+const BADGE: Record<DeckEngine, { label: string; tone: BadgeTone }> = {
+  // Trame sans IA : l'accent d'Opale (à compléter), sans ton d'alerte.
+  free: { label: "Sans IA · à compléter", tone: "accent" },
+  ollama: { label: "Modèle local", tone: "info" },
+  claude: { label: "Claude", tone: "primary" },
+  mock: { label: "Démo", tone: "neutral" },
 };
 
-/** Moteur qui a produit un deck ; rien pour les decks antérieurs au suivi (null). */
-export function EngineBadge({ engine, className = "" }: { engine: DeckEngine | null; className?: string }) {
+/** Moteur qui a produit un deck (`Badge` d'Opale) ; rien pour les decks antérieurs au suivi (null). */
+export function EngineBadge({ engine, className }: { engine: DeckEngine | null; className?: string }) {
   if (!engine) return null;
   const badge = BADGE[engine];
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-sm font-semibold ${badge.className} ${className}`}>
+    <Badge tone={badge.tone} className={className}>
       <span className="sr-only">Moteur : </span>
       {badge.label}
-    </span>
+    </Badge>
   );
 }
 

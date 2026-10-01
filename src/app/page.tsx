@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Badge } from "@thomascaron/opale-ui";
 import { redirect } from "next/navigation";
 import { Duration, PREP_MINUTES, PrepDial, PrepTimeBadge } from "@/components/day/PrepClock";
 import { SlidePreview, type SlideBrand, type SlidePreviewData } from "@/components/slides/SlidePreview";
@@ -6,8 +7,8 @@ import { getUser } from "@/server/session";
 
 const STEPS = [
   {
-    title: "Configurer le programme",
-    text: "Listez les thèmes de votre programme, puis réglez la charte graphique et le gabarit : format, durée de l'oral, sections attendues.",
+    title: "Configurer le projet",
+    text: "Listez les thèmes de votre projet, puis réglez la charte graphique et le gabarit : format, durée de l'oral, sections attendues.",
   },
   {
     title: "Réviser les squelettes",
@@ -21,13 +22,13 @@ const STEPS = [
 
 const DAY_TIMELINE = [
   { at: "0:00", text: "Vous recopiez la problématique tirée au sort." },
-  { at: "0:01", text: "L'IA reconnaît le thème du programme ; vous confirmez d'un clic." },
+  { at: "0:01", text: "L'IA reconnaît le thème du projet ; vous confirmez d'un clic." },
   { at: "0:03", text: "Le deck complet, notes d'orateur comprises, est prêt à relire et à exporter." },
 ] as const;
 
-/** Charte d'exemple aux couleurs de l'app, pour les miniatures de l'accueil. */
+/** Charte d'exemple dans la palette d'Opale, pour les miniatures de l'accueil. */
 const SAMPLE_BRAND: SlideBrand = {
-  colors: { primary: "#1B2A4A", secondary: "#55627A", accent: "#FFE14D", background: "#FFFFFF", text: "#1B2333" },
+  colors: { primary: "#23457A", secondary: "#5C574D", accent: "#F4AD15", background: "#FFFFFF", text: "#14100B" },
   fonts: { heading: "Georgia", body: "Arial" },
   logoDataUrl: null,
 };
@@ -71,12 +72,12 @@ export default async function HomePage() {
             fidèle à votre charte, que vous relisez et ajustez pendant votre temps de préparation.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/inscription" className="btn btn-primary min-h-12 px-6 text-lg">
+            <ButtonLink href="/inscription" size="large">
               Créer un compte
-            </Link>
-            <Link href="/connexion" className="btn btn-secondary min-h-12 px-6 text-lg">
+            </ButtonLink>
+            <ButtonLink href="/connexion" variant="ghost" size="large">
               J&apos;ai déjà un compte
-            </Link>
+            </ButtonLink>
           </div>
           <div className="mt-8">
             <PrepTimeBadge />
@@ -106,9 +107,9 @@ export default async function HomePage() {
               );
             })}
           </div>
-          <p className="num absolute -bottom-2 right-0 rounded-sm bg-surface px-2 py-1 text-sm font-semibold shadow-card ring-1 ring-border">
+          <Badge tone="neutral" className="num absolute -bottom-2 right-0 shadow-card">
             13 diapos · 20 min
-          </p>
+          </Badge>
         </div>
       </section>
 
@@ -119,7 +120,7 @@ export default async function HomePage() {
         </h2>
         <ol className="mt-8 grid gap-4 md:grid-cols-3 md:gap-6">
           {STEPS.map((step, i) => (
-            <li key={step.title} className="card card-bristol p-6 pt-8">
+            <li key={step.title} className="opale-card opale-card--e1 block p-6">
               <span aria-hidden="true" className="num text-sm font-bold text-muted">
                 Étape {String(i + 1).padStart(2, "0")}
               </span>
@@ -133,7 +134,7 @@ export default async function HomePage() {
         </ol>
       </section>
 
-      <section aria-labelledby="jour-j" className="mb-16 grid gap-8 rounded-[var(--radius-card)] border border-border bg-surface p-6 shadow-card sm:p-10 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-12">
+      <section aria-labelledby="jour-j" className="opale-card opale-card--e1 mb-16 grid gap-8 p-6 sm:p-10 md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-12">
         <div className="flex items-center gap-4 md:flex-col md:items-center">
           <PrepDial className="h-24 w-24 shrink-0 sm:h-32 sm:w-32" />
           <p className="text-sm text-muted md:text-center">

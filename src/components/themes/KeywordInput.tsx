@@ -67,7 +67,7 @@ export function KeywordInput({
   return (
     <div>
       <div
-        className={`input flex min-h-11 flex-wrap items-center gap-1.5 py-1.5 focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-accent ${
+        className={`opale-input-shell flex-wrap gap-1.5 py-1.5 focus-within:outline-[length:var(--opale-focus-ring-width)] focus-within:outline-solid focus-within:outline-offset-[var(--opale-focus-ring-offset)] focus-within:outline-ring ${
           invalid ? "border-danger" : ""
         }`}
       >
@@ -118,7 +118,7 @@ export function KeywordInput({
           maxLength={maxLength}
         />
       </div>
-      <p id={hintId} className={`field-hint ${full ? "font-semibold text-warning" : ""}`}>
+      <p id={hintId} className={`opale-field__helper ${full ?"font-semibold text-warning" : ""}`}>
         {full
           ? `Limite de ${max} mots-clés atteinte : retirez-en un pour en ajouter un autre.`
           : `Validez chaque mot-clé avec Entrée ou une virgule (${value.length}/${max}).`}

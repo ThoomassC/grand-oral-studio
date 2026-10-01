@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { ApiKeySettings, type ApiKeyStatus } from "@/components/settings/ApiKeySettings";
 import { EngineSettings, type EngineStatus } from "@/components/settings/EngineSettings";
 import { AppearanceSettings } from "@/components/theme/AppearanceSettings";
-import { parseExplicitTheme, THEME_COOKIE } from "@/components/theme/theme";
 import { formatDateTime } from "@/components/ui/format";
 import { getAiSettings } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -14,9 +12,7 @@ const CONSOLE_URL = "https://console.anthropic.com/settings/keys";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  // Lectures indépendantes en parallèle.
-  const [settings, cookieStore] = await Promise.all([getAiSettings(user.id), cookies()]);
-  const themePreference = parseExplicitTheme(cookieStore.get(THEME_COOKIE)?.value) ?? "system";
+  const settings = await getAiSettings(user.id);
 
   // DTO explicite : seulement ce que l'interface affiche.
   const status: ApiKeyStatus = {
@@ -50,7 +46,7 @@ export default async function SettingsPage() {
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
-        <section aria-labelledby="moteur" className="card card-bristol p-5 pt-7 sm:p-6 sm:pt-8">
+        <section aria-labelledby="moteur" className="opale-card opale-card--e1 block p-5 pt-7 sm:p-6 sm:pt-8">
           <h2 id="moteur" className="text-2xl">
             Moteur de rédaction
           </h2>
@@ -62,7 +58,7 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <section aria-labelledby="cle-api" className="card p-5 sm:p-6">
+        <section aria-labelledby="cle-api" className="opale-card opale-card--e1 block p-5 sm:p-6">
           <h2 id="cle-api" tabIndex={-1} className="scroll-mt-6 text-2xl focus:outline-none">
             Clé API Anthropic
           </h2>
@@ -79,7 +75,7 @@ export default async function SettingsPage() {
             <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
               <li>
                 Créez une clé dans la{" "}
-                <a href={CONSOLE_URL} className="link font-semibold" target="_blank" rel="noopener noreferrer">
+                <a href={CONSOLE_URL} className="opale-link font-semibold" target="_blank" rel="noopener noreferrer">
                   console Anthropic, rubrique API Keys
                   <span className="sr-only"> (nouvel onglet)</span>
                 </a>
@@ -97,7 +93,7 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <section aria-labelledby="apparence" className="card p-5 sm:p-6">
+        <section aria-labelledby="apparence" className="opale-card opale-card--e1 block p-5 sm:p-6">
           <h2 id="apparence" className="text-2xl">
             Apparence
           </h2>
@@ -106,7 +102,7 @@ export default async function SettingsPage() {
             votre appareil.
           </p>
           <div className="mt-5">
-            <AppearanceSettings serverPreference={themePreference} />
+            <AppearanceSettings />
           </div>
         </section>
       </div>

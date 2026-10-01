@@ -4,7 +4,7 @@ import { getDeck, getProgram, NotFoundError, type DeckWithProgram, type ProgramD
 import { requireUser } from "@/server/session";
 
 /**
- * Lectures partagées par le layout et les pages d'un programme. `cache`
+ * Lectures partagées par le layout et les pages d'un projet. `cache`
  * dédoublonne l'appel au sein d'un même rendu (layout + page = une requête).
  * Une ressource absente ou étrangère devient un 404.
  */
@@ -30,7 +30,7 @@ export const loadDeck = cache(async (programId: string, deckId: string): Promise
   }
 });
 
-/** Compte des squelettes générés d'un programme. */
+/** Compte des squelettes générés d'un projet. */
 export function skeletonCount(program: ProgramDetail): number {
   return program.themes.filter((t) => t.skeleton !== null).length;
 }

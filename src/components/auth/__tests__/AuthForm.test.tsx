@@ -28,7 +28,8 @@ describe("AuthForm — erreur de retour OAuth", () => {
   it("devrait injecter l'erreur dans la région d'alerte après le montage", async () => {
     render(<AuthForm mode="signin" next="/programmes" google="enabled" initialError={MESSAGE} />);
     const alerts = await screen.findAllByRole("alert");
-    expect(alerts.some((a) => a.textContent === MESSAGE)).toBe(true);
+    // Encart au rendu de Feedback d'Opale : titre « Erreur » puis le message.
+    expect(alerts.some((a) => a.textContent === `Erreur${MESSAGE}`)).toBe(true);
   });
 
   it("devrait effacer l'erreur initiale quand on relance Google", async () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge, type BadgeTone, Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useId, useRef, useState, useTransition } from "react";
 import { SaveApiKeyInputSchema } from "@/domain/api-key";
@@ -32,26 +33,26 @@ interface SaveState {
 const INITIAL: SaveState = { status: IDLE, fieldErrors: {} };
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
 
-const SOURCE_SUMMARY: Record<ApiKeyStatus["effectiveSource"], { badge: string; text: string; tone: string }> = {
+const SOURCE_SUMMARY: Record<ApiKeyStatus["effectiveSource"], { badge: string; text: string; tone: BadgeTone }> = {
   user: {
     badge: "Clé personnelle",
     text: "Vos générations utilisent votre propre clé API.",
-    tone: "bg-success-soft text-success ring-success/50",
+    tone: "success",
   },
   server: {
     badge: "Clé du serveur",
     text: "Aucune clé personnelle : l'app utilise la clé du serveur.",
-    tone: "bg-surface-2 text-text ring-border-strong",
+    tone: "neutral",
   },
   mock: {
     badge: "Démo",
     text: "Mode démo : contenus factices. Ajoutez votre clé pour obtenir de vrais diaporamas.",
-    tone: "bg-warning-soft text-warning ring-warning/50",
+    tone: "warning",
   },
   none: {
     badge: "Aucune clé",
     text: "Aucune clé API : Claude n'est pas disponible. Le moteur gratuit (sans IA) fonctionne sans clé.",
-    tone: "bg-surface-2 text-text ring-border-strong",
+    tone: "neutral",
   },
 };
 
@@ -121,9 +122,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
       {/* État actuel, en clair. */}
       <div id={ids.current} className="rounded-lg border border-border bg-surface-2 p-4">
         <p className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-sm font-bold ring-1 ring-inset ${summary.tone}`}>
-            {summary.badge}
-          </span>
+          <Badge tone={summary.tone}>{summary.badge}</Badge>
           {status.effectiveSource !== "mock" ? (
             <span className="text-sm text-muted">
               Modèle : <span className="num text-text">{status.model}</span>
@@ -151,7 +150,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
         }}
       >
         <div>
-          <label htmlFor={ids.key} className="field-label">
+          <label htmlFor={ids.key} className="opale-field__label">
             {status.configured ? "Remplacer par une nouvelle clé" : "Votre clé API Anthropic"}
           </label>
           <PasswordInput
@@ -164,7 +163,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
             maxLength={256}
             {...errorProps(state.fieldErrors, "apiKey", `${ids.key}-err`, ids.hint)}
           />
-          <p id={ids.hint} className="field-hint">
+          <p id={ids.hint} className="opale-field__helper">
             Elle commence par « sk-ant- ». Elle est vérifiée auprès d&apos;Anthropic avant d&apos;être enregistrée.
           </p>
           <FieldError id={`${ids.key}-err`} message={firstError(state.fieldErrors, "apiKey")} />
@@ -172,9 +171,9 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
         <FormStatus state={state.status} />
         <LiveRegion className="sr-only">{saving ? "Vérification de la clé auprès d'Anthropic…" : null}</LiveRegion>
         <div className="flex flex-wrap gap-2">
-          <button type="submit" className="btn btn-primary" aria-disabled={busy || undefined}>
+          <Button type="submit" aria-disabled={busy || undefined}>
             <ButtonLabel idle="Vérifier et enregistrer" busy="Vérification de la clé…" isBusy={saving} />
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -182,15 +181,15 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
         <div className="flex flex-col gap-3 border-t border-border pt-5">
           <div className="flex flex-wrap items-start gap-2">
             {canTest ? (
-              <button type="button" className="btn btn-secondary" onClick={test} aria-disabled={busy || undefined}>
+              <Button type="button" variant="ghost" onClick={test} aria-disabled={busy || undefined}>
                 <ButtonLabel idle="Tester la connexion" busy="Test en cours…" isBusy={testing} />
-              </button>
+              </Button>
             ) : null}
             {status.configured ? (
               <ConfirmAction
                 triggerId={`${baseId}-delete`}
                 triggerLabel="Supprimer ma clé"
-                triggerClassName="btn btn-danger-ghost"
+                size="medium"
                 triggerDisabled={busy}
                 question={
                   status.effectiveSource === "user"

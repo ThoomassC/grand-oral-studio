@@ -1,5 +1,7 @@
 "use client";
 
+import { SelectInput } from "@/components/ui/Field";
+import { Button, Radio, RadioGroup } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useId, useRef, useState, type ReactNode } from "react";
 import { setAiEngine } from "@/server/actions/settings";
@@ -126,7 +128,7 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
       note: status.available.claude ? null : (
         <>
           Indisponible : aucune clé API.{" "}
-          <a href="#cle-api" className="link font-semibold">
+          <a href="#cle-api" className="opale-link font-semibold">
             Ajouter une clé API
           </a>
         </>
@@ -140,14 +142,13 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
       note: ollamaNote,
       extra:
         ollamaUsable && choice === "ollama" ? (
-          <div className="mt-3">
-            <label htmlFor={modelId} className="field-label text-sm">
+          <div>
+            <label htmlFor={modelId} className="opale-field__label">
               Modèle Ollama
             </label>
-            <select
+            <SelectInput
               id={modelId}
               name="ollamaModel"
-              className="input"
               defaultValue={
                 ollama.selectedModel && ollama.models.includes(ollama.selectedModel) ? ollama.selectedModel : ollama.models[0]
               }
@@ -159,7 +160,7 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
                   {m}
                 </option>
               ))}
-            </select>
+            </SelectInput>
             <FieldError id={`${modelId}-err`} message={modelError} />
           </div>
         ) : null,
@@ -188,60 +189,38 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
         ) : null}
       </div>
 
-      <fieldset aria-describedby={engineError ? `${baseId}-engine-err` : undefined}>
-        <legend className="field-label">Choix du moteur</legend>
-        <div className="mt-1 flex flex-col gap-3">
-          {options.map((o) => {
-            const id = `${baseId}-${o.value}`;
-            return (
-              <div
-                key={o.value}
-                className={`rounded-lg border p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${
-                  o.disabled
-                    ? "border-dashed border-border-strong bg-surface"
-                    : "border-border-strong hover:bg-surface-2 has-[:checked]:border-text has-[:checked]:bg-accent-soft has-[:checked]:ring-1 has-[:checked]:ring-text"
-                }`}
-              >
-                <label htmlFor={id} className={`flex items-start gap-3 ${o.disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                  <input
-                    id={id}
-                    type="radio"
-                    name="engine"
-                    value={o.value}
-                    checked={choice === o.value}
-                    disabled={o.disabled}
-                    onChange={() => setChoice(o.value)}
-                    aria-labelledby={`${id}-title`}
-                    aria-describedby={[`${id}-text`, o.note ? `${id}-note` : null].filter(Boolean).join(" ")}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[var(--text)] focus-visible:outline-none"
-                  />
-                  <span className="min-w-0">
-                    <span id={`${id}-title`} className={`block font-bold ${o.disabled ? "text-muted" : ""}`}>
-                      {o.title}
-                    </span>
-                    <span id={`${id}-text`} className="mt-0.5 block text-sm text-muted">
-                      {o.text}
-                    </span>
-                  </span>
-                </label>
-                {o.note ? (
-                  <p id={`${id}-note`} className="mt-2 pl-7 text-sm font-medium">
-                    {o.note}
-                  </p>
-                ) : null}
-                {o.extra ? <div className="pl-7">{o.extra}</div> : null}
-              </div>
-            );
-          })}
-        </div>
-        <FieldError id={`${baseId}-engine-err`} message={engineError} />
-      </fieldset>
+      <RadioGroup
+        label="Choix du moteur"
+        name="engine"
+        value={choice}
+        onValueChange={(value) => {
+          if (value === "claude" || value === "ollama" || value === "free") setChoice(value);
+        }}
+        aria-describedby={engineError ? `${baseId}-engine-err` : undefined}
+      >
+        {options.map((o) => (
+          <Radio
+            key={o.value}
+            value={o.value}
+            disabled={o.disabled}
+            label={o.title}
+            description={
+              <>
+                {o.text}
+                {o.note ? <span className="mt-1 block font-semibold text-text">{o.note}</span> : null}
+              </>
+            }
+          />
+        ))}
+      </RadioGroup>
+      {options.map((o) => (o.extra ? <div key={o.value}>{o.extra}</div> : null))}
+      <FieldError id={`${baseId}-engine-err`} message={engineError} />
 
       <FormStatus state={state.status} />
       <div>
-        <button type="submit" className="btn btn-primary" aria-disabled={saving || undefined}>
+        <Button type="submit" aria-disabled={saving || undefined}>
           <ButtonLabel idle="Enregistrer le moteur" busy="Enregistrement…" isBusy={saving} />
-        </button>
+        </Button>
       </div>
     </form>
   );

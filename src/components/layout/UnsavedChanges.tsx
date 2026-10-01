@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode, type RefO
 
 /**
  * Signal « modifications non enregistrées » partagé entre un éditeur (charte,
- * gabarit) et la navigation par onglets du programme. Un ref suffit : on ne le
+ * gabarit) et la navigation par onglets du projet. Un ref suffit : on ne le
  * lit qu'au moment d'un clic, sans rien re-rendre.
  */
 const UnsavedContext = createContext<RefObject<boolean> | null>(null);

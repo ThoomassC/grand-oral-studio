@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useState } from "react";
 import { buildCanvaPrompt } from "@/domain/canva";
 import { checkDeckAgainstTemplate } from "@/domain/deck";
@@ -57,15 +58,15 @@ export function DeckReview({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start gap-3">
         <PptxDownloadButton href={`/api/decks/${deckId}/pptx`} fallbackName="diaporama.pptx" />
-        <button
+        <Button
           type="button"
-          className="btn btn-secondary"
+          variant="ghost"
           aria-expanded={canvaOpen}
           aria-controls={canvaOpen ? canvaId : undefined}
           onClick={() => setCanvaOpen((v) => !v)}
         >
           {canvaOpen ? "Masquer l'import dans Canva" : "Importer dans Canva"}
-        </button>
+        </Button>
       </div>
 
       {canvaOpen ? <CanvaPanel id={canvaId} prompt={canvaPrompt} /> : null}
@@ -97,7 +98,7 @@ export function DeckReview({
             const section =
               slide.sectionId === "cover" ? "Couverture" : (sectionTitle.get(slide.sectionId) ?? slide.sectionId);
             return (
-              <li key={index} className="card p-4 sm:p-5">
+              <li key={index} className="opale-card opale-card--e1 block p-4 sm:p-5">
                 <h3 className="text-lg">
                   <span aria-hidden="true" className="num mr-2 text-base text-muted">
                     {String(index + 1).padStart(2, "0")}
@@ -159,17 +160,17 @@ export function DeckReview({
                           )}
                         </div>
                         <div className="mt-auto">
-                          <button
+                          <Button
                             id={editId(index)}
                             type="button"
-                            className="btn btn-secondary btn-sm"
+                            variant="ghost" size="small"
                             onClick={() => {
                               if (editing === null) setEditing(index);
                             }}
                             aria-disabled={editing !== null || undefined}
                           >
                             Modifier<span className="sr-only"> la diapo {index + 1}</span>
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )}

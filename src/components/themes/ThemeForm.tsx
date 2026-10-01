@@ -1,5 +1,7 @@
 "use client";
 
+import { TextArea, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { ThemeInputSchema, type ThemeInput } from "@/domain/schemas";
 import type { ActionResult } from "@/server/actions/result";
@@ -112,13 +114,12 @@ export function ThemeForm({
       }}
     >
       <div>
-        <label htmlFor={ids.name} className="field-label">
+        <label htmlFor={ids.name} className="opale-field__label">
           Nom du thème
         </label>
-        <input
+        <TextInput
           ref={nameRef}
           id={ids.name}
-          className="input"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={120}
@@ -128,12 +129,11 @@ export function ThemeForm({
         <FieldError id={`${ids.name}-err`} message={firstError(fieldErrors, "name")} />
       </div>
       <div>
-        <label htmlFor={ids.description} className="field-label">
+        <label htmlFor={ids.description} className="opale-field__label">
           Description <span className="font-normal text-muted">(facultatif)</span>
         </label>
-        <textarea
+        <TextArea
           id={ids.description}
-          className="input"
           rows={3}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -143,7 +143,7 @@ export function ThemeForm({
         <FieldError id={`${ids.description}-err`} message={firstError(fieldErrors, "description")} />
       </div>
       <div>
-        <label htmlFor={ids.keywords} className="field-label">
+        <label htmlFor={ids.keywords} className="opale-field__label">
           Mots-clés <span className="font-normal text-muted">(aident la reconnaissance du thème)</span>
         </label>
         <KeywordInput
@@ -157,20 +157,20 @@ export function ThemeForm({
       </div>
       <FormStatus state={status} />
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+        <Button type="submit" aria-disabled={pending || undefined}>
           <ButtonLabel idle={submitLabel} busy={pendingLabel} isBusy={pending} />
-        </button>
+        </Button>
         {onCancel ? (
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
+            variant="ghost"
             onClick={() => {
               if (!pending) onCancel();
             }}
             aria-disabled={pending || undefined}
           >
             Annuler
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

@@ -1,5 +1,8 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
+import { TextArea } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useState, useTransition } from "react";
 import { importThemes } from "@/server/actions/themes";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -70,12 +73,12 @@ export function ThemeImport({
         </ul>
       </div>
       <div>
-        <label htmlFor={textId} className="field-label">
+        <label htmlFor={textId} className="opale-field__label">
           Liste des thèmes
         </label>
-        <textarea
+        <TextArea
           id={textId}
-          className="input font-mono text-sm"
+          className="font-mono text-sm"
           rows={8}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -105,7 +108,7 @@ export function ThemeImport({
       </LiveRegion>
       <LiveRegion>
         {outcome.kind === "done" ? (
-          <div className="rounded-lg border border-success/40 bg-success-soft px-3 py-2 text-sm">
+          <Notice tone="success">
             <p className="font-semibold text-success">
               {outcome.created === 0
                 ? "Aucun nouveau thème créé."
@@ -117,17 +120,17 @@ export function ThemeImport({
                 {outcome.skipped.join(", ")}.
               </p>
             ) : null}
-          </div>
+          </Notice>
         ) : null}
       </LiveRegion>
 
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn btn-primary" aria-disabled={pending || text.trim() === "" || undefined}>
+        <Button type="submit" aria-disabled={pending || text.trim() === "" || undefined}>
           <ButtonLabel idle="Importer les thèmes" busy="Import…" isBusy={pending} />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn btn-ghost"
+          variant="text"
           aria-disabled={text !== "" || undefined}
           aria-describedby={text !== "" ? `${textId}-example-hint` : undefined}
           onClick={() => {
@@ -135,16 +138,16 @@ export function ThemeImport({
           }}
         >
           Insérer un exemple
-        </button>
+        </Button>
         {text !== "" ? (
           <span id={`${textId}-example-hint`} className="sr-only">
             Disponible quand la liste est vide.
           </span>
         ) : null}
         {onClose ? (
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
+          <Button type="button" variant="text" onClick={onClose}>
             Fermer
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

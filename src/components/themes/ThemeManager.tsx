@@ -1,5 +1,7 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@thomascaron/opale-ui";
 import { useOptimistic, useState, useTransition } from "react";
 import type { ThemeInput } from "@/domain/schemas";
 import { addTheme, deleteTheme, reorderThemes, updateTheme } from "@/server/actions/themes";
@@ -126,36 +128,35 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             Thèmes
           </h2>
           <p className="text-sm text-muted">
-            L&apos;ordre des thèmes est celui de votre programme. Les mots-clés aident l&apos;IA à reconnaître le
+            L&apos;ordre des thèmes est celui de votre projet. Les mots-clés aident l&apos;IA à reconnaître le
             thème d&apos;une problématique.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
+          <Button
             id={IDS.addButton}
-            type="button"
-            className={panel === "add" ? "btn btn-secondary" : "btn btn-primary"}
+            variant={panel === "add" ? "ghost" : "primary"}
             aria-expanded={panel === "add"}
             aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
             onClick={() => openPanel("add")}
           >
             Ajouter un thème
-          </button>
-          <button
+          </Button>
+          <Button
             id={IDS.importButton}
             type="button"
-            className="btn btn-secondary"
+            variant="ghost"
             aria-expanded={panel === "import"}
             aria-controls={panel === "import" ? "panel-import-themes" : undefined}
             onClick={() => openPanel("import")}
           >
             Importer une liste
-          </button>
+          </Button>
         </div>
       </div>
 
       {panel === "add" ? (
-        <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="card p-5">
+        <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="opale-card opale-card--e1 block p-5">
           <h3 id="titre-ajout-theme" className="text-lg font-semibold">
             Nouveau thème
           </h3>
@@ -174,7 +175,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       ) : null}
 
       {panel === "import" ? (
-        <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="card p-5">
+        <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="opale-card opale-card--e1 block p-5">
           <h3 id="titre-import-themes" className="text-lg font-semibold">
             Importer des thèmes
           </h3>
@@ -185,26 +186,26 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       <LiveRegion>{announce}</LiveRegion>
       <LiveRegion role="alert">
         {reorderError ? (
-          <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+          <Notice tone="error">
             {reorderError}
-          </p>
+          </Notice>
         ) : null}
       </LiveRegion>
 
       {optimisticThemes.length === 0 ? (
-        <div className="card-empty p-6">
+        <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
           <p className="font-display text-lg font-semibold">Aucun thème</p>
           <p className="mt-1 text-muted">
-            Ajoutez les thèmes de votre programme un par un, ou importez-les en une fois depuis une liste.
+            Ajoutez les thèmes de votre projet un par un, ou importez-les en une fois depuis une liste.
           </p>
         </div>
       ) : (
-        <ol className="flex flex-col gap-3" aria-label="Thèmes du programme">
+        <ol className="flex flex-col gap-3" aria-label="Thèmes du projet">
           {optimisticThemes.map((theme, index) => {
             const neighbour = optimisticThemes[index + 1] ?? optimisticThemes[index - 1];
             const { question, confirm } = deleteQuestion(theme);
             return (
-              <li key={theme.id} className="card card-bristol p-4 pt-6 sm:p-5 sm:pt-7">
+              <li key={theme.id} className="opale-card opale-card--e1 block p-4 pt-6 sm:p-5 sm:pt-7">
                 {editingId === theme.id ? (
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm
@@ -254,31 +255,31 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                     </div>
                     <div className="flex flex-wrap items-start gap-2 sm:justify-end">
                       <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
-                        <button
+                        <Button
                           id={moveButtonId(theme.id, "up")}
                           type="button"
-                          className="btn btn-secondary btn-icon"
+                          variant="ghost" className="opale-icon-action-button"
                           onClick={() => move(index, "up")}
                           disabled={index === 0}
                           aria-label={`Monter ${theme.name}`}
                         >
                           <ArrowIcon dir="up" />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           id={moveButtonId(theme.id, "down")}
                           type="button"
-                          className="btn btn-secondary btn-icon"
+                          variant="ghost" className="opale-icon-action-button"
                           onClick={() => move(index, "down")}
                           disabled={index === optimisticThemes.length - 1}
                           aria-label={`Descendre ${theme.name}`}
                         >
                           <ArrowIcon dir="down" />
-                        </button>
+                        </Button>
                       </div>
-                      <button
+                      <Button
                         id={editButtonId(theme.id)}
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        variant="ghost" size="small"
                         onClick={() => {
                           setEditingId(theme.id);
                           focusLater([`edit-name-${theme.id}`]);
@@ -286,7 +287,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                         aria-label={`Modifier ${theme.name}`}
                       >
                         Modifier
-                      </button>
+                      </Button>
                       <ConfirmAction
                         triggerLabel="Supprimer"
                         triggerAccessibleLabel={`Supprimer ${theme.name}`}

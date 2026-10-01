@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { signOut } from "@/lib/auth-client";
@@ -30,16 +31,16 @@ export function SignOutButton() {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="btn btn-secondary btn-sm"
+        variant="ghost" size="small"
         onClick={() => {
           if (!pending) handleClick();
         }}
         aria-disabled={pending || undefined}
       >
         <ButtonLabel idle="Se déconnecter" busy="Déconnexion…" isBusy={pending} />
-      </button>
+      </Button>
       <span role="status" className={failed ? "text-sm text-danger" : "sr-only"}>
         {failed ? "Échec, réessayez." : ""}
       </span>

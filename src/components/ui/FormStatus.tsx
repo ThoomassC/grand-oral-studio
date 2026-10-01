@@ -1,3 +1,4 @@
+import { Notice } from "@/components/ui/Notice";
 import { LiveRegion } from "./LiveRegion";
 
 export type FormStatusState =
@@ -16,9 +17,9 @@ export function FormStatus({ state, className = "" }: { state: FormStatusState; 
     <>
       <LiveRegion role="alert" className={className}>
         {state.kind === "error" ? (
-          <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+          <Notice tone="error">
             {state.message}
-          </p>
+          </Notice>
         ) : null}
       </LiveRegion>
       <LiveRegion className={className}>

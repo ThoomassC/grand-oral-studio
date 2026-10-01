@@ -13,7 +13,7 @@ export default async function SignupPage({ searchParams }: PageProps<"/inscripti
   if (await getUser()) redirect(next);
 
   return (
-    <AuthCard title="Créer un compte" intro="Un compte suffit pour préparer tous vos programmes.">
+    <AuthCard title="Créer un compte" intro="Un compte suffit pour préparer tous vos projets.">
       <AuthForm mode="signup" next={next} google={googleButtonState(process.env)} />
     </AuthCard>
   );

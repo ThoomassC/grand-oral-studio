@@ -1,5 +1,7 @@
 "use client";
 
+import { Button, Input, type ButtonVariant } from "@thomascaron/opale-ui";
+import { DANGER_OUTLINE } from "./ButtonLink";
 import { useId, useRef, useState, useTransition } from "react";
 import { ButtonLabel } from "./ButtonLabel";
 import { LiveRegion } from "./LiveRegion";
@@ -14,7 +16,7 @@ interface ConfirmActionProps {
   confirmLabel: string;
   pendingLabel?: string;
   /**
-   * Texte à recopier pour activer la confirmation (ex. le nom du programme).
+   * Texte à recopier pour activer la confirmation (ex. le nom du projet).
    * Réservé aux suppressions lourdes.
    */
   requireText?: string;
@@ -22,8 +24,10 @@ interface ConfirmActionProps {
   onConfirm: () => Promise<string | null>;
   /** Appelé après succès : le parent place le focus (l'élément a pu disparaître). */
   onDone?: () => void;
-  triggerClassName?: string;
-  confirmClassName?: string;
+  /** Rôle visuel du déclencheur (`Button` d'Opale) ; `danger-outline` : contour de danger (défaut). */
+  triggerVariant?: ButtonVariant | "danger-outline";
+  /** Taille du déclencheur et des boutons de confirmation. Défaut : `small`. */
+  size?: "small" | "medium";
   /** Désactive le déclencheur (autre action en cours). */
   triggerDisabled?: boolean;
   triggerId?: string;
@@ -45,8 +49,8 @@ export function ConfirmAction({
   requireText,
   onConfirm,
   onDone,
-  triggerClassName = "btn btn-danger-ghost btn-sm",
-  confirmClassName = "btn btn-danger btn-sm",
+  triggerVariant = "danger-outline",
+  size = "small",
   triggerDisabled = false,
   triggerId,
 }: ConfirmActionProps) {
@@ -93,11 +97,12 @@ export function ConfirmAction({
 
   if (!open) {
     return (
-      <button
+      <Button
         ref={triggerRef}
         id={triggerId}
-        type="button"
-        className={triggerClassName}
+        variant={triggerVariant === "danger-outline" ? "ghost" : triggerVariant}
+        size={size}
+        className={triggerVariant === "danger-outline" ? DANGER_OUTLINE : undefined}
         aria-label={triggerAccessibleLabel}
         aria-disabled={triggerDisabled || undefined}
         onClick={() => {
@@ -105,7 +110,7 @@ export function ConfirmAction({
         }}
       >
         {triggerLabel}
-      </button>
+      </Button>
     );
   }
 
@@ -113,7 +118,7 @@ export function ConfirmAction({
     <div
       role="group"
       aria-labelledby={questionId}
-      className="flex w-full flex-col gap-2 rounded-lg border border-danger/40 bg-danger-soft p-3 sm:w-auto sm:max-w-md"
+      className="flex w-full flex-col gap-3 rounded-lg border border-danger/40 bg-danger-soft p-4 sm:w-auto sm:max-w-md"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
@@ -125,13 +130,10 @@ export function ConfirmAction({
         {question}
       </p>
       {requireText ? (
-        <div>
-          <label htmlFor={inputId} className="text-sm font-semibold">
-            Recopiez « {requireText} » pour confirmer
-          </label>
-          <input
+        <Input
             id={inputId}
-            className="input mt-1"
+            label={`Recopiez « ${requireText} » pour confirmer`}
+            size="small"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
@@ -144,26 +146,20 @@ export function ConfirmAction({
             spellCheck={false}
             autoFocus
           />
-        </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={confirmClassName}
-          onClick={confirm}
-          aria-disabled={pending || !matches || undefined}
-        >
+        <Button variant="danger" size={size} onClick={confirm} aria-disabled={pending || !matches || undefined}>
           <ButtonLabel idle={confirmLabel} busy={pendingLabel} isBusy={pending} />
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
+        </Button>
+        <Button
+          variant="ghost"
+          size={size}
           onClick={cancel}
           aria-disabled={pending || undefined}
           autoFocus={!requireText}
         >
           Annuler
-        </button>
+        </Button>
       </div>
       <LiveRegion role="alert">
         {error ? <p className="text-sm font-medium text-danger">{error}</p> : null}

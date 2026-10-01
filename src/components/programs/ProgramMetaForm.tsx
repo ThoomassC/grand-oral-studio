@@ -1,5 +1,7 @@
 "use client";
 
+import { TextArea, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { updateProgram } from "@/server/actions/programs";
 import { errorProps, firstError, type FieldErrors } from "@/components/forms/validation";
@@ -8,7 +10,7 @@ import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 
-/** Renommer / décrire un programme, dans un panneau repliable. */
+/** Renommer / décrire un projet, dans un panneau repliable. */
 export function ProgramMetaForm({
   programId,
   name: initialName,
@@ -55,7 +57,7 @@ export function ProgramMetaForm({
           if (countFieldErrors(errors) > 0) focusFirstInvalid(formRef.current);
           return;
         }
-        setStatus({ kind: "success", message: "Programme enregistré." });
+        setStatus({ kind: "success", message: "Projet enregistré." });
       } catch {
         setStatus({ kind: "error", message: "La connexion a été interrompue. Votre saisie est conservée : réessayez." });
       }
@@ -64,10 +66,10 @@ export function ProgramMetaForm({
 
   return (
     <div>
-      <button
+      <Button
         id={ids.toggle}
         type="button"
-        className="btn btn-ghost btn-sm"
+        variant="text" size="small"
         aria-expanded={open}
         aria-controls={open ? ids.panel : undefined}
         onClick={() => {
@@ -79,8 +81,8 @@ export function ProgramMetaForm({
           }
         }}
       >
-        Renommer ou décrire le programme
-      </button>
+        Renommer ou décrire le projet
+      </Button>
       {open ? (
         <form
           ref={formRef}
@@ -90,15 +92,14 @@ export function ProgramMetaForm({
           onKeyDown={(e) => {
             if (e.key === "Escape" && !pending) close();
           }}
-          className="card mt-2 flex flex-col gap-4 p-5"
+          className="opale-card opale-card--e1 mt-2 flex flex-col gap-4 p-5"
         >
           <div>
-            <label htmlFor={ids.name} className="field-label">
-              Nom du programme
+            <label htmlFor={ids.name} className="opale-field__label">
+              Nom du projet
             </label>
-            <input
+            <TextInput
               id={ids.name}
-              className="input"
               value={name}
               maxLength={120}
               onChange={(e) => setName(e.target.value)}
@@ -107,31 +108,30 @@ export function ProgramMetaForm({
             <FieldError id={`${ids.name}-err`} message={firstError(fieldErrors, "name")} />
           </div>
           <div>
-            <label htmlFor={ids.desc} className="field-label">
+            <label htmlFor={ids.desc} className="opale-field__label">
               Description <span className="font-normal text-muted">(facultatif)</span>
             </label>
-            <textarea
+            <TextArea
               id={ids.desc}
-              className="input"
               rows={3}
               maxLength={2000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               {...errorProps(fieldErrors, "description", `${ids.desc}-err`, `${ids.desc}-hint`)}
             />
-            <p id={`${ids.desc}-hint`} className="field-hint">
+            <p id={`${ids.desc}-hint`} className="opale-field__helper">
               Contexte transmis à l&apos;IA : niveau, discipline, attentes du jury.
             </p>
             <FieldError id={`${ids.desc}-err`} message={firstError(fieldErrors, "description")} />
           </div>
           <FormStatus state={status} />
           <div className="flex flex-wrap gap-2">
-            <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+            <Button type="submit" aria-disabled={pending || undefined}>
               <ButtonLabel idle="Enregistrer" busy="Enregistrement…" isBusy={pending} />
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={close} aria-disabled={pending || undefined}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={close} aria-disabled={pending || undefined}>
               Fermer
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

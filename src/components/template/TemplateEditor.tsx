@@ -1,5 +1,7 @@
 "use client";
 
+import { SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { defaultTemplate } from "@/domain/defaults";
 import { PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
@@ -140,58 +142,55 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
             consignes.
           </p>
         </div>
-        <button
+        <Button
           type="button"
-          className="btn btn-secondary btn-sm"
+          variant="ghost" size="small"
           onClick={() => {
             if (!pending) reset();
           }}
           aria-disabled={pending || undefined}
         >
           Réinitialiser au gabarit par défaut
-        </button>
+        </Button>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-3">
         <div>
-          <label htmlFor={ids.format} className="field-label">
+          <label htmlFor={ids.format} className="opale-field__label">
             Format
           </label>
-          <select
+          <SelectInput
             id={ids.format}
-            className="input"
             value={template.format}
             onChange={(e) => patch({ format: e.target.value === "4:3" ? "4:3" : "16:9" })}
           >
             <option value="16:9">16:9 (écran large)</option>
             <option value="4:3">4:3 (standard)</option>
-          </select>
+          </SelectInput>
         </div>
         <div>
-          <label htmlFor={ids.language} className="field-label">
+          <label htmlFor={ids.language} className="opale-field__label">
             Langue des diapos
           </label>
-          <select
+          <SelectInput
             id={ids.language}
-            className="input"
             value={template.language}
             onChange={(e) => patch({ language: e.target.value === "en" ? "en" : "fr" })}
           >
             <option value="fr">Français</option>
             <option value="en">Anglais</option>
-          </select>
+          </SelectInput>
         </div>
         <div>
-          <label htmlFor={ids.duration} className="field-label">
+          <label htmlFor={ids.duration} className="opale-field__label">
             Durée de l&apos;oral (minutes)
           </label>
-          <input
+          <TextInput
             id={ids.duration}
             type="number"
             inputMode="numeric"
             min={3}
             max={90}
-            className="input"
             value={Number.isFinite(template.durationMinutes) ? template.durationMinutes : ""}
             onChange={(e) => patch({ durationMinutes: toNumber(e.target.value) })}
             {...errorProps(fieldErrors, "durationMinutes", `${ids.duration}-err`)}
@@ -233,7 +232,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
             const guidanceId = `${baseId}-guidance-${section.id}`;
             const label = section.title || `section ${index + 1}`;
             return (
-              <li key={section.id} className="card p-4">
+              <li key={section.id} className="opale-card opale-card--e1 block p-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start">
                   <span
                     aria-hidden="true"
@@ -243,12 +242,11 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                   </span>
                   <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
                     <div>
-                      <label htmlFor={titleId} className="field-label">
+                      <label htmlFor={titleId} className="opale-field__label">
                         Titre de la section {index + 1}
                       </label>
-                      <input
+                      <TextInput
                         id={titleId}
-                        className="input"
                         value={section.title}
                         maxLength={80}
                         onChange={(e) => patchSection(index, { title: e.target.value })}
@@ -257,16 +255,15 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <FieldError id={`${titleId}-err`} message={firstError(fieldErrors, `${p}.title`)} />
                     </div>
                     <div>
-                      <label htmlFor={slidesId} className="field-label">
+                      <label htmlFor={slidesId} className="opale-field__label">
                         Diapos
                       </label>
-                      <input
+                      <TextInput
                         id={slidesId}
                         type="number"
                         inputMode="numeric"
                         min={1}
                         max={8}
-                        className="input"
                         value={Number.isFinite(section.slides) ? section.slides : ""}
                         onChange={(e) => patchSection(index, { slides: toNumber(e.target.value) })}
                         {...errorProps(fieldErrors, `${p}.slides`, `${slidesId}-err`)}
@@ -274,12 +271,11 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <FieldError id={`${slidesId}-err`} message={firstError(fieldErrors, `${p}.slides`)} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label htmlFor={guidanceId} className="field-label">
+                      <label htmlFor={guidanceId} className="opale-field__label">
                         Consigne pour l&apos;IA <span className="font-normal text-muted">(facultatif)</span>
                       </label>
-                      <textarea
+                      <TextArea
                         id={guidanceId}
-                        className="input"
                         rows={2}
                         maxLength={600}
                         value={section.guidance}
@@ -290,10 +286,10 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                     </div>
                   </div>
                   <div className="flex gap-1 md:flex-col" role="group" aria-label={`Actions pour ${label}`}>
-                    <button
+                    <Button
                       id={`${baseId}-up-${section.id}`}
                       type="button"
-                      className="btn btn-secondary btn-icon"
+                      variant="ghost" className="opale-icon-action-button"
                       onClick={() => moveSection(index, -1)}
                       disabled={index === 0}
                       aria-label={`Monter ${label}`}
@@ -301,11 +297,11 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
                         <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       id={`${baseId}-down-${section.id}`}
                       type="button"
-                      className="btn btn-secondary btn-icon"
+                      variant="ghost" className="opale-icon-action-button"
                       onClick={() => moveSection(index, 1)}
                       disabled={index === template.sections.length - 1}
                       aria-label={`Descendre ${label}`}
@@ -313,10 +309,10 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
                         <path d="M8 3v10M3.5 8.5L8 13l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn btn-danger-ghost btn-icon"
+                      variant="ghost" className="danger-outline opale-icon-action-button"
                       onClick={() => removeSection(index)}
                       disabled={template.sections.length <= 1}
                       aria-label={`Supprimer ${label}`}
@@ -324,35 +320,34 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
                         <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </li>
             );
           })}
         </ol>
-        <button
+        <Button
           id={`${baseId}-add`}
           type="button"
-          className="btn btn-secondary mt-3"
+          variant="ghost" className="mt-3"
           onClick={addSection}
           disabled={template.sections.length >= MAX_SECTIONS}
         >
           Ajouter une section
-        </button>
+        </Button>
         {template.sections.length >= MAX_SECTIONS ? (
-          <p className="field-hint">{MAX_SECTIONS} sections au plus.</p>
+          <p className="opale-field__helper">{MAX_SECTIONS} sections au plus.</p>
         ) : null}
       </fieldset>
 
       <div className="grid gap-5 md:grid-cols-2">
         <div>
-          <label htmlFor={ids.tone} className="field-label">
+          <label htmlFor={ids.tone} className="opale-field__label">
             Ton
           </label>
-          <input
+          <TextInput
             id={ids.tone}
-            className="input"
             value={template.tone}
             maxLength={200}
             placeholder="Ex. clair, argumenté, niveau master"
@@ -362,12 +357,11 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
           <FieldError id={`${ids.tone}-err`} message={firstError(fieldErrors, "tone")} />
         </div>
         <div>
-          <label htmlFor={ids.constraints} className="field-label">
+          <label htmlFor={ids.constraints} className="opale-field__label">
             Contraintes
           </label>
-          <textarea
+          <TextArea
             id={ids.constraints}
-            className="input"
             rows={3}
             value={template.constraints}
             maxLength={2000}
@@ -382,14 +376,14 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
       <div className="sticky bottom-0 -mx-1 flex flex-col gap-2 border-t border-border bg-bg/95 px-1 py-3 backdrop-blur">
         <FormStatus state={status} />
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+          <Button type="submit" aria-disabled={pending || undefined}>
             <ButtonLabel idle="Enregistrer le gabarit" busy="Enregistrement…" isBusy={pending} />
-          </button>
+          </Button>
           {dirty ? (
             <>
-              <button
+              <Button
                 type="button"
-                className="btn btn-ghost"
+                variant="text"
                 onClick={() => {
                   if (pending) return;
                   setTemplate(saved);
@@ -399,7 +393,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                 aria-disabled={pending || undefined}
               >
                 Annuler les modifications
-              </button>
+              </Button>
               <span className="text-sm text-muted">Modifications non enregistrées</span>
             </>
           ) : null}

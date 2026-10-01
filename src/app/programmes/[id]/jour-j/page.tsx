@@ -42,7 +42,7 @@ export default async function DayPage({ params }: PageProps<"/programmes/[id]/jo
   const [program, decks, settings] = await Promise.all([
     loadProgram(id),
     listFinalDecks(user.id, id).catch((error: unknown) => {
-      // L'absence du programme est traitée par loadProgram (404).
+      // L'absence du projet est traitée par loadProgram (404).
       if (error instanceof NotFoundError) return [];
       throw error;
     }),

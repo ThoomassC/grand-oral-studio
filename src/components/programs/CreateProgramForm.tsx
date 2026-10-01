@@ -1,5 +1,7 @@
 "use client";
 
+import { TextArea, TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useId, useRef } from "react";
 import { createProgram } from "@/server/actions/programs";
@@ -32,7 +34,7 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
     if (values.name.length < 2 || values.name.length > 120) {
       focusFirstInvalid(formRef.current);
       return {
-        status: { kind: "error", message: invalidCountMessage(1, "de créer le programme") },
+        status: { kind: "error", message: invalidCountMessage(1, "de créer le projet") },
         fieldErrors: { name: ["Le nom doit contenir entre 2 et 120 caractères."] },
         values,
       };
@@ -49,7 +51,7 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
       return { status: { kind: "error", message: result.error }, fieldErrors, values };
     }
     router.push(`/programmes/${result.data.id}`);
-    return { status: { kind: "success", message: "Programme créé. Ouverture…" }, fieldErrors: {}, values };
+    return { status: { kind: "success", message: "Projet créé. Ouverture…" }, fieldErrors: {}, values };
   }, INITIAL);
 
   return (
@@ -65,13 +67,12 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
       }}
     >
       <div>
-        <label htmlFor={nameId} className="field-label">
-          Nom du programme
+        <label htmlFor={nameId} className="opale-field__label">
+          Nom du projet
         </label>
-        <input
+        <TextInput
           id={nameId}
           name="name"
-          className="input"
           defaultValue={state.values.name}
           placeholder="Ex. Master Management — session 2027"
           maxLength={120}
@@ -82,28 +83,27 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
         <FieldError id={`${nameId}-err`} message={firstError(state.fieldErrors, "name")} />
       </div>
       <div>
-        <label htmlFor={descId} className="field-label">
+        <label htmlFor={descId} className="opale-field__label">
           Description <span className="font-normal text-muted">(facultatif)</span>
         </label>
-        <textarea
+        <TextArea
           id={descId}
           name="description"
-          className="input"
           rows={3}
           maxLength={2000}
           defaultValue={state.values.description}
           {...errorProps(state.fieldErrors, "description", `${descId}-err`, `${descId}-hint`)}
         />
-        <p id={`${descId}-hint`} className="field-hint">
+        <p id={`${descId}-hint`} className="opale-field__helper">
           Contexte transmis à l&apos;IA : niveau, discipline, attentes du jury.
         </p>
         <FieldError id={`${descId}-err`} message={firstError(state.fieldErrors, "description")} />
       </div>
       <FormStatus state={state.status} />
       <div>
-        <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
-          <ButtonLabel idle="Créer le programme" busy="Création…" isBusy={pending} />
-        </button>
+        <Button type="submit" aria-disabled={pending || undefined}>
+          <ButtonLabel idle="Créer le projet" busy="Création…" isBusy={pending} />
+        </Button>
       </div>
     </form>
   );

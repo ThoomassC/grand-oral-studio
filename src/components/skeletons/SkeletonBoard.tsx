@@ -1,6 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { Notice } from "@/components/ui/Notice";
+import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Badge, type BadgeTone, Button } from "@thomascaron/opale-ui";
 import { useState, useTransition } from "react";
 import type { PromptTemplate } from "@/domain/schemas";
 import { generateAllSkeletons, generateSkeleton } from "@/server/actions/generation";
@@ -36,11 +38,11 @@ const STATUS_LABEL: Record<Display, string> = {
   todo: "À générer",
 };
 
-const STATUS_STYLE: Record<Display, string> = {
-  running: "bg-accent-soft text-accent-strong",
-  error: "bg-danger-soft text-danger",
-  ready: "bg-success-soft text-success",
-  todo: "bg-surface-2 text-muted",
+const STATUS_TONE: Record<Display, BadgeTone> = {
+  running: "info",
+  error: "error",
+  ready: "success",
+  todo: "neutral",
 };
 
 function StatusIcon({ kind }: { kind: Display }) {
@@ -185,12 +187,12 @@ export function SkeletonBoard({
 
   if (themes.length === 0) {
     return (
-      <div className="card-empty p-6">
+      <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
         <h2 className="font-display text-lg font-semibold">Aucun thème à préparer</h2>
-        <p className="mt-1 text-muted">Ajoutez d&apos;abord les thèmes du programme : un squelette sera généré pour chacun.</p>
-        <Link href={`/programmes/${programId}`} className="btn btn-primary mt-4">
+        <p className="mt-1 text-muted">Ajoutez d&apos;abord les thèmes du projet : un squelette sera généré pour chacun.</p>
+        <ButtonLink href={`/programmes/${programId}`} className="mt-4">
           Ajouter des thèmes
-        </Link>
+        </ButtonLink>
       </div>
     );
   }
@@ -206,21 +208,21 @@ export function SkeletonBoard({
         </div>
         <div className="flex flex-wrap items-start gap-2 md:justify-end">
           {missing.length > 0 ? (
-            <button
+            <Button
               id={MISSING_ID}
               type="button"
-              className="btn btn-primary"
               onClick={() => runBatch("missing")}
               aria-disabled={anyRunning || undefined}
             >
               {batch.running ? "Génération en cours…" : `Générer les squelettes manquants (${missing.length})`}
-            </button>
+            </Button>
           ) : null}
           {readyCount > 0 ? (
             <ConfirmAction
               triggerId={REGEN_ALL_ID}
               triggerLabel="Régénérer tous les squelettes"
-              triggerClassName="btn btn-secondary"
+              triggerVariant="ghost"
+              size="medium"
               triggerDisabled={anyRunning}
               question={`Remplacer les ${readyCount} squelette${readyCount > 1 ? "s" : ""} existant${readyCount > 1 ? "s" : ""}, y compris vos modifications ?`}
               confirmLabel="Remplacer les squelettes"
@@ -238,7 +240,7 @@ export function SkeletonBoard({
       <LiveRegion className="sr-only">{announce}</LiveRegion>
 
       {batch.running ? (
-        <div className="rounded-lg border border-accent/40 bg-accent-soft p-4">
+        <Notice tone="info">
           <p className="font-semibold text-accent-strong">
             Génération de {batch.count} squelette{batch.count > 1 ? "s" : ""}, trois à la fois.
           </p>
@@ -246,7 +248,7 @@ export function SkeletonBoard({
             Cela peut prendre plusieurs minutes. Restez sur cette page : le résultat de chaque thème s&apos;affichera à la
             fin. Temps écoulé : <ElapsedTime since={batch.startedAt} />
           </p>
-        </div>
+        </Notice>
       ) : null}
       {batch.summary ? (
         <div
@@ -269,9 +271,9 @@ export function SkeletonBoard({
       ) : null}
       <LiveRegion role="alert">
         {batch.error ? (
-          <div className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
+          <Notice tone="error">
             <p className="font-semibold">{batch.error}</p>
-          </div>
+          </Notice>
         ) : null}
       </LiveRegion>
 
@@ -281,7 +283,7 @@ export function SkeletonBoard({
           const run = runs[theme.id];
           const busy = display === "running" || batch.running;
           return (
-            <li key={theme.id} className="card flex flex-col overflow-hidden">
+            <li key={theme.id} className="opale-card opale-card--e1 flex flex-col gap-0 overflow-hidden p-0">
               <div className="border-b border-border bg-surface-2 p-4">
                 {theme.skeleton ? (
                   <SlidePreview slide={theme.skeleton.cover} brand={brand} format={format} clamp decorative />
@@ -297,12 +299,10 @@ export function SkeletonBoard({
               <div className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-lg">{theme.name}</h3>
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-sm font-semibold ${STATUS_STYLE[display]}`}
-                  >
+                  <Badge tone={STATUS_TONE[display]} className="shrink-0">
                     <StatusIcon kind={display} />
                     {STATUS_LABEL[display]}
-                  </span>
+                  </Badge>
                 </div>
                 {theme.skeleton?.engine ? <EngineBadge engine={theme.skeleton.engine} className="self-start" /> : null}
                 {theme.skeleton ? (
@@ -326,12 +326,12 @@ export function SkeletonBoard({
                 ) : null}
                 <div className="mt-auto flex flex-wrap items-start gap-2">
                   {theme.skeleton ? (
-                    <Link
+                    <ButtonLink
                       href={`/programmes/${programId}/squelettes/${theme.skeleton.deckId}`}
-                      className="btn btn-secondary btn-sm"
+                      variant="ghost" size="small"
                     >
                       Ouvrir<span className="sr-only"> le squelette {theme.name}</span>
-                    </Link>
+                    </ButtonLink>
                   ) : null}
                   {theme.skeleton && display !== "error" ? (
                     <ConfirmAction
@@ -340,7 +340,7 @@ export function SkeletonBoard({
                       triggerAccessibleLabel={
                         display === "running" ? `Génération du squelette ${theme.name} en cours` : `Régénérer le squelette ${theme.name}`
                       }
-                      triggerClassName="btn btn-ghost btn-sm"
+                      triggerVariant="text"
                       triggerDisabled={busy}
                       question={`Remplacer le squelette de « ${theme.name} », y compris vos modifications ?`}
                       confirmLabel="Remplacer le squelette"
@@ -352,15 +352,15 @@ export function SkeletonBoard({
                       onDone={() => focusLater([regenButtonId(theme.id)])}
                     />
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      variant="ghost" size="small"
                       onClick={() => runOne(theme)}
                       aria-disabled={busy || undefined}
                     >
                       {display === "running" ? "Génération…" : display === "error" ? "Relancer" : "Générer"}
                       <span className="sr-only"> le squelette {theme.name}</span>
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>

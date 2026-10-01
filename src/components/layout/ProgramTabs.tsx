@@ -1,8 +1,10 @@
 "use client";
 
+import { Button } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { tabLinkClass } from "./MainNav";
 import { useUnsavedRef } from "./UnsavedChanges";
 
 const GROUPS = [
@@ -25,10 +27,11 @@ const GROUPS = [
 ] as const;
 
 /**
- * Navigation entre les sections d'un programme. Ce sont des liens (chaque
+ * Navigation entre les sections d'un projet. Ce sont des liens (chaque
  * onglet est une page) : `aria-current="page"` signale la section active, le
- * style ne repose pas que sur la couleur (surlignage jaune + soulignement
- * épais à l'encre + graisse).
+ * style ne repose pas que sur la couleur (lavis du primaire d'Opale +
+ * soulignement épais + graisse). `Tabs` d'Opale est un tablist ARIA (boutons
+ * et panneaux dans la page) : il ne convient pas à une navigation entre pages.
  * Une seule ligne, défilante sur mobile ; l'onglet actif est ramené en vue.
  * L'anneau de focus est tracé à l'intérieur de l'onglet : la barre défilante
  * (overflow) le rognerait sinon en haut et en bas.
@@ -56,7 +59,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
 
   return (
     <div>
-      <nav aria-label="Sections du programme" className="relative -mb-px overflow-x-auto">
+      <nav aria-label="Sections du projet" className="relative -mb-px overflow-x-auto">
         <div className="flex min-w-max items-end gap-4">
           {GROUPS.map((group, gi) => (
             <div key={group.label} className={`relative flex items-end ${gi > 0 ? "border-l border-border pl-4" : ""}`}>
@@ -79,11 +82,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
                           setPendingHref(href);
                           window.setTimeout(() => stayRef.current?.focus(), 0);
                         }}
-                        className={`inline-flex min-h-11 items-center rounded-t-md border-b-[3px] px-3 transition-colors focus-visible:outline-offset-[-3px] ${
-                          active
-                            ? "hl border-on-highlight font-bold"
-                            : "border-transparent font-medium text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text"
-                        }`}
+                        className={tabLinkClass(active)}
                       >
                         {tab.label}
                       </Link>
@@ -108,12 +107,12 @@ export function ProgramTabs({ programId }: { programId: string }) {
             Vos modifications ne sont pas enregistrées. Quitter cette page les abandonne.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button ref={stayRef} type="button" className="btn btn-secondary btn-sm" onClick={() => setPendingHref(null)}>
+            <Button ref={stayRef} type="button" variant="ghost" size="small" onClick={() => setPendingHref(null)}>
               Rester sur la page
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-danger-ghost btn-sm"
+              variant="ghost" size="small" className="danger-outline"
               onClick={() => {
                 if (dirtyRef) dirtyRef.current = false;
                 const href = pendingHref;
@@ -122,7 +121,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
               }}
             >
               Quitter sans enregistrer
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

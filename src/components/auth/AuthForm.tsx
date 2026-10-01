@@ -1,5 +1,8 @@
 "use client";
 
+import { Notice } from "@/components/ui/Notice";
+import { TextInput } from "@/components/ui/Field";
+import { Button } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useId, useRef, useState, useSyncExternalStore, startTransition } from "react";
@@ -127,9 +130,9 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
       >
         <LiveRegion role="alert">
           {shownError ? (
-            <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+            <Notice tone="error">
               {shownError}
-            </p>
+            </Notice>
           ) : null}
         </LiveRegion>
         <LiveRegion className="sr-only">
@@ -138,13 +141,12 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
 
         {isSignup ? (
           <div>
-            <label htmlFor={ids.name} className="field-label">
+            <label htmlFor={ids.name} className="opale-field__label">
               Nom
             </label>
-            <input
+            <TextInput
               id={ids.name}
               name="name"
-              className="input"
               autoComplete="name"
               defaultValue={state.values.name}
               aria-invalid={Boolean(state.fieldErrors.name)}
@@ -156,15 +158,14 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
         ) : null}
 
         <div>
-          <label htmlFor={ids.email} className="field-label">
+          <label htmlFor={ids.email} className="opale-field__label">
             Adresse e-mail
           </label>
-          <input
+          <TextInput
             id={ids.email}
             name="email"
             type="email"
             inputMode="email"
-            className="input"
             autoComplete="email"
             spellCheck={false}
             defaultValue={state.values.email}
@@ -176,7 +177,7 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
         </div>
 
         <div>
-          <label htmlFor={ids.password} className="field-label">
+          <label htmlFor={ids.password} className="opale-field__label">
             Mot de passe
           </label>
           <PasswordInput
@@ -193,20 +194,20 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
             minLength={isSignup ? MIN_PASSWORD : undefined}
           />
           {isSignup ? (
-            <p id={ids.hint} className="field-hint">
+            <p id={ids.hint} className="opale-field__helper">
               {MIN_PASSWORD} caractères au moins.
             </p>
           ) : null}
           <FieldError id={`${ids.password}-err`} message={state.fieldErrors.password} />
         </div>
 
-        <button type="submit" className="btn btn-primary w-full" aria-disabled={pending || undefined}>
+        <Button type="submit" fullWidth aria-disabled={pending || undefined}>
           <ButtonLabel
             idle={isSignup ? "Créer mon compte" : "Se connecter"}
             busy={isSignup ? "Création du compte…" : "Connexion…"}
             isBusy={pending}
           />
-        </button>
+        </Button>
       </form>
 
       {google !== "hidden" ? (
@@ -226,7 +227,7 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
 
       <p className="text-center text-sm text-muted">
         {isSignup ? "Déjà un compte ? " : "Pas encore de compte ? "}
-        <Link href={otherHref} className="link font-medium">
+        <Link href={otherHref} className="opale-link font-medium">
           {isSignup ? "Se connecter" : "Créer un compte"}
         </Link>
       </p>

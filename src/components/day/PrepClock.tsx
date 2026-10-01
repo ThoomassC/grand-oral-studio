@@ -46,9 +46,9 @@ export function PrepDial({ usedMinutes = 3, className = "h-28 w-28" }: { usedMin
   const ticks = Array.from({ length: 18 }, (_, i) => i);
   return (
     <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false" className={className}>
-      <circle cx="50" cy="50" r="47" fill="var(--surface)" stroke="currentColor" strokeWidth="2.5" />
+      <circle cx="50" cy="50" r="47" fill="var(--opale-surface)" stroke="currentColor" strokeWidth="2.5" />
       {angle > 0 ? (
-        <path d={`M50 50 L50 ${50 - r} A${r} ${r} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)} Z`} fill="var(--highlight)" />
+        <path d={`M50 50 L50 ${50 - r} A${r} ${r} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)} Z`} fill="var(--opale-accent)" />
       ) : null}
       {ticks.map((i) => {
         const a = (i / ticks.length) * 2 * Math.PI;
@@ -68,7 +68,7 @@ export function PrepDial({ usedMinutes = 3, className = "h-28 w-28" }: { usedMin
           />
         );
       })}
-      <line x1="50" y1="50" x2={end.x} y2={end.y} stroke={angle > 0 ? "var(--on-highlight)" : "currentColor"} strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="50" y1="50" x2={end.x} y2={end.y} stroke={angle > 0 ? "var(--opale-on-accent)" : "currentColor"} strokeWidth="2.5" strokeLinecap="round" />
       <rect x="44" y="0" width="12" height="5" rx="1.5" fill="currentColor" />
       <circle cx="50" cy="50" r="3.2" fill="currentColor" />
     </svg>

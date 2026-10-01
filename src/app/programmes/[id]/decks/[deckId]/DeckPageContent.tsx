@@ -1,3 +1,4 @@
+import { Feedback } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
@@ -31,7 +32,7 @@ export async function DeckPageContent({
     <div className="flex flex-col gap-6">
       <div>
         <p className="text-sm">
-          <Link href={backHref} className="link text-muted">
+          <Link href={backHref} className="opale-link">
             {isSkeleton ? "Retour aux squelettes" : "Retour aux decks"}
           </Link>
         </p>
@@ -63,24 +64,25 @@ export async function DeckPageContent({
       </div>
 
       {deck.engine === "free" ? (
-        <div className="rounded-lg border border-border-strong bg-surface p-4">
-          <p>
-            Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces{" "}
-            <mark className="rounded-sm bg-highlight-soft px-1 text-text">« À compléter »</mark> sont à remplacer par vos
-            contenus.
-          </p>
-        </div>
+        <Feedback tone="neutral" title="Trame sans IA">
+          Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces{" "}
+          <mark className="rounded-sm bg-highlight-soft px-1 text-text">« À compléter »</mark> sont à remplacer par vos
+          contenus.
+        </Feedback>
       ) : null}
 
       {isNew ? (
-        <div id="deck-pret" role="status" className="rounded-lg border border-success/40 bg-success-soft p-4">
-          <p className="font-semibold">
-            {deck.engine === "free"
+        <Feedback
+          id="deck-pret"
+          tone="success"
+          title={
+            deck.engine === "free"
               ? `Votre trame est prête : ${deck.spec.slides.length} diapos à compléter.`
-              : `Votre diaporama est prêt : ${deck.spec.slides.length} diapos avec notes d'orateur.`}
-          </p>
-          <p className="mt-1 text-sm">Relisez-le, puis téléchargez le .pptx pour Canva.</p>
-        </div>
+              : `Votre diaporama est prêt : ${deck.spec.slides.length} diapos avec notes d'orateur.`
+          }
+        >
+          Relisez-le, puis téléchargez le .pptx pour Canva.
+        </Feedback>
       ) : null}
 
       <DeckReview

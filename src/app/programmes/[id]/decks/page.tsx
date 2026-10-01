@@ -1,3 +1,4 @@
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
@@ -14,7 +15,7 @@ export async function generateMetadata({ params }: PageProps<"/programmes/[id]/d
 
 export default async function DecksPage({ params }: PageProps<"/programmes/[id]/decks">) {
   const { id } = await params;
-  // Lectures indépendantes en parallèle (le programme vérifie aussi la propriété → 404).
+  // Lectures indépendantes en parallèle (le projet vérifie aussi la propriété → 404).
   const [user, program] = await Promise.all([requireUser(), loadProgram(id)]);
   const decks = await listFinalDecks(user.id, program.id);
 
@@ -27,21 +28,21 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
         <p className="text-sm text-muted">Les diaporamas complets générés à partir d&apos;une problématique.</p>
       </div>
       {decks.length === 0 ? (
-        <div className="card-empty p-6">
+        <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
           <p className="font-display text-lg font-semibold">Aucun deck pour l&apos;instant</p>
           <p className="mt-1 text-muted">
             Saisissez une problématique dans l&apos;onglet Jour J pour générer votre premier deck complet.
           </p>
-          <Link href={`/programmes/${program.id}/jour-j`} className="btn btn-primary mt-4">
+          <ButtonLink href={`/programmes/${program.id}/jour-j`} className="mt-4">
             Aller au Jour J
-          </Link>
+          </ButtonLink>
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {decks.map((d, i) => {
             const neighbour = decks[i + 1] ?? decks[i - 1];
             return (
-            <li key={d.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+            <li key={d.id} className="opale-card opale-card--e1 flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <h3 className="font-semibold">
                   <Link id={`deck-${d.id}`} href={`/programmes/${program.id}/decks/${d.id}`} className="hover:underline">
@@ -56,9 +57,9 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-start gap-2">
-                <Link href={`/programmes/${program.id}/decks/${d.id}`} className="btn btn-secondary btn-sm">
+                <ButtonLink href={`/programmes/${program.id}/decks/${d.id}`} variant="ghost" size="small">
                   Ouvrir<span className="sr-only"> le deck {d.title}</span>
-                </Link>
+                </ButtonLink>
                 <DeleteDeckButton
                   deckId={d.id}
                   label={d.title}

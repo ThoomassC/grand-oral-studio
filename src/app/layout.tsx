@@ -1,35 +1,13 @@
 import type { Metadata } from "next";
-import { Atkinson_Hyperlegible_Next, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { opaleThemeScript } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
-import { parseExplicitTheme, THEME_COOKIE } from "@/components/theme/theme";
-import { ThemeScript } from "@/components/theme/ThemeScript";
+import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { InlineScript } from "@/components/ui/InlineScript";
 import "./globals.css";
 
-// Titres : Bricolage Grotesque (caractère, sans excentricité).
-// Texte : Atkinson Hyperlegible Next, conçue pour la lisibilité — utile le jour J.
-// Compteurs, durées, numéros d'étape : JetBrains Mono, chiffres tabulaires.
-const heading = Bricolage_Grotesque({
-  variable: "--font-heading",
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-});
-
-const body = Atkinson_Hyperlegible_Next({
-  variable: "--font-body",
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-  // next/font n'a pas les métriques de cette police : repli explicite, sans ajustement automatique.
-  adjustFontFallback: false,
-  fallback: ["ui-sans-serif", "system-ui", "Arial", "sans-serif"],
-});
-
-const code = JetBrains_Mono({
-  variable: "--font-code",
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-  weight: ["500", "600", "700"],
-});
+// Polices : celles d'Opale (Chivo, Bricolage Grotesque), reliées par sa feuille.
 
 export const metadata: Metadata = {
   title: {
@@ -41,37 +19,36 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // Choix explicite mémorisé dans le cookie : le serveur rend directement le bon
-  // thème. Absent = « Système » (pas d'attribut, le CSS suit prefers-color-scheme).
-  // L'app est déjà rendue dynamiquement (session lue dans l'en-tête).
-  const theme = parseExplicitTheme((await cookies()).get(THEME_COOKIE)?.value);
+  // Choix explicite recopié dans le cookie : le serveur rend directement le bon
+  // `data-theme`. Sans cookie (« Système »), le script d'Opale résout le thème
+  // avant la première peinture. L'app est déjà rendue dynamiquement (session
+  // lue dans l'en-tête).
+  const cookieTheme = parseExplicitTheme((await cookies()).get(THEME_COOKIE)?.value);
+  const defaultTheme = cookieTheme ?? "system";
 
   return (
-    // suppressHydrationWarning : le script inline du <head> peut corriger
-    // `data-theme` avant l'hydratation (choix présent dans localStorage mais
-    // cookie absent ou périmé). React garde alors l'attribut du DOM au lieu de
-    // signaler un écart ; l'avertissement ne porte que sur cet élément, pas
-    // sur ses enfants.
-    <html
-      lang="fr"
-      data-theme={theme ?? undefined}
-      suppressHydrationWarning
-      className={`${heading.variable} ${body.variable} ${code.variable} h-full antialiased`}
-    >
+    // suppressHydrationWarning : le script d'Opale pose `data-theme` sur <html>
+    // avant l'hydratation (thème système, ou choix mémorisé différent du
+    // cookie). React garde l'attribut du DOM au lieu de signaler un écart ;
+    // l'option ne porte que sur cet élément, pas sur ses enfants.
+    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className="h-full antialiased">
       <head>
-        <ThemeScript />
+        {/* Mêmes options que useOpaleTheme (ThemeProvider), sans quoi script et React divergent. */}
+        <InlineScript html={opaleThemeScript({ storageKey: THEME_STORAGE_KEY, defaultTheme })} />
       </head>
-      <body className="flex min-h-full flex-col">
-        <a
-          href="#contenu"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:shadow-raised"
-        >
-          Aller au contenu
-        </a>
-        <SiteHeader />
-        <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
-          {children}
-        </main>
+      <body className="opale-root flex min-h-full flex-col">
+        <ThemeProvider defaultTheme={defaultTheme}>
+          <a
+            href="#contenu"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:shadow-raised"
+          >
+            Aller au contenu
+          </a>
+          <SiteHeader />
+          <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
+            {children}
+          </main>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -18,8 +18,8 @@ export default async function ProgramLayout({ children, params }: LayoutProps<"/
         <div className="border-b border-border bg-surface">
           <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
             <p className="text-sm">
-              <Link href="/programmes" className="link text-muted">
-                Mes programmes
+              <Link href="/programmes" className="opale-link">
+                Projets
               </Link>
             </p>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
