@@ -15,6 +15,9 @@ describe("safeNextPath", () => {
     ["saut de ligne", "/\n/evil.example"],
     ["tabulation + antislash", "/\t\\evil.example"],
     ["chemin relatif", "programmes"],
+    ["segment point", "/.//evil.example/x"],
+    ["segment point-point", "/a/..//evil.example"],
+    ["point encodé", "/%2e//evil.example"],
   ])("renvoie la valeur de repli pour %s", (_cas, valeur) => {
     expect(safeNextPath(valeur)).toBe("/programmes");
   });

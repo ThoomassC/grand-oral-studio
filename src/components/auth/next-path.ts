@@ -14,6 +14,7 @@ export function safeNextPath(raw: string | string[] | undefined, fallback = "/pr
   } catch {
     return fallback;
   }
-  if (url.origin !== ORIGIN) return fallback;
+  // La normalisation des segments (`/.//x`, `/a/..//x`) peut produire `//hôte` : refusé aussi.
+  if (url.origin !== ORIGIN || url.pathname.startsWith("//")) return fallback;
   return `${url.pathname}${url.search}${url.hash}`;
 }
