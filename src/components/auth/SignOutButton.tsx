@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { signOut } from "@/lib/auth-client";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -12,8 +13,13 @@ export function SignOutButton() {
   function handleClick() {
     setFailed(false);
     startTransition(async () => {
-      const { error } = await signOut();
-      if (error) {
+      try {
+        const { error } = await signOut();
+        if (error) {
+          setFailed(true);
+          return;
+        }
+      } catch {
         setFailed(true);
         return;
       }
@@ -24,8 +30,15 @@ export function SignOutButton() {
 
   return (
     <>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={handleClick} disabled={pending}>
-        {pending ? "Déconnexion…" : "Se déconnecter"}
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => {
+          if (!pending) handleClick();
+        }}
+        aria-disabled={pending || undefined}
+      >
+        <ButtonLabel idle="Se déconnecter" busy="Déconnexion…" isBusy={pending} />
       </button>
       <span role="status" className={failed ? "text-sm text-danger" : "sr-only"}>
         {failed ? "Échec, réessayez." : ""}

@@ -4,21 +4,38 @@ import { useId, useRef, useState, useTransition } from "react";
 import { BrandSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import { updateBrand } from "@/server/actions/programs";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { SlidePreview } from "@/components/slides/SlidePreview";
 import { SAFE_FONTS } from "@/components/slides/fonts";
 import { SAMPLE_SLIDES } from "@/components/slides/sample-slides";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
+import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { contrastRatio } from "./contrast";
 
 type ColorKey = keyof Brand["colors"];
 
+/** Rôle de chaque couleur dans le rendu .pptx (qui fait foi). */
 const COLOR_FIELDS: { key: ColorKey; label: string; hint: string }[] = [
-  { key: "primary", label: "Principale", hint: "Titres, fond des diapos de couverture et de conclusion" },
-  { key: "secondary", label: "Secondaire", hint: "Sous-titres et titres de section" },
-  { key: "accent", label: "Accent", hint: "Puces, filets, éléments de mise en valeur" },
-  { key: "background", label: "Fond", hint: "Fond des diapos de contenu" },
-  { key: "text", label: "Texte", hint: "Corps du texte" },
+  {
+    key: "primary",
+    label: "Principale",
+    hint: "Fond de la couverture, bandeau de la conclusion, titres des diapos, barre des intercalaires",
+  },
+  {
+    key: "secondary",
+    label: "Secondaire",
+    hint: "Sous-titres, texte des intercalaires, séparateur des deux colonnes, pied de page",
+  },
+  { key: "accent", label: "Accent", hint: "Bande de la couverture, trait sous les titres, coches de la conclusion" },
+  {
+    key: "background",
+    label: "Fond",
+    hint: "Fond des diapos ; texte de la couverture et du bandeau de conclusion ; pastille du logo",
+  },
+  { key: "text", label: "Texte", hint: "Texte des puces" },
 ];
 
 const LOGO_MAX_BYTES = 500 * 1024;
@@ -32,6 +49,23 @@ function readAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("read"));
     reader.readAsDataURL(file);
   });
+}
+
+function contrastWarnings(colors: Brand["colors"]): string[] {
+  const checks: [string, string, string][] = [
+    [colors.text, colors.background, "Texte des puces sur le fond"],
+    [colors.background, colors.primary, "Texte de la couverture et de la conclusion (fond sur principale)"],
+    [colors.secondary, colors.background, "Sous-titres sur le fond (secondaire sur fond)"],
+    [colors.primary, colors.background, "Titres sur le fond (principale sur fond)"],
+  ];
+  const out: string[] = [];
+  for (const [fg, bg, label] of checks) {
+    const ratio = contrastRatio(fg, bg);
+    if (ratio !== null && ratio < 4.5) {
+      out.push(`${label} : contraste ${ratio.toFixed(1).replace(".", ",")}:1, en dessous du minimum recommandé de 4,5:1.`);
+    }
+  }
+  return out;
 }
 
 export function BrandEditor({
@@ -49,28 +83,17 @@ export function BrandEditor({
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const baseId = useId();
 
   const dirty = JSON.stringify(brand) !== JSON.stringify(saved);
-  const textContrast = contrastRatio(brand.colors.text, brand.colors.background);
-  const coverContrast = contrastRatio(brand.colors.background, brand.colors.primary);
-  const contrastWarnings = [
-    textContrast !== null && textContrast < 4.5
-      ? `Texte sur fond : contraste ${textContrast.toFixed(1)}:1, en dessous du minimum recommandé de 4,5:1.`
-      : null,
-    coverContrast !== null && coverContrast < 4.5
-      ? `Texte des diapos de couverture (couleur de fond sur couleur principale) : contraste ${coverContrast.toFixed(1)}:1, en dessous de 4,5:1.`
-      : null,
-  ].filter((w): w is string => w !== null);
+  const logoUnsaved = brand.logoDataUrl !== saved.logoDataUrl;
+  const warnings = contrastWarnings(brand.colors);
+  useUnsavedChanges(dirty);
 
-  function setColor(key: ColorKey, value: string) {
-    setBrand((b) => ({ ...b, colors: { ...b.colors, [key]: value } }));
-    setStatus(IDLE);
-  }
-
-  function setFont(key: keyof Brand["fonts"], value: string) {
-    setBrand((b) => ({ ...b, fonts: { ...b.fonts, [key]: value } }));
+  function patch(next: (b: Brand) => Brand) {
+    setBrand(next);
     setStatus(IDLE);
   }
 
@@ -91,8 +114,7 @@ export function BrandEditor({
     }
     try {
       const dataUrl = await readAsDataUrl(file);
-      setBrand((b) => ({ ...b, logoDataUrl: dataUrl }));
-      setStatus(IDLE);
+      patch((b) => ({ ...b, logoDataUrl: dataUrl }));
     } catch {
       setLogoError("Le fichier n'a pas pu être lu. Réessayez avec un autre fichier.");
     }
@@ -104,27 +126,51 @@ export function BrandEditor({
     const checked = validateWith(BrandSchema, brand);
     if (!checked.ok) {
       setFieldErrors(checked.fieldErrors);
-      setStatus({ kind: "error", message: "Corrigez les champs signalés avant d'enregistrer." });
+      setStatus({ kind: "error", message: invalidCountMessage(countFieldErrors(checked.fieldErrors)) });
+      focusFirstInvalid(formRef.current);
       return;
     }
     setFieldErrors({});
     startTransition(async () => {
-      const result = await updateBrand(programId, checked.data);
-      if (!result.ok) {
-        setFieldErrors(result.fieldErrors ?? {});
-        setStatus({ kind: "error", message: result.error });
-        return;
+      try {
+        const result = await updateBrand(programId, checked.data);
+        if (!result.ok) {
+          const errors = result.fieldErrors ?? {};
+          setFieldErrors(errors);
+          setStatus({ kind: "error", message: result.error });
+          if (countFieldErrors(errors) > 0) focusFirstInvalid(formRef.current);
+          return;
+        }
+        setSaved(checked.data);
+        setBrand(checked.data);
+        setStatus({ kind: "success", message: "Charte enregistrée." });
+      } catch {
+        setStatus({ kind: "error", message: "La connexion a été interrompue. Vos réglages sont conservés : réessayez." });
       }
-      setSaved(checked.data);
-      setStatus({ kind: "success", message: "Charte enregistrée." });
     });
   }
 
   const nameId = `${baseId}-name`;
+  const previewId = `${baseId}-preview`;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-      <form noValidate onSubmit={save} className="flex flex-col gap-6">
+      <section aria-labelledby={previewId} className="lg:sticky lg:top-4 lg:order-2 lg:self-start">
+        <h2 id={previewId} className="text-lg font-semibold">
+          Aperçu
+        </h2>
+        <p className="text-sm text-muted">Mis à jour en direct, avant même l&apos;enregistrement. Rendu identique au .pptx.</p>
+        <ul className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
+          {SAMPLE_SLIDES.map(({ label, slide }, i) => (
+            <li key={label} className={i === 1 || i === 3 ? "hidden sm:block" : i === 4 ? "hidden sm:block" : ""}>
+              <SlidePreview slide={slide} brand={brand} format={format} number={i + 1} deckTitle="Titre du diaporama" decorative />
+              <p className="mt-1.5 text-sm text-muted">Diapo {label.toLowerCase()}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
           <h2 className="text-xl font-semibold">Charte graphique</h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
@@ -140,8 +186,8 @@ export function BrandEditor({
             value={brand.name}
             maxLength={80}
             onChange={(e) => {
-              setBrand((b) => ({ ...b, name: e.target.value }));
-              setStatus(IDLE);
+              const name = e.target.value;
+              patch((b) => ({ ...b, name }));
             }}
             {...errorProps(fieldErrors, "name", `${nameId}-err`)}
           />
@@ -157,32 +203,34 @@ export function BrandEditor({
               const errKey = `colors.${key}`;
               return (
                 <div key={key}>
+                  <label htmlFor={id} className="field-label">
+                    {label} <span className="font-normal text-muted">(hexadécimal)</span>
+                  </label>
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
                       aria-label={`${label} : sélecteur de couleur`}
                       className="h-10 w-12 shrink-0 cursor-pointer rounded-md border border-border-strong bg-surface p-1"
                       value={HEX.test(value) ? value.toLowerCase() : "#000000"}
-                      onChange={(e) => setColor(key, e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        const v = e.target.value.toUpperCase();
+                        patch((b) => ({ ...b, colors: { ...b.colors, [key]: v } }));
+                      }}
                     />
-                    <div className="min-w-0 flex-1">
-                      <label htmlFor={id} className="text-sm font-semibold">
-                        {label} <span className="font-normal text-muted">(hexadécimal)</span>
-                      </label>
-                      <input
-                        id={id}
-                        className="input mt-1 font-mono uppercase"
-                        value={value}
-                        maxLength={7}
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(e) => {
-                          const raw = e.target.value.trim();
-                          setColor(key, raw.startsWith("#") ? raw : `#${raw}`);
-                        }}
-                        {...errorProps(fieldErrors, errKey, `${id}-err`, `${id}-hint`)}
-                      />
-                    </div>
+                    <input
+                      id={id}
+                      className="input min-w-0 flex-1 font-mono uppercase"
+                      value={value}
+                      maxLength={7}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const v = raw.startsWith("#") ? raw : `#${raw}`;
+                        patch((b) => ({ ...b, colors: { ...b.colors, [key]: v } }));
+                      }}
+                      {...errorProps(fieldErrors, errKey, `${id}-err`, `${id}-hint`)}
+                    />
                   </div>
                   <p id={`${id}-hint`} className="field-hint">
                     {hint}
@@ -194,16 +242,18 @@ export function BrandEditor({
           </div>
         </fieldset>
 
-        {contrastWarnings.length > 0 ? (
-          <div className="rounded-lg border border-warning/50 bg-warning-soft p-3 text-sm">
-            <p className="font-semibold text-warning">Attention : lisibilité</p>
-            <ul className="mt-1 list-disc pl-5">
-              {contrastWarnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <LiveRegion className="rounded-lg border border-warning/50 bg-warning-soft p-3 text-sm">
+          {warnings.length > 0 ? (
+            <>
+              <p className="font-semibold text-warning">Attention : lisibilité</p>
+              <ul className="mt-1 list-disc pl-5">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </LiveRegion>
 
         <fieldset>
           <legend className="field-label">Polices</legend>
@@ -216,23 +266,26 @@ export function BrandEditor({
             ).map(([key, label]) => {
               const id = `${baseId}-font-${key}`;
               const current = brand.fonts[key];
-              const known = SAFE_FONTS.some((f) => f.name === current);
+              const known = SAFE_FONTS.includes(current);
               return (
                 <div key={key}>
-                  <label htmlFor={id} className="text-sm font-semibold">
+                  <label htmlFor={id} className="field-label">
                     {label}
                   </label>
                   <select
                     id={id}
-                    className="input mt-1"
+                    className="input"
                     value={current}
-                    onChange={(e) => setFont(key, e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      patch((b) => ({ ...b, fonts: { ...b.fonts, [key]: v } }));
+                    }}
                     {...errorProps(fieldErrors, `fonts.${key}`, `${id}-err`)}
                   >
-                    {!known ? <option value={current}>{current}</option> : null}
+                    {!known ? <option value={current}>{current} (non prise en charge)</option> : null}
                     {SAFE_FONTS.map((f) => (
-                      <option key={f.name} value={f.name}>
-                        {f.name}
+                      <option key={f} value={f}>
+                        {f}
                       </option>
                     ))}
                   </select>
@@ -261,7 +314,7 @@ export function BrandEditor({
               <p className="text-sm text-muted">Aucun logo.</p>
             )}
             <div className="flex flex-wrap gap-2">
-              <label className="btn btn-secondary btn-sm focus-within:outline-2 focus-within:outline-accent">
+              <label className="btn btn-secondary btn-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent">
                 {brand.logoDataUrl ? "Remplacer le logo" : "Choisir un logo"}
                 <input
                   ref={fileRef}
@@ -277,8 +330,7 @@ export function BrandEditor({
                   type="button"
                   className="btn btn-danger-ghost btn-sm"
                   onClick={() => {
-                    setBrand((b) => ({ ...b, logoDataUrl: null }));
-                    setStatus(IDLE);
+                    patch((b) => ({ ...b, logoDataUrl: null }));
                     fileRef.current?.focus();
                   }}
                 >
@@ -290,16 +342,25 @@ export function BrandEditor({
           <p id={`${baseId}-logo-hint`} className="field-hint">
             PNG ou JPEG, 500 Ko au plus. Un fond transparent (PNG) s&apos;intègre mieux.
           </p>
-          <div role="alert">
-            <FieldError id={`${baseId}-logo-err`} message={logoError ?? firstError(fieldErrors, "logoDataUrl")} />
-          </div>
+          <LiveRegion className="mt-1 text-sm font-medium text-warning">
+            {logoUnsaved && !logoError
+              ? brand.logoDataUrl
+                ? "Logo chargé, non enregistré."
+                : "Logo retiré, non enregistré."
+              : null}
+          </LiveRegion>
+          <LiveRegion role="alert">
+            {logoError || firstError(fieldErrors, "logoDataUrl") ? (
+              <FieldError id={`${baseId}-logo-err`} message={logoError ?? firstError(fieldErrors, "logoDataUrl")} />
+            ) : null}
+          </LiveRegion>
         </fieldset>
 
         <div className="sticky bottom-0 -mx-1 flex flex-col gap-2 border-t border-border bg-bg/95 px-1 py-3 backdrop-blur">
           <FormStatus state={status} />
           <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" className="btn btn-primary" disabled={pending}>
-              {pending ? "Enregistrement…" : "Enregistrer la charte"}
+            <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+              <ButtonLabel idle="Enregistrer la charte" busy="Enregistrement…" isBusy={pending} />
             </button>
             {dirty ? (
               <>
@@ -307,11 +368,13 @@ export function BrandEditor({
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => {
+                    if (pending) return;
                     setBrand(saved);
                     setFieldErrors({});
                     setStatus(IDLE);
+                    setLogoError(null);
                   }}
-                  disabled={pending}
+                  aria-disabled={pending || undefined}
                 >
                   Annuler les modifications
                 </button>
@@ -321,21 +384,6 @@ export function BrandEditor({
           </div>
         </div>
       </form>
-
-      <section aria-labelledby={`${baseId}-preview`} className="lg:sticky lg:top-4 lg:self-start">
-        <h2 id={`${baseId}-preview`} className="text-lg font-semibold">
-          Aperçu
-        </h2>
-        <p className="text-sm text-muted">Mis à jour en direct, avant même l&apos;enregistrement.</p>
-        <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-          {SAMPLE_SLIDES.map(({ label, slide }, i) => (
-            <li key={label}>
-              <SlidePreview slide={slide} brand={brand} format={format} number={i + 1} decorative />
-              <p className="mt-1.5 text-sm text-muted">Diapo {label.toLowerCase()}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

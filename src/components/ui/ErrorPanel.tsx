@@ -5,10 +5,13 @@ import { useEffect, useRef } from "react";
 /** Contenu commun des fichiers error.tsx : message, référence, bouton Réessayer. */
 export function ErrorPanel({
   title = "Cette page n'a pas pu être chargée",
+  level = 1,
   error,
   retry,
 }: {
   title?: string;
+  /** Niveau du titre : 2 sous le layout d'un programme (qui porte déjà le h1). */
+  level?: 1 | 2;
   error: Error & { digest?: string };
   retry: () => void;
 }) {
@@ -17,13 +20,14 @@ export function ErrorPanel({
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
+  const Heading = level === 1 ? "h1" : "h2";
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-12">
       <div className="card border-danger/40 p-6">
-        <h1 ref={headingRef} tabIndex={-1} className="text-xl font-bold focus:outline-none">
+        <Heading ref={headingRef} tabIndex={-1} className="text-xl font-bold focus:outline-none">
           {title}
-        </h1>
+        </Heading>
         <p className="mt-2 text-muted">
           Une erreur est survenue pendant le chargement. Vos données ne sont pas perdues : réessayez dans un instant.
         </p>

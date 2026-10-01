@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ProgramMetaForm } from "@/components/programs/ProgramMetaForm";
 import { ThemeManager, type ThemeItem } from "@/components/themes/ThemeManager";
 import { loadProgram } from "../_lib/load";
 
@@ -15,7 +16,13 @@ export default async function ThemesPage({ params }: PageProps<"/programmes/[id]
     description: t.description,
     keywords: t.keywords,
     hasSkeleton: t.skeleton !== null,
+    finalDeckCount: t.finalDeckCount,
   }));
 
-  return <ThemeManager programId={program.id} themes={themes} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <ProgramMetaForm programId={program.id} name={program.name} description={program.description} />
+      <ThemeManager programId={program.id} themes={themes} />
+    </div>
+  );
 }

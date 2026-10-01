@@ -1,12 +1,16 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { defaultTemplate } from "@/domain/defaults";
 import { PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
 import { suggestSlideCount, totalSlides } from "@/domain/slides";
 import { updateTemplate } from "@/server/actions/programs";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
+import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } from "@/components/ui/focus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 
 const MAX_SECTIONS = 15;
@@ -29,8 +33,10 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
   const [announce, setAnnounce] = useState("");
   const [pending, startTransition] = useTransition();
   const baseId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const dirty = JSON.stringify(template) !== JSON.stringify(saved);
+  useUnsavedChanges(dirty);
   const durationOk = Number.isFinite(template.durationMinutes) && template.durationMinutes >= 3;
   const slidesOk = template.sections.every((s) => Number.isFinite(s.slides));
   const total = slidesOk ? totalSlides(template) : null;
@@ -59,7 +65,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
     setAnnounce(`Section « ${moved.title || "sans titre"} » déplacée en position ${target + 1}.`);
     const atEdge = target === 0 || target === sections.length - 1;
     const focusDir = atEdge ? (dir === -1 ? "down" : "up") : dir === -1 ? "up" : "down";
-    requestAnimationFrame(() => document.getElementById(`${baseId}-${focusDir}-${moved.id}`)?.focus());
+    focusLater([`${baseId}-${focusDir}-${moved.id}`]);
   }
 
   function removeSection(index: number) {
@@ -69,22 +75,14 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
     patch({ sections });
     setAnnounce(`Section « ${removed.title || "sans titre"} » supprimée.`);
     const neighbour = sections[Math.min(index, sections.length - 1)];
-    requestAnimationFrame(() =>
-      document.getElementById(neighbour ? `${baseId}-title-${neighbour.id}` : `${baseId}-add`)?.focus(),
-    );
+    focusLater([neighbour ? `${baseId}-title-${neighbour.id}` : null, `${baseId}-add`]);
   }
 
   function addSection() {
     const id = newSectionId();
     patch({ sections: [...template.sections, { id, title: "Nouvelle section", guidance: "", slides: 1 }] });
     setAnnounce("Section ajoutée en fin de liste.");
-    requestAnimationFrame(() => {
-      const input = document.getElementById(`${baseId}-title-${id}`);
-      if (input instanceof HTMLInputElement) {
-        input.focus();
-        input.select();
-      }
-    });
+    focusLater([`${baseId}-title-${id}`], { select: true });
   }
 
   function reset() {
@@ -99,20 +97,27 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
     const checked = validateWith(PromptTemplateSchema, template);
     if (!checked.ok) {
       setFieldErrors(checked.fieldErrors);
-      setStatus({ kind: "error", message: "Corrigez les champs signalés avant d'enregistrer." });
+      setStatus({ kind: "error", message: invalidCountMessage(countFieldErrors(checked.fieldErrors)) });
+      focusFirstInvalid(formRef.current);
       return;
     }
     setFieldErrors({});
     startTransition(async () => {
-      const result = await updateTemplate(programId, checked.data);
-      if (!result.ok) {
-        setFieldErrors(result.fieldErrors ?? {});
-        setStatus({ kind: "error", message: result.error });
-        return;
+      try {
+        const result = await updateTemplate(programId, checked.data);
+        if (!result.ok) {
+          const errors = result.fieldErrors ?? {};
+          setFieldErrors(errors);
+          setStatus({ kind: "error", message: result.error });
+          if (countFieldErrors(errors) > 0) focusFirstInvalid(formRef.current);
+          return;
+        }
+        setSaved(checked.data);
+        setTemplate(checked.data);
+        setStatus({ kind: "success", message: "Gabarit enregistré." });
+      } catch {
+        setStatus({ kind: "error", message: "La connexion a été interrompue. Vos réglages sont conservés : réessayez." });
       }
-      setSaved(checked.data);
-      setTemplate(checked.data);
-      setStatus({ kind: "success", message: "Gabarit enregistré." });
     });
   }
 
@@ -126,7 +131,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
   };
 
   return (
-    <form noValidate onSubmit={save} className="flex flex-col gap-8">
+    <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Gabarit de présentation</h2>
@@ -135,7 +140,14 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
             consignes.
           </p>
         </div>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={reset} disabled={pending}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            if (!pending) reset();
+          }}
+          aria-disabled={pending || undefined}
+        >
           Réinitialiser au gabarit par défaut
         </button>
       </div>
@@ -199,12 +211,11 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
             <strong className="tabular-nums">{suggested ?? "—"}</strong>
           </span>
         </p>
-        {tooFar && suggested !== null && total !== null ? (
-          <p className="mt-2 text-sm font-medium text-warning">
-            Attention : {total > suggested ? "trop" : "pas assez"} de diapos pour la durée ({gap > 0 ? "+" : ""}
-            {Math.round(gap * 100)} %). Ajustez le nombre de diapos par section ou la durée.
-          </p>
-        ) : null}
+        <LiveRegion className="mt-2 text-sm font-medium text-warning">
+          {tooFar && suggested !== null && total !== null
+            ? `Attention : ${total > suggested ? "trop" : "pas assez"} de diapos pour la durée (${gap > 0 ? "+" : ""}${Math.round(gap * 100)} %). Ajustez le nombre de diapos par section ou la durée.`
+            : null}
+        </LiveRegion>
       </div>
 
       <fieldset>
@@ -213,9 +224,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
           Dans l&apos;ordre de la présentation. La couverture est ajoutée automatiquement.
         </p>
         <FieldError id={`${baseId}-sections-err`} message={firstError(fieldErrors, "sections")} />
-        <p role="status" className="sr-only">
-          {announce}
-        </p>
+        <LiveRegion>{announce}</LiveRegion>
         <ol className="mt-4 flex flex-col gap-3">
           {template.sections.map((section, index) => {
             const p = `sections.${index}`;
@@ -234,12 +243,12 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                   </span>
                   <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
                     <div>
-                      <label htmlFor={titleId} className="text-sm font-semibold">
+                      <label htmlFor={titleId} className="field-label">
                         Titre de la section {index + 1}
                       </label>
                       <input
                         id={titleId}
-                        className="input mt-1"
+                        className="input"
                         value={section.title}
                         maxLength={80}
                         onChange={(e) => patchSection(index, { title: e.target.value })}
@@ -248,7 +257,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <FieldError id={`${titleId}-err`} message={firstError(fieldErrors, `${p}.title`)} />
                     </div>
                     <div>
-                      <label htmlFor={slidesId} className="text-sm font-semibold">
+                      <label htmlFor={slidesId} className="field-label">
                         Diapos
                       </label>
                       <input
@@ -257,7 +266,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                         inputMode="numeric"
                         min={1}
                         max={8}
-                        className="input mt-1"
+                        className="input"
                         value={Number.isFinite(section.slides) ? section.slides : ""}
                         onChange={(e) => patchSection(index, { slides: toNumber(e.target.value) })}
                         {...errorProps(fieldErrors, `${p}.slides`, `${slidesId}-err`)}
@@ -265,12 +274,12 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                       <FieldError id={`${slidesId}-err`} message={firstError(fieldErrors, `${p}.slides`)} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label htmlFor={guidanceId} className="text-sm font-semibold">
+                      <label htmlFor={guidanceId} className="field-label">
                         Consigne pour l&apos;IA <span className="font-normal text-muted">(facultatif)</span>
                       </label>
                       <textarea
                         id={guidanceId}
-                        className="input mt-1"
+                        className="input"
                         rows={2}
                         maxLength={600}
                         value={section.guidance}
@@ -373,8 +382,8 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
       <div className="sticky bottom-0 -mx-1 flex flex-col gap-2 border-t border-border bg-bg/95 px-1 py-3 backdrop-blur">
         <FormStatus state={status} />
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending ? "Enregistrement…" : "Enregistrer le gabarit"}
+          <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+            <ButtonLabel idle="Enregistrer le gabarit" busy="Enregistrement…" isBusy={pending} />
           </button>
           {dirty ? (
             <>
@@ -382,11 +391,12 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => {
+                  if (pending) return;
                   setTemplate(saved);
                   setFieldErrors({});
                   setStatus(IDLE);
                 }}
-                disabled={pending}
+                aria-disabled={pending || undefined}
               >
                 Annuler les modifications
               </button>

@@ -2,6 +2,8 @@
 
 import { useId, useState, useTransition } from "react";
 import { importThemes } from "@/server/actions/themes";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 
 type ImportOutcome =
   | { kind: "idle" }
@@ -17,8 +19,17 @@ Intelligence artificielle`;
  * rejette l'import et renvoie le détail par ligne ; les noms déjà présents
  * sont ignorés (import rejouable).
  */
-export function ThemeImport({ programId }: { programId: string }) {
-  const textId = useId();
+export function ThemeImport({
+  programId,
+  textareaId,
+  onClose,
+}: {
+  programId: string;
+  textareaId?: string;
+  onClose?: () => void;
+}) {
+  const generatedId = useId();
+  const textId = textareaId ?? generatedId;
   const formatId = useId();
   const [text, setText] = useState("");
   const [outcome, setOutcome] = useState<ImportOutcome>({ kind: "idle" });
@@ -26,11 +37,18 @@ export function ThemeImport({ programId }: { programId: string }) {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (pending) return;
+    if (pending || text.trim() === "") return;
     startTransition(async () => {
-      const result = await importThemes(programId, text);
+      let result: Awaited<ReturnType<typeof importThemes>>;
+      try {
+        result = await importThemes(programId, text);
+      } catch {
+        setOutcome({ kind: "error", message: "La connexion a été interrompue. Votre liste est conservée : réessayez.", lines: [] });
+        return;
+      }
       if (!result.ok) {
         setOutcome({ kind: "error", message: result.error, lines: result.fieldErrors?.text ?? [] });
+        document.getElementById(textId)?.focus();
         return;
       }
       setOutcome({ kind: "done", created: result.data.created, skipped: result.data.skipped });
@@ -68,7 +86,7 @@ export function ThemeImport({ programId }: { programId: string }) {
         />
       </div>
 
-      <div role="alert" aria-atomic="true">
+      <LiveRegion role="alert">
         {outcome.kind === "error" ? (
           <div
             id={`${textId}-err`}
@@ -84,8 +102,8 @@ export function ThemeImport({ programId }: { programId: string }) {
             ) : null}
           </div>
         ) : null}
-      </div>
-      <div role="status" aria-atomic="true">
+      </LiveRegion>
+      <LiveRegion>
         {outcome.kind === "done" ? (
           <div className="rounded-lg border border-success/40 bg-success-soft px-3 py-2 text-sm">
             <p className="font-semibold text-success">
@@ -101,15 +119,31 @@ export function ThemeImport({ programId }: { programId: string }) {
             ) : null}
           </div>
         ) : null}
-      </div>
+      </LiveRegion>
 
       <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn btn-primary" disabled={pending || text.trim() === ""}>
-          {pending ? "Import…" : "Importer"}
+        <button type="submit" className="btn btn-primary" aria-disabled={pending || text.trim() === "" || undefined}>
+          <ButtonLabel idle="Importer les thèmes" busy="Import…" isBusy={pending} />
         </button>
-        {text === "" ? (
-          <button type="button" className="btn btn-ghost" onClick={() => setText(EXAMPLE)}>
-            Insérer un exemple
+        <button
+          type="button"
+          className="btn btn-ghost"
+          aria-disabled={text !== "" || undefined}
+          aria-describedby={text !== "" ? `${textId}-example-hint` : undefined}
+          onClick={() => {
+            if (text === "") setText(EXAMPLE);
+          }}
+        >
+          Insérer un exemple
+        </button>
+        {text !== "" ? (
+          <span id={`${textId}-example-hint`} className="sr-only">
+            Disponible quand la liste est vide.
+          </span>
+        ) : null}
+        {onClose ? (
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Fermer
           </button>
         ) : null}
       </div>

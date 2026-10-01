@@ -4,6 +4,8 @@ import { useOptimistic, useState, useTransition } from "react";
 import type { ThemeInput } from "@/domain/schemas";
 import { addTheme, deleteTheme, reorderThemes, updateTheme } from "@/server/actions/themes";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { focusLater } from "@/components/ui/focus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ThemeForm } from "./ThemeForm";
 import { ThemeImport } from "./ThemeImport";
 
@@ -13,10 +15,45 @@ export interface ThemeItem {
   description: string;
   keywords: string[];
   hasSkeleton: boolean;
+  /** Nombre de diaporamas du jour J rattachés au thème (supprimés avec lui). */
+  finalDeckCount: number;
 }
 
-function moveButtonId(themeId: string, dir: "up" | "down") {
-  return `move-${dir}-${themeId}`;
+const IDS = {
+  addButton: "themes-add-button",
+  importButton: "themes-import-button",
+  addName: "themes-add-name",
+  importText: "themes-import-text",
+  listTitle: "themes-list-title",
+};
+
+const moveButtonId = (themeId: string, dir: "up" | "down") => `move-${dir}-${themeId}`;
+const editButtonId = (themeId: string) => `edit-${themeId}`;
+
+function deleteQuestion(theme: ThemeItem): { question: string; confirm: string } {
+  const parts = [theme.hasSkeleton ? "son squelette" : null];
+  const n = theme.finalDeckCount;
+  if (n > 0) parts.push(`${n === 1 ? "son diaporama" : `ses ${n} diaporamas`} du jour J`);
+  const what = parts.filter(Boolean).join(" et ");
+  return {
+    question: `Supprimer « ${theme.name} »${what ? `, ${what}` : ""} ? Cette action est définitive.`,
+    confirm: n > 0 ? `Supprimer le thème et ${n === 1 ? "son diaporama" : "ses diaporamas"}` : "Supprimer le thème",
+  };
+}
+
+function ArrowIcon({ dir }: { dir: "up" | "down" }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+      <path
+        d={dir === "up" ? "M8 13V3M3.5 7.5L8 3l4.5 4.5" : "M8 3v10M3.5 8.5L8 13l4.5-4.5"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export function ThemeManager({ programId, themes }: { programId: string; themes: ThemeItem[] }) {
@@ -27,9 +64,24 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
   const [reorderError, setReorderError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  function openPanel(next: "add" | "import") {
+    if (panel === next) {
+      closePanel();
+      return;
+    }
+    setPanel(next);
+    focusLater([next === "add" ? IDS.addName : IDS.importText]);
+  }
+
+  function closePanel() {
+    const from = panel;
+    setPanel("none");
+    focusLater([from === "import" ? IDS.importButton : IDS.addButton]);
+  }
+
   function closeEditor(themeId: string) {
     setEditingId(null);
-    requestAnimationFrame(() => document.getElementById(`edit-${themeId}`)?.focus());
+    focusLater([editButtonId(themeId)]);
   }
 
   function move(index: number, dir: "up" | "down") {
@@ -46,16 +98,21 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     // ou à son voisin s'il devient inactif (premier / dernier rang).
     const atEdge = target === 0 || target === next.length - 1;
     const focusDir = atEdge ? (dir === "up" ? "down" : "up") : dir;
-    requestAnimationFrame(() => document.getElementById(moveButtonId(moved.id, focusDir))?.focus());
+    focusLater([moveButtonId(moved.id, focusDir)]);
 
     startTransition(async () => {
       setOptimisticThemes(next);
-      const result = await reorderThemes(
-        programId,
-        next.map((t) => t.id),
-      );
-      if (!result.ok) {
-        setReorderError(`Le nouvel ordre n'a pas été enregistré : ${result.error}`);
+      try {
+        const result = await reorderThemes(
+          programId,
+          next.map((t) => t.id),
+        );
+        if (!result.ok) {
+          setReorderError(`Le nouvel ordre n'a pas été enregistré : ${result.error}`);
+          setAnnounce("");
+        }
+      } catch {
+        setReorderError("Le nouvel ordre n'a pas été enregistré : la connexion a été interrompue. Réessayez.");
         setAnnounce("");
       }
     });
@@ -65,7 +122,9 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Thèmes</h2>
+          <h2 id={IDS.listTitle} tabIndex={-1} className="text-xl font-semibold focus:outline-none">
+            Thèmes
+          </h2>
           <p className="text-sm text-muted">
             L&apos;ordre des thèmes est celui de votre programme. Les mots-clés aident l&apos;IA à reconnaître le
             thème d&apos;une problématique.
@@ -73,20 +132,22 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
         </div>
         <div className="flex flex-wrap gap-2">
           <button
+            id={IDS.addButton}
             type="button"
             className={panel === "add" ? "btn btn-secondary" : "btn btn-primary"}
             aria-expanded={panel === "add"}
-            aria-controls="panel-ajout-theme"
-            onClick={() => setPanel(panel === "add" ? "none" : "add")}
+            aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
+            onClick={() => openPanel("add")}
           >
             Ajouter un thème
           </button>
           <button
+            id={IDS.importButton}
             type="button"
             className="btn btn-secondary"
             aria-expanded={panel === "import"}
-            aria-controls="panel-import-themes"
-            onClick={() => setPanel(panel === "import" ? "none" : "import")}
+            aria-controls={panel === "import" ? "panel-import-themes" : undefined}
+            onClick={() => openPanel("import")}
           >
             Importer une liste
           </button>
@@ -100,12 +161,13 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
           </h3>
           <div className="mt-4">
             <ThemeForm
+              nameId={IDS.addName}
               submitLabel="Ajouter le thème"
               pendingLabel="Ajout…"
               successMessage="Thème ajouté. Vous pouvez en saisir un autre."
               resetOnSuccess
               onSubmit={(value: ThemeInput) => addTheme(programId, value)}
-              onCancel={() => setPanel("none")}
+              onCancel={closePanel}
             />
           </div>
         </section>
@@ -116,20 +178,18 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
           <h3 id="titre-import-themes" className="text-lg font-semibold">
             Importer des thèmes
           </h3>
-          <ThemeImport programId={programId} />
+          <ThemeImport programId={programId} textareaId={IDS.importText} onClose={closePanel} />
         </section>
       ) : null}
 
-      <p role="status" className="sr-only">
-        {announce}
-      </p>
-      <div role="alert">
+      <LiveRegion>{announce}</LiveRegion>
+      <LiveRegion role="alert">
         {reorderError ? (
           <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
             {reorderError}
           </p>
         ) : null}
-      </div>
+      </LiveRegion>
 
       {optimisticThemes.length === 0 ? (
         <div className="card border-dashed p-6">
@@ -140,99 +200,113 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
         </div>
       ) : (
         <ol className="flex flex-col gap-3" aria-label="Thèmes du programme">
-          {optimisticThemes.map((theme, index) => (
-            <li key={theme.id} className="card p-4 sm:p-5">
-              {editingId === theme.id ? (
-                <section aria-label={`Modifier ${theme.name}`}>
-                  <ThemeForm
-                    initial={{ name: theme.name, description: theme.description, keywords: theme.keywords }}
-                    submitLabel="Enregistrer"
-                    pendingLabel="Enregistrement…"
-                    successMessage="Thème enregistré."
-                    onSubmit={(value) => updateTheme(theme.id, value)}
-                    onSaved={() => closeEditor(theme.id)}
-                    onCancel={() => closeEditor(theme.id)}
-                  />
-                </section>
-              ) : (
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-sm font-bold tabular-nums"
-                    aria-hidden="true"
-                  >
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold">
-                      <span className="sr-only">Thème {index + 1} : </span>
-                      {theme.name}
-                    </h3>
-                    {theme.description ? <p className="mt-1 text-muted">{theme.description}</p> : null}
-                    {theme.keywords.length > 0 ? (
-                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">
-                        {theme.keywords.map((kw) => (
-                          <li key={kw} className="rounded-md bg-surface-2 px-2 py-0.5 text-sm">
-                            {kw}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <p className="mt-2 text-sm text-muted">
-                      Squelette : {theme.hasSkeleton ? "généré" : "à générer"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-start gap-2 sm:justify-end">
-                    <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
-                      <button
-                        id={moveButtonId(theme.id, "up")}
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        onClick={() => move(index, "up")}
-                        disabled={index === 0}
-                        aria-label={`Monter ${theme.name}`}
-                      >
-                        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
-                          <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      <button
-                        id={moveButtonId(theme.id, "down")}
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        onClick={() => move(index, "down")}
-                        disabled={index === optimisticThemes.length - 1}
-                        aria-label={`Descendre ${theme.name}`}
-                      >
-                        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
-                          <path d="M8 3v10M3.5 8.5L8 13l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    </div>
-                    <button
-                      id={`edit-${theme.id}`}
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setEditingId(theme.id)}
-                      aria-label={`Modifier ${theme.name}`}
-                    >
-                      Modifier
-                    </button>
-                    <ConfirmAction
-                      triggerLabel="Supprimer"
-                      triggerAccessibleLabel={`Supprimer ${theme.name}`}
-                      question={`Supprimer « ${theme.name} »${theme.hasSkeleton ? " et son squelette" : ""} ?`}
-                      confirmLabel="Supprimer"
-                      onConfirm={async () => {
-                        const result = await deleteTheme(theme.id);
-                        if (result.ok) setAnnounce(`Thème « ${theme.name} » supprimé.`);
-                        return result.ok ? null : result.error;
+          {optimisticThemes.map((theme, index) => {
+            const neighbour = optimisticThemes[index + 1] ?? optimisticThemes[index - 1];
+            const { question, confirm } = deleteQuestion(theme);
+            return (
+              <li key={theme.id} className="card p-4 sm:p-5">
+                {editingId === theme.id ? (
+                  <section aria-label={`Modifier ${theme.name}`}>
+                    <ThemeForm
+                      nameId={`edit-name-${theme.id}`}
+                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords }}
+                      submitLabel="Enregistrer le thème"
+                      pendingLabel="Enregistrement…"
+                      onSubmit={(value) => updateTheme(theme.id, value)}
+                      onSaved={(name) => {
+                        setAnnounce(`Thème « ${name} » enregistré.`);
+                        closeEditor(theme.id);
                       }}
+                      onCancel={() => closeEditor(theme.id)}
                     />
+                  </section>
+                ) : (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-sm font-bold tabular-nums"
+                        aria-hidden="true"
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="pt-1 font-semibold">
+                          <span className="sr-only">Thème {index + 1} : </span>
+                          {theme.name}
+                        </h3>
+                        {theme.description ? <p className="mt-1 text-muted">{theme.description}</p> : null}
+                        {theme.keywords.length > 0 ? (
+                          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">
+                            {theme.keywords.map((kw) => (
+                              <li key={kw} className="rounded-md bg-surface-2 px-2 py-0.5 text-sm">
+                                {kw}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <p className="mt-2 text-sm text-muted">
+                          Squelette : {theme.hasSkeleton ? "généré" : "à générer"}
+                          {theme.finalDeckCount > 0
+                            ? ` · ${theme.finalDeckCount} diaporama${theme.finalDeckCount > 1 ? "s" : ""} du jour J`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-start gap-2 sm:justify-end">
+                      <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
+                        <button
+                          id={moveButtonId(theme.id, "up")}
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          onClick={() => move(index, "up")}
+                          disabled={index === 0}
+                          aria-label={`Monter ${theme.name}`}
+                        >
+                          <ArrowIcon dir="up" />
+                        </button>
+                        <button
+                          id={moveButtonId(theme.id, "down")}
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          onClick={() => move(index, "down")}
+                          disabled={index === optimisticThemes.length - 1}
+                          aria-label={`Descendre ${theme.name}`}
+                        >
+                          <ArrowIcon dir="down" />
+                        </button>
+                      </div>
+                      <button
+                        id={editButtonId(theme.id)}
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setEditingId(theme.id);
+                          focusLater([`edit-name-${theme.id}`]);
+                        }}
+                        aria-label={`Modifier ${theme.name}`}
+                      >
+                        Modifier
+                      </button>
+                      <ConfirmAction
+                        triggerLabel="Supprimer"
+                        triggerAccessibleLabel={`Supprimer ${theme.name}`}
+                        question={question}
+                        confirmLabel={confirm}
+                        onConfirm={async () => {
+                          const result = await deleteTheme(theme.id);
+                          if (result.ok) setAnnounce(`Thème « ${theme.name} » supprimé.`);
+                          return result.ok ? null : result.error;
+                        }}
+                        onDone={() =>
+                          focusLater([neighbour ? editButtonId(neighbour.id) : null, IDS.listTitle])
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-            </li>
-          ))}
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>

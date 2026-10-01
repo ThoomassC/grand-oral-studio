@@ -12,7 +12,8 @@
   --surface: oklch(100% 0 0);
   --surface-2: oklch(96.4% 0.006 255);
   --border: oklch(89.5% 0.01 255);
-  --border-strong: oklch(72% 0.014 255);
+  /* ≥ 3:1 sur --surface et --bg (bordures de champs, WCAG 1.4.11). */
+  --border-strong: oklch(60% 0.014 255);
   --text: oklch(23% 0.02 260);
   --muted: oklch(44% 0.018 260);
   --accent: oklch(47% 0.16 262);
@@ -21,6 +22,7 @@
   --accent-soft: oklch(94.5% 0.03 262);
   --accent-strong: oklch(38% 0.15 262);
   --danger: oklch(49% 0.18 27);
+  --danger-hover: oklch(43% 0.18 27);
   --danger-soft: oklch(95.5% 0.025 27);
   --success: oklch(45% 0.11 155);
   --success-soft: oklch(95.5% 0.03 155);
@@ -36,7 +38,7 @@
     --surface: oklch(21% 0.014 260);
     --surface-2: oklch(24.5% 0.016 260);
     --border: oklch(31% 0.016 260);
-    --border-strong: oklch(50% 0.018 260);
+    --border-strong: oklch(60% 0.018 260);
     --text: oklch(94.5% 0.007 255);
     --muted: oklch(74% 0.014 255);
     --accent: oklch(74% 0.13 262);
@@ -45,6 +47,7 @@
     --accent-soft: oklch(29% 0.06 262);
     --accent-strong: oklch(84% 0.09 262);
     --danger: oklch(74% 0.15 25);
+    --danger-hover: oklch(80% 0.12 25);
     --danger-soft: oklch(27% 0.05 25);
     --success: oklch(76% 0.12 155);
     --success-soft: oklch(26% 0.04 155);
@@ -68,6 +71,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-strong: var(--accent-strong);
   --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -80,6 +84,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Les barres d'enregistrement collantes ne doivent pas masquer le champ focalisé (WCAG 2.4.11). */
+  scroll-padding-bottom: 7rem;
 }
 
 body {
@@ -120,15 +126,19 @@ h3 {
     border-radius: 0.5rem;
     border: 1px solid transparent;
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 1rem;
     line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
     transition:
-      background-color 120ms ease,
-      border-color 120ms ease,
-      color 120ms ease;
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      transform 150ms ease;
     white-space: nowrap;
+  }
+  .btn:not(:disabled):not([aria-disabled="true"]):active {
+    transform: translateY(1px);
   }
   .btn:disabled,
   .btn[aria-disabled="true"] {
@@ -144,7 +154,7 @@ h3 {
     background: var(--accent);
     color: var(--on-accent);
   }
-  .btn-primary:not(:disabled):hover {
+  .btn-primary:not(:disabled):not([aria-disabled="true"]):hover {
     background: var(--accent-hover);
   }
   .btn-secondary {
@@ -152,29 +162,29 @@ h3 {
     color: var(--text);
     border-color: var(--border-strong);
   }
-  .btn-secondary:not(:disabled):hover {
+  .btn-secondary:not(:disabled):not([aria-disabled="true"]):hover {
     background: var(--surface-2);
   }
   .btn-ghost {
     background: transparent;
     color: var(--text);
   }
-  .btn-ghost:not(:disabled):hover {
+  .btn-ghost:not(:disabled):not([aria-disabled="true"]):hover {
     background: var(--surface-2);
   }
   .btn-danger {
     background: var(--danger);
     color: var(--on-accent);
   }
-  .btn-danger:not(:disabled):hover {
-    filter: brightness(0.92);
+  .btn-danger:not(:disabled):not([aria-disabled="true"]):hover {
+    background: var(--danger-hover);
   }
   .btn-danger-ghost {
     background: transparent;
     color: var(--danger);
     border-color: var(--border-strong);
   }
-  .btn-danger-ghost:not(:disabled):hover {
+  .btn-danger-ghost:not(:disabled):not([aria-disabled="true"]):hover {
     background: var(--danger-soft);
   }
   .btn-icon {
@@ -186,7 +196,7 @@ h3 {
   .field-label {
     display: block;
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 1rem;
     margin-bottom: 0.375rem;
   }
   .field-hint {

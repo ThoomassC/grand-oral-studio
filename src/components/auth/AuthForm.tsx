@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useId, useState, startTransition } from "react";
+import { useActionState, useId, useRef, useState, startTransition } from "react";
 import { signIn, signUp } from "@/lib/auth-client";
 import { FieldError } from "@/components/ui/FieldError";
+import { focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 
 type Mode = "signin" | "signup";
 
@@ -40,8 +43,10 @@ function authErrorMessage(code: string | undefined, status: number, mode: Mode):
 
 export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
   const router = useRouter();
+  const isSignup = mode === "signup";
   const ids = { name: useId(), email: useId(), password: useId(), hint: useId() };
   const [showPassword, setShowPassword] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [state, submit, pending] = useActionState<AuthState, FormData>(
     async (_prev, formData) => {
@@ -56,12 +61,21 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
       if (mode === "signup" && password.length < MIN_PASSWORD)
         fieldErrors.password = `Le mot de passe doit contenir au moins ${MIN_PASSWORD} caractères.`;
       if (mode === "signin" && password.length === 0) fieldErrors.password = "Saisissez votre mot de passe.";
-      if (Object.keys(fieldErrors).length > 0) return { error: null, fieldErrors, values };
+      const invalid = Object.keys(fieldErrors).length;
+      if (invalid > 0) {
+        focusFirstInvalid(formRef.current);
+        return { error: invalidCountMessage(invalid, isSignup ? "de créer le compte" : "de vous connecter"), fieldErrors, values };
+      }
 
-      const { error } =
-        mode === "signin"
-          ? await signIn.email({ email, password })
-          : await signUp.email({ email, password, name });
+      let error: { code?: string; status: number } | null;
+      try {
+        ({ error } =
+          mode === "signin"
+            ? await signIn.email({ email, password })
+            : await signUp.email({ email, password, name }));
+      } catch {
+        return { error: "La connexion au serveur a été interrompue. Réessayez.", fieldErrors: {}, values };
+      }
       if (error) {
         return { error: authErrorMessage(error.code, error.status, mode), fieldErrors: {}, values };
       }
@@ -72,28 +86,29 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
     { error: null, fieldErrors: {}, values: { name: "", email: "" } },
   );
 
-  const isSignup = mode === "signup";
   const otherHref = `${isSignup ? "/connexion" : "/inscription"}${next !== "/programmes" ? `?next=${encodeURIComponent(next)}` : ""}`;
 
   return (
     <form
+      ref={formRef}
       noValidate
       className="flex flex-col gap-5"
       onSubmit={(e) => {
         // Soumission manuelle : évite la réinitialisation automatique du formulaire
         // par React après l'action (on garde la saisie en cas d'erreur).
         e.preventDefault();
+        if (pending) return;
         const data = new FormData(e.currentTarget);
         startTransition(() => submit(data));
       }}
     >
-      <div role="alert" aria-atomic="true">
+      <LiveRegion role="alert">
         {state.error ? (
           <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
             {state.error}
           </p>
         ) : null}
-      </div>
+      </LiveRegion>
 
       {isSignup ? (
         <div>
@@ -141,7 +156,7 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
           </label>
           <button
             type="button"
-            className="text-sm font-medium text-accent-strong underline underline-offset-2"
+            className="inline-flex min-h-6 min-w-6 items-center px-1 text-sm font-medium text-accent-strong underline underline-offset-2"
             aria-pressed={showPassword}
             onClick={() => setShowPassword((v) => !v)}
           >
@@ -172,8 +187,12 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
         <FieldError id={`${ids.password}-err`} message={state.fieldErrors.password} />
       </div>
 
-      <button type="submit" className="btn btn-primary w-full" disabled={pending}>
-        {pending ? (isSignup ? "Création du compte…" : "Connexion…") : isSignup ? "Créer mon compte" : "Se connecter"}
+      <button type="submit" className="btn btn-primary w-full" aria-disabled={pending || undefined}>
+        <ButtonLabel
+          idle={isSignup ? "Créer mon compte" : "Se connecter"}
+          busy={isSignup ? "Création du compte…" : "Connexion…"}
+          isBusy={pending}
+        />
       </button>
 
       <p className="text-center text-sm text-muted">

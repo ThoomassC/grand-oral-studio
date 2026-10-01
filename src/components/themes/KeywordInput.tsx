@@ -30,8 +30,13 @@ export function KeywordInput({
   const [announce, setAnnounce] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const hintId = useId();
+  const full = value.length >= max;
 
   function add(raw: string) {
+    if (full) {
+      setDraft("");
+      return;
+    }
     const parts = raw
       .split(/[,;]/)
       .map((p) => p.trim().slice(0, maxLength))
@@ -109,12 +114,14 @@ export function KeywordInput({
           className="min-w-[8rem] flex-1 bg-transparent py-1 outline-none"
           aria-describedby={[hintId, describedBy].filter(Boolean).join(" ")}
           aria-invalid={invalid}
-          disabled={value.length >= max}
+          readOnly={full}
           maxLength={maxLength}
         />
       </div>
-      <p id={hintId} className="field-hint">
-        Validez chaque mot-clé avec Entrée ou une virgule ({value.length}/{max}).
+      <p id={hintId} className={`field-hint ${full ? "font-semibold text-warning" : ""}`}>
+        {full
+          ? `Limite de ${max} mots-clés atteinte : retirez-en un pour en ajouter un autre.`
+          : `Validez chaque mot-clé avec Entrée ou une virgule (${value.length}/${max}).`}
       </p>
       <p role="status" className="sr-only">
         {announce}

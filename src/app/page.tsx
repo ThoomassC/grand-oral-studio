@@ -25,7 +25,7 @@ export default async function HomePage() {
     <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-accent-strong">Préparation du grand oral</p>
-        <h1 className="mt-3 text-4xl font-bold sm:text-5xl">
+        <h1 className="mt-3 text-3xl font-bold">
           Une problématique tirée au sort, un diaporama prêt en quelques minutes.
         </h1>
         <p className="mt-5 text-lg text-muted">

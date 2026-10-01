@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useId } from "react";
+import { startTransition, useActionState, useId, useRef } from "react";
 import { createProgram } from "@/server/actions/programs";
 import { FieldError } from "@/components/ui/FieldError";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
+import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { errorProps, firstError, type FieldErrors } from "@/components/forms/validation";
 
 interface State {
@@ -19,6 +21,7 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
   const router = useRouter();
   const nameId = useId();
   const descId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [state, submit, pending] = useActionState<State, FormData>(async (_prev: State, formData: FormData): Promise<State> => {
     const values = {
@@ -27,11 +30,23 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
     };
     // Même règle que ProgramMetaSchema côté serveur (2 à 120 caractères), revalidée par l'action.
     if (values.name.length < 2 || values.name.length > 120) {
-      return { status: IDLE, fieldErrors: { name: ["Le nom doit contenir entre 2 et 120 caractères."] }, values };
+      focusFirstInvalid(formRef.current);
+      return {
+        status: { kind: "error", message: invalidCountMessage(1, "de créer le programme") },
+        fieldErrors: { name: ["Le nom doit contenir entre 2 et 120 caractères."] },
+        values,
+      };
     }
-    const result = await createProgram(values);
+    let result: Awaited<ReturnType<typeof createProgram>>;
+    try {
+      result = await createProgram(values);
+    } catch {
+      return { status: { kind: "error", message: "La connexion a été interrompue. Réessayez." }, fieldErrors: {}, values };
+    }
     if (!result.ok) {
-      return { status: { kind: "error", message: result.error }, fieldErrors: result.fieldErrors ?? {}, values };
+      const fieldErrors = result.fieldErrors ?? {};
+      if (countFieldErrors(fieldErrors) > 0) focusFirstInvalid(formRef.current);
+      return { status: { kind: "error", message: result.error }, fieldErrors, values };
     }
     router.push(`/programmes/${result.data.id}`);
     return { status: { kind: "success", message: "Programme créé. Ouverture…" }, fieldErrors: {}, values };
@@ -39,10 +54,12 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
 
   return (
     <form
+      ref={formRef}
       noValidate
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
+        if (pending) return;
         const data = new FormData(e.currentTarget);
         startTransition(() => submit(data));
       }}
@@ -84,8 +101,8 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
       </div>
       <FormStatus state={state.status} />
       <div>
-        <button type="submit" className="btn btn-primary" disabled={pending}>
-          {pending ? "Création…" : "Créer le programme"}
+        <button type="submit" className="btn btn-primary" aria-disabled={pending || undefined}>
+          <ButtonLabel idle="Créer le programme" busy="Création…" isBusy={pending} />
         </button>
       </div>
     </form>

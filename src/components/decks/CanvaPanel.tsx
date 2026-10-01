@@ -5,7 +5,7 @@ import { useId, useRef, useState } from "react";
 type CopyState = { kind: "idle" } | { kind: "copied" } | { kind: "manual" };
 
 /** Panneau « Ouvrir dans Canva » : marche à suivre et prompt à copier. */
-export function CanvaPanel({ prompt, pptxHref, id }: { prompt: string; pptxHref: string; id: string }) {
+export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
   const textareaId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copy, setCopy] = useState<CopyState>({ kind: "idle" });
@@ -29,14 +29,11 @@ export function CanvaPanel({ prompt, pptxHref, id }: { prompt: string; pptxHref:
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="card p-5 sm:p-6">
       <h2 id={`${id}-title`} className="text-lg font-semibold">
-        Passer dans Canva
+        Importer dans Canva
       </h2>
       <ol className="mt-3 list-decimal space-y-1.5 pl-5">
         <li>
-          <a href={pptxHref} className="link" download>
-            Téléchargez le fichier .pptx
-          </a>{" "}
-          de ce deck.
+          Téléchargez le fichier .pptx de ce deck (bouton « Télécharger le .pptx » ci-dessus).
         </li>
         <li>
           Ouvrez{" "}
@@ -60,7 +57,7 @@ export function CanvaPanel({ prompt, pptxHref, id }: { prompt: string; pptxHref:
           <label htmlFor={textareaId} className="field-label mb-0">
             Prompt Canva
           </label>
-          <button type="button" className="btn btn-primary btn-sm" onClick={copyPrompt}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={copyPrompt}>
             Copier le prompt Canva
           </button>
         </div>

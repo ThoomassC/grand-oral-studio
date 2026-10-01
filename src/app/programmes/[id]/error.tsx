@@ -9,5 +9,5 @@ export default function ProgramSectionError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  return <ErrorPanel title="Cette section n'a pas pu être chargée" error={error} retry={retry} />;
+  return <ErrorPanel level={2} title="Cette section n'a pas pu être chargée" error={error} retry={retry} />;
 }

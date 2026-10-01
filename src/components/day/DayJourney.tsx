@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { ClassificationResult } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { classifyProblem, generateFinalDeck } from "@/server/actions/generation";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
-import { ElapsedTime } from "@/components/ui/ElapsedTime";
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
+import { ElapsedTime, useElapsed } from "@/components/ui/ElapsedTime";
 import { FieldError } from "@/components/ui/FieldError";
+import { focusLater } from "@/components/ui/focus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { Meter } from "@/components/ui/Meter";
 
 export interface DayTheme {
@@ -17,119 +20,245 @@ export interface DayTheme {
   hasSkeleton: boolean;
 }
 
-const OTHER = "__other__";
-
-function StepTitle({
-  n,
-  children,
-  id,
-  headingRef,
-  done = false,
-}: {
-  n: number;
-  children: React.ReactNode;
+export interface RecentDeck {
   id: string;
-  headingRef?: React.Ref<HTMLHeadingElement>;
-  done?: boolean;
-}) {
+  title: string;
+  minutesAgo: number;
+}
+
+const OTHER = "__other__";
+/** Horloge lue dans les gestionnaires d'événements uniquement. */
+const clock = () => Date.now();
+const PROBLEM_MAX = 1500;
+const SLOW_AFTER_MS = 3 * 60 * 1000;
+const NETWORK_ERROR = "La connexion a été interrompue. Votre problématique est conservée : relancez la génération.";
+
+/** Ce qui est conservé dans sessionStorage (rechargement, onglet fermé par erreur). */
+interface Draft {
+  problem: string;
+  hintedThemeId: string;
+  stage: "input" | "chosen";
+  result: ClassificationResult | null;
+  choice: string;
+  otherThemeId: string;
+}
+
+function readDraft(key: string): Draft | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== "object" || value === null) return null;
+    const d = value as Partial<Draft>;
+    if (typeof d.problem !== "string") return null;
+    return {
+      problem: d.problem,
+      hintedThemeId: typeof d.hintedThemeId === "string" ? d.hintedThemeId : "",
+      stage: d.stage === "chosen" ? "chosen" : "input",
+      result: d.result && Array.isArray(d.result.ranked) ? d.result : null,
+      choice: typeof d.choice === "string" ? d.choice : "",
+      otherThemeId: typeof d.otherThemeId === "string" ? d.otherThemeId : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string, draft: Draft | null): void {
+  try {
+    if (draft) window.sessionStorage.setItem(key, JSON.stringify(draft));
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Stockage indisponible (navigation privée, quota) : la saisie reste en mémoire.
+  }
+}
+
+function StepTitle({ n, children, id, state }: { n: number; children: React.ReactNode; id: string; state: "current" | "done" | "todo" }) {
   return (
-    <h2 id={id} ref={headingRef} tabIndex={-1} className="flex items-center gap-3 text-xl font-semibold focus:outline-none">
+    <h2 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl font-semibold focus:outline-none">
       <span
         aria-hidden="true"
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-base font-bold ${
-          done ? "bg-accent text-on-accent" : "bg-accent-soft text-accent-strong"
+          state === "current"
+            ? "bg-accent text-on-accent"
+            : state === "done"
+              ? "bg-success-soft text-success"
+              : "bg-surface-2 text-muted"
         }`}
       >
-        {n}
+        {state === "done" ? "✓" : n}
       </span>
       <span>
         <span className="sr-only">Étape {n} sur 3 : </span>
         {children}
+        {state === "done" ? <span className="sr-only"> (terminée)</span> : null}
       </span>
     </h2>
   );
 }
 
-export function DayJourney({ programId, themes }: { programId: string; themes: DayTheme[] }) {
+interface DayJourneyProps {
+  programId: string;
+  themes: DayTheme[];
+  recentDeck: RecentDeck | null;
+}
+
+const draftKey = (programId: string) => `grand-oral-studio:jour-j:${programId}`;
+const noopSubscribe = () => () => {};
+
+/**
+ * Le brouillon vit dans sessionStorage, inconnu du serveur : le rendu serveur
+ * et l'hydratation partent d'un état vide, puis, une fois côté client, le
+ * parcours est remonté (clé) avec le brouillon restauré comme état initial.
+ */
+export function DayJourney(props: DayJourneyProps) {
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  return (
+    <DayJourneyInner
+      key={hydrated ? "client" : "server"}
+      {...props}
+      initialDraft={hydrated ? readDraft(draftKey(props.programId)) : null}
+    />
+  );
+}
+
+function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJourneyProps & { initialDraft: Draft | null }) {
   const router = useRouter();
-  const ids = { problem: useId(), hint: useId(), other: useId(), s1: useId(), s2: useId(), s3: useId() };
-  const step2Ref = useRef<HTMLHeadingElement>(null);
-  const generatingRef = useRef<HTMLDivElement>(null);
+  const baseId = useId();
+  const ids = {
+    problem: `${baseId}-problem`,
+    hint: `${baseId}-hint`,
+    other: `${baseId}-other`,
+    direct: `${baseId}-direct`,
+    s1: `${baseId}-s1`,
+    s2: `${baseId}-s2`,
+    s3: `${baseId}-s3`,
+    generate: `${baseId}-generate`,
+    counter: `${baseId}-counter`,
+  };
+  const storageKey = draftKey(programId);
   const submittedRef = useRef(false);
 
-  const [problem, setProblem] = useState("");
-  const [hintedThemeId, setHintedThemeId] = useState("");
+  const [problem, setProblem] = useState(initialDraft?.problem ?? "");
+  const [hintedThemeId, setHintedThemeId] = useState(initialDraft?.hintedThemeId ?? "");
+  const [stage, setStage] = useState<"input" | "chosen">(initialDraft?.stage ?? "input");
+  const [result, setResult] = useState<ClassificationResult | null>(initialDraft?.result ?? null);
+  const [choice, setChoice] = useState<string>(initialDraft?.choice ?? "");
+  const [otherThemeId, setOtherThemeId] = useState(initialDraft?.otherThemeId ?? "");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [classifyError, setClassifyError] = useState<string | null>(null);
-  const [result, setResult] = useState<ClassificationResult | null>(null);
-  const [choice, setChoice] = useState<string>("");
-  const [otherThemeId, setOtherThemeId] = useState("");
   const [generation, setGeneration] = useState<
     { kind: "idle" } | { kind: "running"; startedAt: number } | { kind: "error"; message: string }
   >({ kind: "idle" });
   const [classifying, startClassify] = useTransition();
   const [, startGenerate] = useTransition();
 
+
+  const generating = generation.kind === "running";
+  const elapsed = useElapsed(generation.kind === "running" ? generation.startedAt : null);
   const themeById = new Map(themes.map((t) => [t.id, t]));
   const selectedThemeId = choice === OTHER ? otherThemeId : choice;
   const selectedTheme = selectedThemeId ? themeById.get(selectedThemeId) : undefined;
-  const generating = generation.kind === "running";
+  const hintedTheme = hintedThemeId ? themeById.get(hintedThemeId) : undefined;
+  const problemLength = problem.trim().length;
 
-  function classify(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (classifying) return;
-    setClassifyError(null);
+  /** Met à jour l'état et le brouillon en une fois (pas d'effet de synchronisation). */
+  function update(next: Partial<Draft>) {
+    const draft: Draft = { problem, hintedThemeId, stage, result, choice, otherThemeId, ...next };
+    if (next.problem !== undefined) setProblem(next.problem);
+    if (next.hintedThemeId !== undefined) setHintedThemeId(next.hintedThemeId);
+    if (next.stage !== undefined) setStage(next.stage);
+    if (next.result !== undefined) setResult(next.result);
+    if (next.choice !== undefined) setChoice(next.choice);
+    if (next.otherThemeId !== undefined) setOtherThemeId(next.otherThemeId);
+    writeDraft(storageKey, draft);
+  }
+
+  function validateProblem(): boolean {
     const checked = validateWith(ProblemInputSchema, { problem, hintedThemeId: hintedThemeId || null });
-    if (!checked.ok) {
-      // Message plus direct que celui de zod pour la longueur (cas le plus fréquent).
-      const length = problem.trim().length;
-      setFieldErrors(
-        length < 10 || length > 1500
-          ? { problem: [length < 10 ? "Saisissez la problématique complète (10 caractères au moins)." : "La problématique dépasse 1 500 caractères."] }
-          : checked.fieldErrors,
-      );
-      document.getElementById(ids.problem)?.focus();
-      return;
+    if (checked.ok) {
+      setFieldErrors({});
+      return true;
     }
-    setFieldErrors({});
+    setFieldErrors(
+      problemLength < 10 || problemLength > PROBLEM_MAX
+        ? {
+            problem: [
+              problemLength < 10
+                ? "Saisissez la problématique complète (10 caractères au moins)."
+                : "La problématique dépasse 1 500 caractères.",
+            ],
+          }
+        : checked.fieldErrors,
+    );
+    focusLater([ids.problem]);
+    return false;
+  }
+
+  function classify() {
+    if (classifying || generating) return;
+    setClassifyError(null);
+    if (!validateProblem()) return;
     startClassify(async () => {
-      const res = await classifyProblem(programId, checked.data);
+      let res: Awaited<ReturnType<typeof classifyProblem>>;
+      try {
+        res = await classifyProblem(programId, { problem, hintedThemeId: hintedThemeId || null });
+      } catch {
+        setClassifyError("La connexion a été interrompue. Votre problématique est conservée : réessayez.");
+        return;
+      }
       if (!res.ok) {
         setFieldErrors(res.fieldErrors ?? {});
         setClassifyError(res.error);
         return;
       }
-      setResult(res.data);
       const first = res.data.ranked[0]?.themeId;
-      const fallback = hintedThemeId || themes[0]?.id || "";
-      setChoice(first ?? OTHER);
-      setOtherThemeId(first ? "" : fallback);
-      requestAnimationFrame(() => step2Ref.current?.focus());
+      update({
+        stage: "chosen",
+        result: res.data,
+        choice: first ?? OTHER,
+        otherThemeId: first ? "" : hintedThemeId || themes[0]?.id || "",
+      });
+      focusLater([ids.s2]);
     });
   }
 
+  /** Thème indiqué sur le sujet : on passe directement à la génération. */
+  function continueWithHint() {
+    if (classifying || generating || !hintedTheme) return;
+    if (!validateProblem()) return;
+    update({ stage: "chosen", result: null, choice: OTHER, otherThemeId: hintedTheme.id });
+    focusLater([ids.generate]);
+  }
+
   function editProblem() {
-    setResult(null);
-    setChoice("");
-    setOtherThemeId("");
+    if (generating) return;
+    update({ stage: "input", result: null, choice: "", otherThemeId: "" });
     setGeneration({ kind: "idle" });
-    requestAnimationFrame(() => document.getElementById(ids.problem)?.focus());
+    focusLater([ids.problem]);
   }
 
   function generate() {
     if (submittedRef.current || !selectedThemeId) return;
     submittedRef.current = true;
-    setGeneration({ kind: "running", startedAt: Date.now() });
-    requestAnimationFrame(() => generatingRef.current?.focus());
+    setGeneration({ kind: "running", startedAt: clock() });
     startGenerate(async () => {
-      const res = await generateFinalDeck(programId, selectedThemeId, problem.trim());
+      let res: Awaited<ReturnType<typeof generateFinalDeck>>;
+      try {
+        res = await generateFinalDeck(programId, selectedThemeId, problem.trim());
+      } catch {
+        submittedRef.current = false;
+        setGeneration({ kind: "error", message: NETWORK_ERROR });
+        return;
+      }
       if (!res.ok) {
         submittedRef.current = false;
         setGeneration({ kind: "error", message: res.error });
         return;
       }
-      // On garde l'état « en cours » jusqu'à l'arrivée sur la page du deck.
-      router.push(`/programmes/${programId}/decks/${res.data.deckId}`);
+      writeDraft(storageKey, null);
+      // L'état « en cours » est conservé jusqu'à l'arrivée sur la page du deck.
+      router.push(`/programmes/${programId}/decks/${res.data.deckId}?nouveau=1`);
     });
   }
 
@@ -145,15 +274,39 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
     );
   }
 
+  const step1State = stage === "chosen" ? "done" : "current";
+  const step2State = stage === "chosen" ? (selectedThemeId ? "done" : "current") : "todo";
+  const step3State = stage === "chosen" && selectedThemeId ? "current" : "todo";
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      {recentDeck ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-success/40 bg-success-soft p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Votre dernier diaporama (« {recentDeck.title} », il y a{" "}
+            {recentDeck.minutesAgo < 1 ? "moins d'une minute" : `${recentDeck.minutesAgo} min`}) est prêt.
+          </p>
+          <Link href={`/programmes/${programId}/decks/${recentDeck.id}`} className="btn btn-secondary btn-sm shrink-0">
+            Ouvrir le diaporama
+          </Link>
+        </div>
+      ) : null}
+
       {/* Étape 1 */}
       <section aria-labelledby={ids.s1} className="card p-5 sm:p-6">
-        <StepTitle n={1} id={ids.s1} done={result !== null}>
+        <StepTitle n={1} id={ids.s1} state={step1State}>
           La problématique
         </StepTitle>
-        {result === null ? (
-          <form noValidate onSubmit={classify} className="mt-4 flex flex-col gap-4">
+        {stage === "input" ? (
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (hintedTheme) continueWithHint();
+              else classify();
+            }}
+            className="mt-4 flex flex-col gap-4"
+          >
             <div>
               <label htmlFor={ids.problem} className="field-label">
                 Problématique tirée au sort
@@ -163,11 +316,14 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
                 className="input text-lg"
                 rows={4}
                 value={problem}
-                maxLength={1500}
-                onChange={(e) => setProblem(e.target.value)}
+                maxLength={PROBLEM_MAX}
+                onChange={(e) => update({ problem: e.target.value })}
                 placeholder="Recopiez l'intitulé exact"
-                {...errorProps(fieldErrors, "problem", `${ids.problem}-err`)}
+                {...errorProps(fieldErrors, "problem", `${ids.problem}-err`, ids.counter)}
               />
+              <p id={ids.counter} className="field-hint tabular-nums">
+                {problem.length.toLocaleString("fr-FR")}/{PROBLEM_MAX.toLocaleString("fr-FR")} caractères
+              </p>
               <FieldError id={`${ids.problem}-err`} message={firstError(fieldErrors, "problem")} />
             </div>
             <div>
@@ -178,7 +334,7 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
                 id={ids.hint}
                 className="input"
                 value={hintedThemeId}
-                onChange={(e) => setHintedThemeId(e.target.value)}
+                onChange={(e) => update({ hintedThemeId: e.target.value })}
               >
                 <option value="">Aucun thème indiqué</option>
                 {themes.map((t) => (
@@ -188,27 +344,48 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
                 ))}
               </select>
             </div>
-            <div role="alert">
+            <LiveRegion role="alert">
               {classifyError ? (
                 <p className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
                   {classifyError}
                 </p>
               ) : null}
-            </div>
+            </LiveRegion>
             <div className="flex flex-wrap items-center gap-3">
-              <button type="submit" className="btn btn-primary" disabled={classifying}>
-                {classifying ? "Reconnaissance en cours…" : "Reconnaître le thème"}
-              </button>
-              <p role="status" className="text-sm text-muted">
-                {classifying ? "Analyse de la problématique, quelques secondes…" : ""}
-              </p>
+              {hintedTheme ? (
+                <>
+                  <button type="submit" className="btn btn-primary" aria-disabled={classifying || undefined}>
+                    Continuer avec ce thème
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={classify}
+                    aria-disabled={classifying || undefined}
+                  >
+                    <ButtonLabel idle="Vérifier avec l'IA" busy="Vérification…" isBusy={classifying} />
+                  </button>
+                </>
+              ) : (
+                <button type="submit" className="btn btn-primary" aria-disabled={classifying || undefined}>
+                  <ButtonLabel idle="Reconnaître le thème" busy="Reconnaissance en cours…" isBusy={classifying} />
+                </button>
+              )}
+              <LiveRegion className="text-sm text-muted">
+                {classifying ? "Analyse de la problématique, quelques secondes…" : null}
+              </LiveRegion>
             </div>
           </form>
         ) : (
           <div className="mt-4 flex flex-col gap-3">
             <blockquote className="border-l-4 border-accent pl-4 text-lg">{problem.trim()}</blockquote>
             <div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={editProblem} disabled={generating}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={editProblem}
+                aria-disabled={generating || undefined}
+              >
                 Modifier la problématique
               </button>
             </div>
@@ -217,115 +394,184 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
       </section>
 
       {/* Étape 2 */}
-      {result ? (
+      {stage === "chosen" ? (
         <section aria-labelledby={ids.s2} className="card p-5 sm:p-6">
-          <StepTitle n={2} id={ids.s2} headingRef={step2Ref} done={selectedThemeId !== ""}>
+          <StepTitle n={2} id={ids.s2} state={step2State}>
             Le thème
           </StepTitle>
-          <div className="mt-4 rounded-lg bg-surface-2 p-3">
-            <p className="text-sm font-semibold text-muted">Problématique reformulée</p>
-            <p className="mt-1">{result.reformulatedProblem}</p>
-          </div>
 
-          <fieldset className="mt-5" disabled={generating}>
-            <legend className="field-label">Thème retenu pour le diaporama</legend>
-            {result.ranked.length === 0 ? (
-              <p className="mb-3 text-sm text-muted">
-                Aucun thème n&apos;a été reconnu avec assez de confiance. Choisissez-le dans la liste.
-              </p>
-            ) : null}
-            <div className="flex flex-col gap-3">
-              {result.ranked.map((r, i) => {
-                const checked = choice === r.themeId;
-                const theme = themeById.get(r.themeId);
-                const pct = Math.round(r.confidence * 100);
-                return (
-                  <label
-                    key={r.themeId}
-                    className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
-                      checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border hover:border-border-strong"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="theme-choice"
-                      value={r.themeId}
-                      checked={checked}
-                      onChange={() => setChoice(r.themeId)}
-                      className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-baseline justify-between gap-x-3">
-                        <span className="font-semibold">
-                          {i === 0 ? <span className="sr-only">Le plus probable : </span> : null}
-                          {r.themeName}
-                        </span>
-                        <span className="text-sm font-semibold tabular-nums">Confiance {pct} %</span>
-                      </span>
-                      <Meter
-                        className="mt-2"
-                        value={r.confidence}
-                        label={`Confiance pour ${r.themeName}`}
-                        valueText={`${pct} %`}
-                      />
-                      {r.rationale ? <span className="mt-2 block text-sm text-muted">{r.rationale}</span> : null}
-                      {theme && !theme.hasSkeleton ? (
-                        <span className="mt-2 block text-sm font-medium text-warning">
-                          Pas de squelette pour ce thème : la génération partira de zéro.
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                );
-              })}
+          {result ? (
+            <>
+              <div className="mt-4 rounded-lg bg-surface-2 p-3">
+                <p className="text-sm font-semibold text-muted">Problématique reformulée</p>
+                <p className="mt-1">{result.reformulatedProblem}</p>
+              </div>
 
-              <div
-                className={`rounded-lg border p-4 ${choice === OTHER ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border"}`}
-              >
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="radio"
-                    name="theme-choice"
-                    value={OTHER}
-                    checked={choice === OTHER}
-                    onChange={() => {
-                      setChoice(OTHER);
-                      if (!otherThemeId) setOtherThemeId(themes[0]?.id ?? "");
-                    }}
-                    className="h-4 w-4 shrink-0 accent-[var(--accent)]"
-                  />
-                  <span className="font-semibold">Un autre thème du programme</span>
-                </label>
-                {choice === OTHER ? (
-                  <div className="mt-3 pl-7">
-                    <label htmlFor={ids.other} className="text-sm font-semibold">
-                      Thème
-                    </label>
-                    <select
-                      id={ids.other}
-                      className="input mt-1"
-                      value={otherThemeId}
-                      onChange={(e) => setOtherThemeId(e.target.value)}
-                    >
-                      {themes.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                          {t.hasSkeleton ? "" : " (sans squelette)"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <fieldset className="mt-5">
+                <legend className="field-label">Thème retenu pour le diaporama</legend>
+                {result.ranked.length === 0 ? (
+                  <p className="mb-3 text-sm text-muted">
+                    Aucun thème n&apos;a été reconnu avec assez de confiance. Choisissez-le dans la liste.
+                  </p>
                 ) : null}
+                <div className="flex flex-col gap-3">
+                  {result.ranked.map((r) => {
+                    const checked = choice === r.themeId;
+                    const theme = themeById.get(r.themeId);
+                    const pct = Math.round(r.confidence * 100);
+                    const isHinted = r.themeId === hintedThemeId;
+                    const showMeter = !isHinted || r.confidence > 0;
+                    const cid = `${baseId}-c-${r.themeId}`;
+                    return (
+                      <label
+                        key={r.themeId}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
+                          checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border hover:border-border-strong"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="theme-choice"
+                          value={r.themeId}
+                          checked={checked}
+                          onChange={() => {
+                            if (!generating) update({ choice: r.themeId });
+                          }}
+                          aria-disabled={generating || undefined}
+                          aria-labelledby={`${cid}-name ${showMeter ? `${cid}-pct` : `${cid}-badge`}`}
+                          aria-describedby={[r.rationale ? `${cid}-why` : null, theme && !theme.hasSkeleton ? `${cid}-noskel` : null]
+                            .filter(Boolean)
+                            .join(" ") || undefined}
+                          className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <span id={`${cid}-name`} className="font-semibold">
+                              {r.themeName}
+                            </span>
+                            {isHinted ? (
+                              <span
+                                id={`${cid}-badge`}
+                                className="rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40"
+                              >
+                                Indiqué sur votre sujet
+                              </span>
+                            ) : null}
+                            {showMeter ? (
+                              <span id={`${cid}-pct`} className="text-sm font-semibold tabular-nums">
+                                Confiance {pct} %
+                              </span>
+                            ) : null}
+                          </span>
+                          {showMeter ? (
+                            <span aria-hidden="true" className="block">
+                              <Meter className="mt-2" value={r.confidence} label={`Confiance pour ${r.themeName}`} valueText={`${pct} %`} />
+                            </span>
+                          ) : null}
+                          {r.rationale ? (
+                            <span id={`${cid}-why`} className="mt-2 block text-sm text-muted">
+                              {r.rationale}
+                            </span>
+                          ) : null}
+                          {theme && !theme.hasSkeleton ? (
+                            <span id={`${cid}-noskel`} className="mt-2 block text-sm font-medium text-warning">
+                              Pas de squelette pour ce thème : la génération partira de zéro.
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+
+                  <div
+                    className={`rounded-lg border p-4 ${choice === OTHER ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border"}`}
+                  >
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="radio"
+                        name="theme-choice"
+                        value={OTHER}
+                        checked={choice === OTHER}
+                        onChange={() => {
+                          if (generating) return;
+                          update({ choice: OTHER, otherThemeId: otherThemeId || themes[0]?.id || "" });
+                        }}
+                        aria-disabled={generating || undefined}
+                        className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                      />
+                      <span className="font-semibold">Un autre thème du programme</span>
+                    </label>
+                    {choice === OTHER ? (
+                      <div className="mt-3 pl-7">
+                        <label htmlFor={ids.other} className="field-label">
+                          Thème
+                        </label>
+                        <select
+                          id={ids.other}
+                          className="input"
+                          value={otherThemeId}
+                          onChange={(e) => {
+                            if (!generating) update({ otherThemeId: e.target.value });
+                          }}
+                        >
+                          {themes.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                              {t.hasSkeleton ? "" : " (sans squelette)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </fieldset>
+            </>
+          ) : (
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <label htmlFor={ids.direct} className="field-label">
+                  Thème indiqué sur votre sujet
+                </label>
+                <select
+                  id={ids.direct}
+                  className="input"
+                  value={otherThemeId}
+                  onChange={(e) => {
+                    if (!generating) update({ otherThemeId: e.target.value, choice: OTHER });
+                  }}
+                >
+                  {themes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.hasSkeleton ? "" : " (sans squelette)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    if (generating) return;
+                    update({ stage: "input" });
+                    window.setTimeout(classify, 0);
+                  }}
+                  aria-disabled={generating || undefined}
+                >
+                  Vérifier avec l&apos;IA
+                </button>
               </div>
             </div>
-          </fieldset>
+          )}
         </section>
       ) : null}
 
       {/* Étape 3 */}
-      {result ? (
+      {stage === "chosen" ? (
         <section aria-labelledby={ids.s3} className="card p-5 sm:p-6">
-          <StepTitle n={3} id={ids.s3}>
+          <StepTitle n={3} id={ids.s3} state={step3State}>
             Le diaporama
           </StepTitle>
           {selectedTheme ? (
@@ -343,40 +589,58 @@ export function DayJourney({ programId, themes }: { programId: string; themes: D
 
           <div className="mt-4">
             <button
+              id={ids.generate}
               type="button"
-              className="btn btn-primary min-h-12 px-6 text-base"
+              className="btn btn-primary min-h-12 px-6 text-lg"
               onClick={generate}
-              disabled={generating || !selectedThemeId}
+              aria-disabled={generating || !selectedThemeId || undefined}
               aria-describedby={generating ? `${ids.s3}-progress` : undefined}
             >
-              {generating ? "Génération en cours…" : "Générer le diaporama"}
+              <ButtonLabel idle="Générer le diaporama" busy="Génération en cours…" isBusy={generating} />
             </button>
           </div>
 
-          <div ref={generatingRef} tabIndex={-1} role="status" aria-live="polite" className="mt-4 focus:outline-none">
-            {generation.kind === "running" ? (
-              <div id={`${ids.s3}-progress`} className="rounded-lg border border-accent/40 bg-accent-soft p-4">
-                <p className="font-semibold text-accent-strong">
+          <LiveRegion className="mt-4">
+            {generating ? (
+              <div className="rounded-lg border border-accent/40 bg-accent-soft p-4">
+                <p id={`${ids.s3}-progress`} className="font-semibold text-accent-strong">
                   Génération du diaporama en cours. Cela prend en général 1 à 3 minutes.
                 </p>
                 <p className="mt-1 text-sm">
                   Ne fermez pas cette page : vous serez redirigé vers le deck dès qu&apos;il sera prêt. En attendant,
                   relisez votre problématique et préparez votre plan.
                 </p>
-                <p className="mt-2 text-sm" aria-hidden="true">
-                  Temps écoulé : <ElapsedTime since={generation.startedAt} />
-                </p>
+                {elapsed > SLOW_AFTER_MS ? (
+                  <p className="mt-2 text-sm font-medium">
+                    La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou relancer : votre
+                    problématique est conservée.
+                  </p>
+                ) : null}
               </div>
             ) : null}
-          </div>
-          <div role="alert">
+          </LiveRegion>
+          {generation.kind === "running" ? (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-muted">
+                Temps écoulé : <ElapsedTime since={generation.startedAt} />
+              </p>
+              {elapsed > SLOW_AFTER_MS ? (
+                // Une Server Action en cours ne s'annule pas : on recharge la page, la saisie est restaurée
+                // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau.
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>
+                  Relancer
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <LiveRegion role="alert" className="mt-2">
             {generation.kind === "error" ? (
-              <div className="mt-2 rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
+              <div className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
                 <p className="font-semibold">{generation.message}</p>
                 <p className="mt-1 text-sm">Votre problématique et votre choix sont conservés : relancez la génération.</p>
               </div>
             ) : null}
-          </div>
+          </LiveRegion>
         </section>
       ) : null}
     </div>

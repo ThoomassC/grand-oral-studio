@@ -20,7 +20,9 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold">Decks du jour J</h2>
+        <h2 id="decks-title" tabIndex={-1} className="text-xl font-semibold focus:outline-none">
+          Decks du jour J
+        </h2>
         <p className="text-sm text-muted">Les diaporamas complets générés à partir d&apos;une problématique.</p>
       </div>
       {decks.length === 0 ? (
@@ -35,11 +37,13 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
-          {decks.map((d) => (
+          {decks.map((d, i) => {
+            const neighbour = decks[i + 1] ?? decks[i - 1];
+            return (
             <li key={d.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <h3 className="font-semibold">
-                  <Link href={`/programmes/${program.id}/decks/${d.id}`} className="hover:underline">
+                  <Link id={`deck-${d.id}`} href={`/programmes/${program.id}/decks/${d.id}`} className="hover:underline">
                     {d.problem}
                   </Link>
                 </h3>
@@ -51,10 +55,15 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
                 <Link href={`/programmes/${program.id}/decks/${d.id}`} className="btn btn-secondary btn-sm">
                   Ouvrir<span className="sr-only"> le deck {d.title}</span>
                 </Link>
-                <DeleteDeckButton deckId={d.id} label={d.title} />
+                <DeleteDeckButton
+                  deckId={d.id}
+                  label={d.title}
+                  focusAfterDelete={[neighbour ? `deck-${neighbour.id}` : "", "decks-title"].filter(Boolean)}
+                />
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>

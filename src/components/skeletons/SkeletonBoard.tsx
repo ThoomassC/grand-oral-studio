@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { PromptTemplate } from "@/domain/schemas";
 import { generateAllSkeletons, generateSkeleton } from "@/server/actions/generation";
 import { SlidePreview, type SlideBrand, type SlidePreviewData } from "@/components/slides/SlidePreview";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { ElapsedTime } from "@/components/ui/ElapsedTime";
+import { focusLater } from "@/components/ui/focus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 
 export interface SkeletonThemeItem {
   id: string;
@@ -14,12 +16,11 @@ export interface SkeletonThemeItem {
   skeleton: { deckId: string; slideCount: number; updatedAtLabel: string; cover: SlidePreviewData } | null;
 }
 
-type RunState =
-  | { kind: "running" }
-  | { kind: "error"; message: string }
-  | { kind: "done"; warnings: string[] };
-
+type RunState = { kind: "running" } | { kind: "error"; message: string } | { kind: "done"; warnings: string[] };
 type Display = "running" | "error" | "ready" | "todo";
+type BatchMode = "missing" | "all";
+
+const NETWORK_ERROR = "La connexion a été interrompue. Relancez la génération.";
 
 const STATUS_LABEL: Record<Display, string> = {
   running: "En cours",
@@ -36,17 +37,17 @@ const STATUS_STYLE: Record<Display, string> = {
 };
 
 function StatusIcon({ kind }: { kind: Display }) {
-  const common = { viewBox: "0 0 16 16", "aria-hidden": true, className: "h-3.5 w-3.5" } as const;
+  const common = { viewBox: "0 0 16 16", "aria-hidden": true } as const;
   switch (kind) {
     case "ready":
       return (
-        <svg {...common}>
+        <svg {...common} className="h-3.5 w-3.5">
           <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "error":
       return (
-        <svg {...common}>
+        <svg {...common} className="h-3.5 w-3.5">
           <path d="M8 3.5v5.5M8 12v.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
@@ -58,12 +59,16 @@ function StatusIcon({ kind }: { kind: Display }) {
       );
     default:
       return (
-        <svg {...common}>
+        <svg {...common} className="h-3.5 w-3.5">
           <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeDasharray="2.5 2" />
         </svg>
       );
   }
 }
+
+const regenButtonId = (themeId: string) => `regen-${themeId}`;
+const REGEN_ALL_ID = "skeletons-regen-all";
+const MISSING_ID = "skeletons-generate-missing";
 
 export function SkeletonBoard({
   programId,
@@ -76,18 +81,19 @@ export function SkeletonBoard({
   brand: SlideBrand;
   format: PromptTemplate["format"];
 }) {
-  const router = useRouter();
   const [runs, setRuns] = useState<Record<string, RunState>>({});
-  const [batch, setBatch] = useState<{ running: boolean; startedAt: number; summary: string | null; error: string | null }>({
-    running: false,
-    startedAt: 0,
-    summary: null,
-    error: null,
-  });
+  const [batch, setBatch] = useState<{
+    running: boolean;
+    count: number;
+    startedAt: number;
+    summary: string | null;
+    error: string | null;
+  }>({ running: false, count: 0, startedAt: 0, summary: null, error: null });
   const [announce, setAnnounce] = useState("");
   const [, startTransition] = useTransition();
 
-  const readyCount = themes.filter((t) => t.skeleton !== null).length;
+  const missing = themes.filter((t) => t.skeleton === null);
+  const readyCount = themes.length - missing.length;
   const failed = themes.filter((t) => runs[t.id]?.kind === "error");
   const anyRunning = batch.running || Object.values(runs).some((r) => r.kind === "running");
 
@@ -98,16 +104,35 @@ export function SkeletonBoard({
     return theme.skeleton ? "ready" : "todo";
   }
 
-  function runAll() {
-    if (anyRunning || themes.length === 0) return;
-    setRuns(Object.fromEntries(themes.map((t) => [t.id, { kind: "running" } satisfies RunState])));
-    setBatch({ running: true, startedAt: Date.now(), summary: null, error: null });
-    setAnnounce(`Génération de ${themes.length} squelettes lancée. Cela peut prendre plusieurs minutes.`);
+  function runBatch(mode: BatchMode) {
+    const targets = mode === "missing" ? missing : themes;
+    if (anyRunning || targets.length === 0) return;
+    // Le bouton « manquants » disparaît quand tout est généré : on ne perd pas le focus.
+    const hadFocus = document.activeElement?.id === MISSING_ID;
+    setRuns((r) => ({ ...r, ...Object.fromEntries(targets.map((t) => [t.id, { kind: "running" } satisfies RunState])) }));
+    setBatch({ running: true, count: targets.length, startedAt: Date.now(), summary: null, error: null });
+    setAnnounce(
+      `Génération de ${targets.length} squelette${targets.length > 1 ? "s" : ""} lancée. Cela peut prendre plusieurs minutes.`,
+    );
     startTransition(async () => {
-      const result = await generateAllSkeletons(programId);
+      const reset = () =>
+        setRuns((r) => {
+          const next = { ...r };
+          for (const t of targets) delete next[t.id];
+          return next;
+        });
+      let result: Awaited<ReturnType<typeof generateAllSkeletons>>;
+      try {
+        result = await generateAllSkeletons(programId, mode);
+      } catch {
+        reset();
+        setBatch({ running: false, count: 0, startedAt: 0, summary: null, error: NETWORK_ERROR });
+        setAnnounce(NETWORK_ERROR);
+        return;
+      }
       if (!result.ok) {
-        setRuns({});
-        setBatch({ running: false, startedAt: 0, summary: null, error: result.error });
+        reset();
+        setBatch({ running: false, count: 0, startedAt: 0, summary: null, error: result.error });
         setAnnounce(`La génération a échoué : ${result.error}`);
         return;
       }
@@ -118,12 +143,15 @@ export function SkeletonBoard({
       const ok = result.data.filter((r) => r.ok).length;
       const ko = result.data.length - ok;
       const summary =
-        ko === 0
-          ? `${ok} squelette${ok > 1 ? "s" : ""} généré${ok > 1 ? "s" : ""}.`
-          : `${ok} généré${ok > 1 ? "s" : ""}, ${ko} en échec. Relancez les thèmes en erreur un par un.`;
-      setRuns(next);
-      setBatch({ running: false, startedAt: 0, summary, error: null });
+        result.data.length === 0
+          ? "Aucun squelette à générer."
+          : ko === 0
+            ? `${ok} squelette${ok > 1 ? "s" : ""} généré${ok > 1 ? "s" : ""}.`
+            : `${ok} généré${ok > 1 ? "s" : ""}, ${ko} en échec. Relancez les thèmes en erreur un par un.`;
+      setRuns((r) => ({ ...r, ...next }));
+      setBatch({ running: false, count: 0, startedAt: 0, summary, error: null });
       setAnnounce(`Génération terminée : ${summary}`);
+      if (hadFocus) focusLater([MISSING_ID, REGEN_ALL_ID]);
     });
   }
 
@@ -132,16 +160,19 @@ export function SkeletonBoard({
     setRuns((r) => ({ ...r, [theme.id]: { kind: "running" } }));
     setAnnounce(`Génération du squelette « ${theme.name} » lancée.`);
     startTransition(async () => {
-      const result = await generateSkeleton(theme.id);
-      if (!result.ok) {
-        setRuns((r) => ({ ...r, [theme.id]: { kind: "error", message: result.error } }));
-        setAnnounce(`Échec pour « ${theme.name} » : ${result.error}`);
-        return;
+      try {
+        const result = await generateSkeleton(theme.id);
+        if (!result.ok) {
+          setRuns((r) => ({ ...r, [theme.id]: { kind: "error", message: result.error } }));
+          setAnnounce(`Échec pour « ${theme.name} » : ${result.error}`);
+          return;
+        }
+        setRuns((r) => ({ ...r, [theme.id]: { kind: "done", warnings: result.data.warnings } }));
+        setAnnounce(`Squelette « ${theme.name} » généré.`);
+      } catch {
+        setRuns((r) => ({ ...r, [theme.id]: { kind: "error", message: NETWORK_ERROR } }));
+        setAnnounce(`Échec pour « ${theme.name} » : ${NETWORK_ERROR}`);
       }
-      setRuns((r) => ({ ...r, [theme.id]: { kind: "done", warnings: result.data.warnings } }));
-      setAnnounce(`Squelette « ${theme.name} » généré.`);
-      // generateSkeleton ne revalide que /programmes : on rafraîchit la page du programme.
-      router.refresh();
     });
   }
 
@@ -166,32 +197,47 @@ export function SkeletonBoard({
             Un diaporama générique par thème, à relire et compléter avant le jour J. Le deck final s&apos;appuie dessus.
           </p>
         </div>
-        <div className="flex flex-col items-start gap-1 md:items-end">
-          <button type="button" className="btn btn-primary" onClick={runAll} disabled={anyRunning}>
-            {batch.running
-              ? "Génération en cours…"
-              : readyCount > 0
-                ? "Régénérer tous les squelettes"
-                : "Générer tous les squelettes"}
-          </button>
-          {readyCount > 0 && !batch.running ? (
-            <p className="text-sm text-muted">Les squelettes existants seront remplacés.</p>
+        <div className="flex flex-wrap items-start gap-2 md:justify-end">
+          {missing.length > 0 ? (
+            <button
+              id={MISSING_ID}
+              type="button"
+              className="btn btn-primary"
+              onClick={() => runBatch("missing")}
+              aria-disabled={anyRunning || undefined}
+            >
+              {batch.running ? "Génération en cours…" : `Générer les squelettes manquants (${missing.length})`}
+            </button>
+          ) : null}
+          {readyCount > 0 ? (
+            <ConfirmAction
+              triggerId={REGEN_ALL_ID}
+              triggerLabel="Régénérer tous les squelettes"
+              triggerClassName="btn btn-secondary"
+              triggerDisabled={anyRunning}
+              question={`Remplacer les ${readyCount} squelette${readyCount > 1 ? "s" : ""} existant${readyCount > 1 ? "s" : ""}, y compris vos modifications ?`}
+              confirmLabel="Remplacer les squelettes"
+              pendingLabel="Lancement…"
+              onConfirm={async () => {
+                runBatch("all");
+                return null;
+              }}
+              onDone={() => focusLater([REGEN_ALL_ID])}
+            />
           ) : null}
         </div>
       </div>
 
-      <div role="status" aria-live="polite" className="sr-only">
-        {announce}
-      </div>
+      <LiveRegion className="sr-only">{announce}</LiveRegion>
 
       {batch.running ? (
         <div className="rounded-lg border border-accent/40 bg-accent-soft p-4">
           <p className="font-semibold text-accent-strong">
-            Génération de {themes.length} squelette{themes.length > 1 ? "s" : ""}, trois à la fois.
+            Génération de {batch.count} squelette{batch.count > 1 ? "s" : ""}, trois à la fois.
           </p>
           <p className="mt-1 text-sm">
-            Cela peut prendre plusieurs minutes. Restez sur cette page : le résultat de chaque thème
-            s&apos;affichera à la fin. Temps écoulé : <ElapsedTime since={batch.startedAt} />
+            Cela peut prendre plusieurs minutes. Restez sur cette page : le résultat de chaque thème s&apos;affichera à la
+            fin. Temps écoulé : <ElapsedTime since={batch.startedAt} />
           </p>
         </div>
       ) : null}
@@ -214,21 +260,24 @@ export function SkeletonBoard({
           ) : null}
         </div>
       ) : null}
-      {batch.error ? (
-        <div role="alert" className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
-          <p className="font-semibold">{batch.error}</p>
-        </div>
-      ) : null}
+      <LiveRegion role="alert">
+        {batch.error ? (
+          <div className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
+            <p className="font-semibold">{batch.error}</p>
+          </div>
+        ) : null}
+      </LiveRegion>
 
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {themes.map((theme) => {
           const display = displayOf(theme);
           const run = runs[theme.id];
+          const busy = display === "running" || batch.running;
           return (
             <li key={theme.id} className="card flex flex-col overflow-hidden">
               <div className="border-b border-border bg-surface-2 p-3">
                 {theme.skeleton ? (
-                  <SlidePreview slide={theme.skeleton.cover} brand={brand} format={format} decorative />
+                  <SlidePreview slide={theme.skeleton.cover} brand={brand} format={format} clamp decorative />
                 ) : (
                   <div
                     className="flex items-center justify-center rounded-md border border-dashed border-border-strong text-sm text-muted"
@@ -242,7 +291,7 @@ export function SkeletonBoard({
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold">{theme.name}</h3>
                   <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[display]}`}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-sm font-semibold ${STATUS_STYLE[display]}`}
                   >
                     <StatusIcon kind={display} />
                     {STATUS_LABEL[display]}
@@ -266,27 +315,44 @@ export function SkeletonBoard({
                     </ul>
                   </details>
                 ) : null}
-                <div className="mt-auto flex flex-wrap gap-2">
+                <div className="mt-auto flex flex-wrap items-start gap-2">
                   {theme.skeleton ? (
-                    <Link href={`/programmes/${programId}/decks/${theme.skeleton.deckId}`} className="btn btn-secondary btn-sm">
+                    <Link
+                      href={`/programmes/${programId}/squelettes/${theme.skeleton.deckId}`}
+                      className="btn btn-secondary btn-sm"
+                    >
                       Ouvrir<span className="sr-only"> le squelette {theme.name}</span>
                     </Link>
                   ) : null}
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${display === "error" || !theme.skeleton ? "btn-primary" : "btn-ghost"}`}
-                    onClick={() => runOne(theme)}
-                    disabled={display === "running" || batch.running}
-                  >
-                    {display === "running"
-                      ? "Génération…"
-                      : display === "error"
-                        ? "Relancer"
-                        : theme.skeleton
-                          ? "Régénérer"
-                          : "Générer"}
-                    <span className="sr-only"> le squelette {theme.name}</span>
-                  </button>
+                  {theme.skeleton && display !== "error" ? (
+                    <ConfirmAction
+                      triggerId={regenButtonId(theme.id)}
+                      triggerLabel={display === "running" ? "Génération…" : "Régénérer"}
+                      triggerAccessibleLabel={
+                        display === "running" ? `Génération du squelette ${theme.name} en cours` : `Régénérer le squelette ${theme.name}`
+                      }
+                      triggerClassName="btn btn-ghost btn-sm"
+                      triggerDisabled={busy}
+                      question={`Remplacer le squelette de « ${theme.name} », y compris vos modifications ?`}
+                      confirmLabel="Remplacer le squelette"
+                      pendingLabel="Lancement…"
+                      onConfirm={async () => {
+                        runOne(theme);
+                        return null;
+                      }}
+                      onDone={() => focusLater([regenButtonId(theme.id)])}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => runOne(theme)}
+                      aria-disabled={busy || undefined}
+                    >
+                      {display === "running" ? "Génération…" : display === "error" ? "Relancer" : "Générer"}
+                      <span className="sr-only"> le squelette {theme.name}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </li>
