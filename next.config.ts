@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
   // En dev, Next journalise par défaut les arguments des Server Functions : la clé
   // API saisie dans Paramètres apparaîtrait en clair dans le terminal.
   logging: { serverFunctions: false },
+  // Les pages des projets vivaient sous /programmes : les anciens liens et favoris restent valides.
+  async redirects() {
+    return [
+      { source: "/programmes", destination: "/projets", permanent: true },
+      { source: "/programmes/:path*", destination: "/projets/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders({ production }) }];
   },

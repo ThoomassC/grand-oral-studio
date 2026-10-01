@@ -3,7 +3,7 @@ import { safeNextPath } from "@/components/auth/next-path";
 
 describe("safeNextPath", () => {
   it("conserve un chemin interne avec sa requête", () => {
-    expect(safeNextPath("/programmes/abc/jour-j?x=1")).toBe("/programmes/abc/jour-j?x=1");
+    expect(safeNextPath("/projets/abc/jour-j?x=1")).toBe("/projets/abc/jour-j?x=1");
   });
 
   it.each([
@@ -19,10 +19,10 @@ describe("safeNextPath", () => {
     ["segment point-point", "/a/..//evil.example"],
     ["point encodé", "/%2e//evil.example"],
   ])("renvoie la valeur de repli pour %s", (_cas, valeur) => {
-    expect(safeNextPath(valeur)).toBe("/programmes");
+    expect(safeNextPath(valeur)).toBe("/projets");
   });
 
   it("prend la première valeur d'un paramètre répété", () => {
-    expect(safeNextPath(["/programmes/a", "//evil.example"])).toBe("/programmes/a");
+    expect(safeNextPath(["/projets/a", "//evil.example"])).toBe("/projets/a");
   });
 });

@@ -16,7 +16,7 @@ export function ReadinessMeter({
   programId: string;
 }) {
   const pathname = usePathname();
-  const onDay = pathname.startsWith(`/programmes/${programId}/jour-j`);
+  const onDay = pathname.startsWith(`/projets/${programId}/jour-j`);
   // « 2/5 squelettes générés » : le compteur en chiffres mono, le reste en texte.
   const count = /^(\d+\/\d+)(.*)$/.exec(label);
   return (

@@ -11,15 +11,17 @@ import { MainNav } from "./MainNav";
  * En-tête global : la `Topbar` d'Opale (parties nommées : Server Component).
  * Ordre de tabulation : logo → Projets → Paramètres → thème → menu du compte
  * (e-mail, informations du profil, déconnexion).
+ * Grille à trois colonnes : marque à gauche, onglets centrés dans la barre,
+ * actions à droite ; sous 640 px, les onglets passent sur une seconde ligne.
  */
 export async function SiteHeader() {
   const user = await getUser();
 
   return (
-    <Topbar className="h-auto min-h-16 flex-wrap gap-x-4 gap-y-1 px-4 py-1 sm:px-6">
-      <TopbarBrand>
+    <Topbar className="grid h-auto min-h-16 grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-2 sm:grid-cols-[1fr_auto_1fr] sm:px-6">
+      <TopbarBrand className="min-w-0 justify-self-start">
         <Link
-          href={user ? "/programmes" : "/"}
+          href={user ? "/projets" : "/"}
           className="flex min-h-11 min-w-0 items-center gap-2 rounded-md font-title text-lg font-semibold tracking-tight text-text no-underline"
         >
           <BrandMark />
@@ -28,8 +30,8 @@ export async function SiteHeader() {
           </span>
         </Link>
       </TopbarBrand>
-      {user ? <MainNav /> : null}
-      <TopbarActions className="ml-auto flex-wrap">
+      {user ? <MainNav className="col-span-2 row-start-2 justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1" /> : null}
+      <TopbarActions className="flex-wrap justify-self-end sm:col-start-3">
         <ThemeToggle />
         {user ? (
           <AccountMenu name={user.name} email={user.email} />

@@ -41,7 +41,7 @@ export default async function ProgramsPage() {
                       <h3 className="text-xl">
                         <Link
                           id={`programme-${p.id}`}
-                          href={`/programmes/${p.id}`}
+                          href={`/projets/${p.id}`}
                           className="underline-offset-4 hover:underline"
                         >
                           {p.name}
@@ -66,7 +66,7 @@ export default async function ProgramsPage() {
                       </dl>
                     </div>
                     <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                      <ButtonLink href={`/programmes/${p.id}/jour-j`} variant="ghost" size="small">
+                      <ButtonLink href={`/projets/${p.id}/jour-j`} variant="ghost" size="small">
                         Commencer le Jour J<span className="sr-only"> pour {p.name}</span>
                       </ButtonLink>
                       <ProgramActions

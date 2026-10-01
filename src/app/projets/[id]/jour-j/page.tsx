@@ -7,7 +7,7 @@ import { loadProgram } from "../../_lib/load";
 
 const RECENT_MS = 15 * 60 * 1000;
 
-export async function generateMetadata({ params }: PageProps<"/programmes/[id]/jour-j">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/projets/[id]/jour-j">): Promise<Metadata> {
   const program = await loadProgram((await params).id);
   return { title: `Jour J — ${program.name}` };
 }
@@ -35,7 +35,7 @@ function writerLabel(engine: AiSettingsView["engine"]): string {
   }
 }
 
-export default async function DayPage({ params }: PageProps<"/programmes/[id]/jour-j">) {
+export default async function DayPage({ params }: PageProps<"/projets/[id]/jour-j">) {
   const { id } = await params;
   // Lectures indépendantes en parallèle ; loadProgram vérifie la propriété (404 sinon).
   const user = await requireUser();

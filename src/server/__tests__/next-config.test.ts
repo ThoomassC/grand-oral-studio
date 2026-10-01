@@ -7,6 +7,16 @@ describe("next.config", () => {
   it("ne devrait pas journaliser les arguments des Server Functions", () => {
     expect(nextConfig.logging).toMatchObject({ serverFunctions: false });
   });
+
+  it("devrait rediriger durablement les anciennes adresses /programmes vers /projets", async () => {
+    const redirects = await nextConfig.redirects?.();
+    expect(redirects).toEqual(
+      expect.arrayContaining([
+        { source: "/programmes", destination: "/projets", permanent: true },
+        { source: "/programmes/:path*", destination: "/projets/:path*", permanent: true },
+      ]),
+    );
+  });
 });
 
 describe("assertAiProviderEnv (validation au démarrage)", () => {

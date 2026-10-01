@@ -23,7 +23,7 @@ export async function DeckPageContent({
   const deck = await loadDeck(id, deckId);
   const isSkeleton = deck.kind === "SKELETON";
   const isNew = isNewParam && !isSkeleton;
-  const backHref = isSkeleton ? `/programmes/${id}/squelettes` : `/programmes/${id}/decks`;
+  const backHref = isSkeleton ? `/projets/${id}/squelettes` : `/projets/${id}/decks`;
   const updatedAt = toIso(deck.updatedAt);
   const showSubtitle = deck.spec.subtitle && normalize(deck.spec.subtitle) !== normalize(deck.program.name);
   const showProblem = deck.problem && !normalize(deck.spec.title).includes(normalize(deck.problem));

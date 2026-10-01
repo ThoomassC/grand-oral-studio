@@ -111,7 +111,7 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
   const oauthError = hydrated && !oauthErrorDismissed ? initialError : null;
   const shownError = oauthError ?? state.error;
 
-  const otherHref = `${isSignup ? "/connexion" : "/inscription"}${next !== "/programmes" ? `?next=${encodeURIComponent(next)}` : ""}`;
+  const otherHref = `${isSignup ? "/connexion" : "/inscription"}${next !== "/projets" ? `?next=${encodeURIComponent(next)}` : ""}`;
 
   return (
     <div className="flex flex-col gap-5">

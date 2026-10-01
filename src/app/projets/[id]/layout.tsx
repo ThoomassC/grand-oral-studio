@@ -4,7 +4,7 @@ import { ReadinessMeter } from "@/components/layout/ReadinessMeter";
 import { UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { loadProgram, skeletonCount } from "../_lib/load";
 
-export default async function ProgramLayout({ children, params }: LayoutProps<"/programmes/[id]">) {
+export default async function ProgramLayout({ children, params }: LayoutProps<"/projets/[id]">) {
   const { id } = await params;
   const program = await loadProgram(id);
   const total = program.themes.length;
@@ -18,7 +18,7 @@ export default async function ProgramLayout({ children, params }: LayoutProps<"/
         <div className="border-b border-border bg-surface">
           <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
             <p className="text-sm">
-              <Link href="/programmes" className="opale-link">
+              <Link href="/projets" className="opale-link">
                 Projets
               </Link>
             </p>

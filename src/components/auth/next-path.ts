@@ -5,7 +5,7 @@ const ORIGIN = "http://interne.invalid";
  * d'URL trancher (il ignore tabulations et sauts de ligne, d'où `/\t/evil.example`)
  * et on refuse tout ce qui ne reste pas sur la même origine.
  */
-export function safeNextPath(raw: string | string[] | undefined, fallback = "/programmes"): string {
+export function safeNextPath(raw: string | string[] | undefined, fallback = "/projets"): string {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value || !value.startsWith("/") || /[\u0000-\u001f\\]/.test(value)) return fallback;
   let url: URL;

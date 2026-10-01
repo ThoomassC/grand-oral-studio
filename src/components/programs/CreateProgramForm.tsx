@@ -50,7 +50,7 @@ export function CreateProgramForm({ autoFocus = false }: { autoFocus?: boolean }
       if (countFieldErrors(fieldErrors) > 0) focusFirstInvalid(formRef.current);
       return { status: { kind: "error", message: result.error }, fieldErrors, values };
     }
-    router.push(`/programmes/${result.data.id}`);
+    router.push(`/projets/${result.data.id}`);
     return { status: { kind: "success", message: "Projet créé. Ouverture…" }, fieldErrors: {}, values };
   }, INITIAL);
 

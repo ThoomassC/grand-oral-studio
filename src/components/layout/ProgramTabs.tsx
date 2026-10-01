@@ -46,7 +46,7 @@ export function ProgramTabs({ programId }: { programId: string }) {
   const stayRef = useRef<HTMLButtonElement>(null);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const warningId = useId();
-  const base = `/programmes/${programId}`;
+  const base = `/projets/${programId}`;
 
   // Synchronisation avec le DOM : faire défiler la barre jusqu'à l'onglet actif.
   useEffect(() => {

@@ -190,7 +190,7 @@ export function SkeletonBoard({
       <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
         <h2 className="font-display text-lg font-semibold">Aucun thème à préparer</h2>
         <p className="mt-1 text-muted">Ajoutez d&apos;abord les thèmes du projet : un squelette sera généré pour chacun.</p>
-        <ButtonLink href={`/programmes/${programId}`} className="mt-4">
+        <ButtonLink href={`/projets/${programId}`} className="mt-4">
           Ajouter des thèmes
         </ButtonLink>
       </div>
@@ -327,7 +327,7 @@ export function SkeletonBoard({
                 <div className="mt-auto flex flex-wrap items-start gap-2">
                   {theme.skeleton ? (
                     <ButtonLink
-                      href={`/programmes/${programId}/squelettes/${theme.skeleton.deckId}`}
+                      href={`/projets/${programId}/squelettes/${theme.skeleton.deckId}`}
                       variant="ghost" size="small"
                     >
                       Ouvrir<span className="sr-only"> le squelette {theme.name}</span>

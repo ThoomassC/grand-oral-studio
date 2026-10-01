@@ -8,12 +8,12 @@ import { listFinalDecks } from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
 
-export async function generateMetadata({ params }: PageProps<"/programmes/[id]/decks">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/projets/[id]/decks">): Promise<Metadata> {
   const program = await loadProgram((await params).id);
   return { title: `Decks — ${program.name}` };
 }
 
-export default async function DecksPage({ params }: PageProps<"/programmes/[id]/decks">) {
+export default async function DecksPage({ params }: PageProps<"/projets/[id]/decks">) {
   const { id } = await params;
   // Lectures indépendantes en parallèle (le projet vérifie aussi la propriété → 404).
   const [user, program] = await Promise.all([requireUser(), loadProgram(id)]);
@@ -33,7 +33,7 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
           <p className="mt-1 text-muted">
             Saisissez une problématique dans l&apos;onglet Jour J pour générer votre premier deck complet.
           </p>
-          <ButtonLink href={`/programmes/${program.id}/jour-j`} className="mt-4">
+          <ButtonLink href={`/projets/${program.id}/jour-j`} className="mt-4">
             Aller au Jour J
           </ButtonLink>
         </div>
@@ -45,7 +45,7 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
             <li key={d.id} className="opale-card opale-card--e1 flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <h3 className="font-semibold">
-                  <Link id={`deck-${d.id}`} href={`/programmes/${program.id}/decks/${d.id}`} className="hover:underline">
+                  <Link id={`deck-${d.id}`} href={`/projets/${program.id}/decks/${d.id}`} className="hover:underline">
                     {d.problem}
                   </Link>
                 </h3>
@@ -57,7 +57,7 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-start gap-2">
-                <ButtonLink href={`/programmes/${program.id}/decks/${d.id}`} variant="ghost" size="small">
+                <ButtonLink href={`/projets/${program.id}/decks/${d.id}`} variant="ghost" size="small">
                   Ouvrir<span className="sr-only"> le deck {d.title}</span>
                 </ButtonLink>
                 <DeleteDeckButton

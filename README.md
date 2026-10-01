@@ -111,4 +111,4 @@ Seuls les scopes `openid`, `email` et `profile` sont demandés. Un compte créé
 
 - Pas de réinitialisation du mot de passe ni de vérification d'e-mail : il faut un service d'envoi d'e-mails.
 - Pas d'intégration directe à l'API Canva : passage par l'import `.pptx` ou le prompt Canva.
-- Une page introuvable sous `/programmes/...` répond 200 (affichage correct) à cause du streaming de `loading.tsx`.
+- Une page introuvable sous `/projets/...` répond 200 (affichage correct) à cause du streaming de `loading.tsx`.

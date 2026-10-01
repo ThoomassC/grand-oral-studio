@@ -3,12 +3,12 @@ import { ProgramMetaForm } from "@/components/programs/ProgramMetaForm";
 import { ThemeManager, type ThemeItem } from "@/components/themes/ThemeManager";
 import { loadProgram } from "../_lib/load";
 
-export async function generateMetadata({ params }: PageProps<"/programmes/[id]">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/projets/[id]">): Promise<Metadata> {
   const program = await loadProgram((await params).id);
   return { title: `Thèmes — ${program.name}` };
 }
 
-export default async function ThemesPage({ params }: PageProps<"/programmes/[id]">) {
+export default async function ThemesPage({ params }: PageProps<"/projets/[id]">) {
   const program = await loadProgram((await params).id);
   const themes: ThemeItem[] = program.themes.map((t) => ({
     id: t.id,

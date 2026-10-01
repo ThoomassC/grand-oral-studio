@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "/programmes", label: "Projets" },
+  { href: "/projets", label: "Projets" },
   { href: "/parametres", label: "Paramètres" },
 ] as const;
 
@@ -18,15 +18,15 @@ export const TAB_LINK_CLASS = "app-tab";
 /**
  * Navigation principale de l'en-tête (compte connecté) : des liens en
  * onglets, `aria-current="page"` sur la section courante (« Projets » couvre
- * aussi chaque projet, sous /programmes/…). Le style ne repose pas que sur la
+ * aussi chaque projet, sous /projets/…). Le style ne repose pas que sur la
  * couleur : lavis et graisse. Opale n'a pas d'onglets-liens
  * horizontaux (`Tabs` est un tablist ARIA, `Navbar` une colonne).
  */
-export function MainNav() {
+export function MainNav({ className = "" }: { className?: string }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Navigation principale" className="self-stretch">
-      <ul className="flex h-full items-end">
+    <nav aria-label="Navigation principale" className={className}>
+      <ul className="flex items-center gap-2">
         {ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (

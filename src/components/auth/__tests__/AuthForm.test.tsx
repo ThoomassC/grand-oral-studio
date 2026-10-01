@@ -21,12 +21,12 @@ afterEach(() => {
 
 describe("AuthForm — erreur de retour OAuth", () => {
   it("ne devrait pas figer l'erreur dans le HTML serveur (une région live n'annonce que les changements)", () => {
-    const html = renderToString(<AuthForm mode="signin" next="/programmes" google="enabled" initialError={MESSAGE} />);
+    const html = renderToString(<AuthForm mode="signin" next="/projets" google="enabled" initialError={MESSAGE} />);
     expect(html).not.toContain(MESSAGE);
   });
 
   it("devrait injecter l'erreur dans la région d'alerte après le montage", async () => {
-    render(<AuthForm mode="signin" next="/programmes" google="enabled" initialError={MESSAGE} />);
+    render(<AuthForm mode="signin" next="/projets" google="enabled" initialError={MESSAGE} />);
     const alerts = await screen.findAllByRole("alert");
     // Encart au rendu de Feedback d'Opale : titre « Erreur » puis le message.
     expect(alerts.some((a) => a.textContent === `Erreur${MESSAGE}`)).toBe(true);
@@ -35,7 +35,7 @@ describe("AuthForm — erreur de retour OAuth", () => {
   it("devrait effacer l'erreur initiale quand on relance Google", async () => {
     social.mockReturnValue(new Promise(() => {}));
     const user = userEvent.setup();
-    render(<AuthForm mode="signin" next="/programmes" google="enabled" initialError={MESSAGE} />);
+    render(<AuthForm mode="signin" next="/projets" google="enabled" initialError={MESSAGE} />);
     await screen.findByText(MESSAGE);
 
     await user.click(screen.getByRole("button", { name: "Continuer avec Google" }));

@@ -3,12 +3,12 @@ import { SkeletonBoard, type SkeletonThemeItem } from "@/components/skeletons/Sk
 import { formatDateTime } from "@/components/ui/format";
 import { loadProgram } from "../../_lib/load";
 
-export async function generateMetadata({ params }: PageProps<"/programmes/[id]/squelettes">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/projets/[id]/squelettes">): Promise<Metadata> {
   const program = await loadProgram((await params).id);
   return { title: `Squelettes — ${program.name}` };
 }
 
-export default async function SkeletonsPage({ params }: PageProps<"/programmes/[id]/squelettes">) {
+export default async function SkeletonsPage({ params }: PageProps<"/projets/[id]/squelettes">) {
   const program = await loadProgram((await params).id);
   // DTO minimal : on n'envoie pas les specs complètes au client, seulement la couverture.
   const themes: SkeletonThemeItem[] = program.themes.map((t) => {

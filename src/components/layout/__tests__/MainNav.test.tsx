@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-let pathname = "/programmes";
+let pathname = "/projets";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 
 const { MainNav } = await import("@/components/layout/MainNav");
@@ -14,7 +14,7 @@ describe("MainNav", () => {
     const nav = screen.getByRole("navigation", { name: "Navigation principale" });
     const links = nav.querySelectorAll("a");
     expect([...links].map((a) => a.textContent)).toEqual(["Projets", "Paramètres"]);
-    expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("href", "/programmes");
+    expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("href", "/projets");
     expect(screen.getByRole("link", { name: "Paramètres" })).toHaveAttribute("href", "/parametres");
   });
 
@@ -26,7 +26,7 @@ describe("MainNav", () => {
   });
 
   it("devrait signaler Projets sur la liste et dans chaque projet", () => {
-    for (const path of ["/programmes", "/programmes/abc/jour-j"]) {
+    for (const path of ["/projets", "/projets/abc/jour-j"]) {
       pathname = path;
       render(<MainNav />);
       expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("aria-current", "page");

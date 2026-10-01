@@ -200,8 +200,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--opale-space-xs);
-    padding-inline: var(--opale-space-sm);
+    gap: var(--opale-space-2xs);
+    padding-inline: var(--opale-space-xs);
     font-size: var(--opale-text-lg);
   }
   .header-control__caret {

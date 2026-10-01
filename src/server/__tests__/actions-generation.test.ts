@@ -45,7 +45,7 @@ describe("action generateSkeleton", () => {
     service.generateSkeleton.mockResolvedValue({ deckId: "deck-1", warnings: [], programId: "prog-1" });
     const result = await actions.generateSkeleton("theme-1");
     expect(result).toEqual({ ok: true, data: { deckId: "deck-1", warnings: [] } });
-    expect(revalidatePath).toHaveBeenCalledWith("/programmes/prog-1", "layout");
+    expect(revalidatePath).toHaveBeenCalledWith("/projets/prog-1", "layout");
   });
 });
 

@@ -8,7 +8,7 @@ export default function NotFound() {
         <p className="mt-2 text-muted">
           Ce contenu n&apos;existe pas ou ne vous appartient pas. Il a peut-être été supprimé.
         </p>
-        <ButtonLink href="/programmes" className="mt-5">
+        <ButtonLink href="/projets" className="mt-5">
           Retour aux projets
         </ButtonLink>
       </div>

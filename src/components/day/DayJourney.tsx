@@ -275,7 +275,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
       }
       writeDraft(storageKey, null);
       // L'état « en cours » est conservé jusqu'à l'arrivée sur la page du deck.
-      router.push(`/programmes/${programId}/decks/${res.data.deckId}?nouveau=1`);
+      router.push(`/projets/${programId}/decks/${res.data.deckId}?nouveau=1`);
     });
   }
 
@@ -284,7 +284,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
       <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
         <h2 className="font-display text-lg font-semibold">Aucun thème dans ce projet</h2>
         <p className="mt-1 text-muted">La reconnaissance a besoin des thèmes du projet. Ajoutez-les d&apos;abord.</p>
-        <ButtonLink href={`/programmes/${programId}`} className="mt-4">
+        <ButtonLink href={`/projets/${programId}`} className="mt-4">
           Ajouter des thèmes
         </ButtonLink>
       </div>
@@ -303,7 +303,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             Votre dernier diaporama (« {recentDeck.title} », il y a{" "}
             {recentDeck.minutesAgo < 1 ? "moins d'une minute" : `${recentDeck.minutesAgo} min`}) est prêt.
           </p>
-          <ButtonLink href={`/programmes/${programId}/decks/${recentDeck.id}`} variant="ghost" size="small" className="shrink-0">
+          <ButtonLink href={`/projets/${programId}/decks/${recentDeck.id}`} variant="ghost" size="small" className="shrink-0">
             Ouvrir le diaporama
           </ButtonLink>
         </div>

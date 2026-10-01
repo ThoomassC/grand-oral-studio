@@ -56,7 +56,7 @@ const SAMPLE_DECK: SlidePreviewData[] = [
 
 export default async function HomePage() {
   const user = await getUser();
-  if (user) redirect("/programmes");
+  if (user) redirect("/projets");
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
