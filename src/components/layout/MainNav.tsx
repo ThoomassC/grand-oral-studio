@@ -8,11 +8,15 @@ const ITEMS = [
   { href: "/parametres", label: "Paramètres" },
 ] as const;
 
-/** Classes d'un onglet-lien, partagées avec la navigation d'un projet (ProgramTabs). */
+/**
+ * Classes d'un onglet-lien, partagées avec la navigation d'un projet (ProgramTabs).
+ * Onglet actif « surligneur » : fond à l'accent d'Opale, texte et soulignement
+ * épais à l'encre (9,8:1), en gras — l'état ne repose pas que sur la couleur.
+ */
 export function tabLinkClass(active: boolean): string {
-  return `inline-flex min-h-11 items-center rounded-t-lg border-b-[3px] px-3 text-sm no-underline transition-colors focus-visible:outline-offset-[-3px] sm:px-4 ${
+  return `inline-flex min-h-11 items-center rounded-t-md border-b-[3px] px-3 text-sm no-underline transition-colors focus-visible:outline-offset-[-3px] sm:px-4 ${
     active
-      ? "border-accent bg-accent-soft font-semibold text-accent-strong"
+      ? "border-on-highlight bg-highlight font-bold text-on-highlight"
       : "border-transparent font-medium text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text"
   }`;
 }
@@ -21,7 +25,7 @@ export function tabLinkClass(active: boolean): string {
  * Navigation principale de l'en-tête (compte connecté) : des liens en
  * onglets, `aria-current="page"` sur la section courante (« Projets » couvre
  * aussi chaque projet, sous /programmes/…). Le style ne repose pas que sur la
- * couleur : soulignement épais et graisse. Opale n'a pas d'onglets-liens
+ * couleur : surlignage, soulignement épais et graisse. Opale n'a pas d'onglets-liens
  * horizontaux (`Tabs` est un tablist ARIA, `Navbar` une colonne).
  */
 export function MainNav() {
