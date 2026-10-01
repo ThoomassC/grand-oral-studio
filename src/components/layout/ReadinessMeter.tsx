@@ -17,11 +17,20 @@ export function ReadinessMeter({
 }) {
   const pathname = usePathname();
   const onDay = pathname.startsWith(`/programmes/${programId}/jour-j`);
+  // « 2/5 squelettes générés » : le compteur en chiffres mono, le reste en texte.
+  const count = /^(\d+\/\d+)(.*)$/.exec(label);
   return (
-    <div className={`w-full shrink-0 sm:w-56 ${onDay ? "hidden sm:block" : ""}`}>
-      <p className="text-sm font-medium">
-        <span className="text-muted">Préparation : </span>
-        {label}
+    <div className={`w-full shrink-0 sm:w-72 ${onDay ? "hidden sm:block" : ""}`}>
+      <p className="text-sm font-semibold">
+        <span className="font-normal text-muted">Préparation : </span>
+        {count ? (
+          <>
+            <span className="num">{count[1]}</span>
+            {count[2]}
+          </>
+        ) : (
+          label
+        )}
       </p>
       <Meter className="mt-1.5" value={ready} max={Math.max(total, 1)} label="Squelettes générés" valueText={label} />
     </div>

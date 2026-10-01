@@ -9,11 +9,18 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { ElapsedTime } from "@/components/ui/ElapsedTime";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { EngineBadge, type DeckEngine } from "@/components/decks/EngineBadge";
 
 export interface SkeletonThemeItem {
   id: string;
   name: string;
-  skeleton: { deckId: string; slideCount: number; updatedAtLabel: string; cover: SlidePreviewData } | null;
+  skeleton: {
+    deckId: string;
+    engine: DeckEngine | null;
+    slideCount: number;
+    updatedAtLabel: string;
+    cover: SlidePreviewData;
+  } | null;
 }
 
 type RunState = { kind: "running" } | { kind: "error"; message: string } | { kind: "done"; warnings: string[] };
@@ -178,7 +185,7 @@ export function SkeletonBoard({
 
   if (themes.length === 0) {
     return (
-      <div className="card border-dashed p-6">
+      <div className="card-empty p-6">
         <h2 className="font-display text-lg font-semibold">Aucun thème à préparer</h2>
         <p className="mt-1 text-muted">Ajoutez d&apos;abord les thèmes du programme : un squelette sera généré pour chacun.</p>
         <Link href={`/programmes/${programId}`} className="btn btn-primary mt-4">
@@ -192,7 +199,7 @@ export function SkeletonBoard({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="max-w-2xl">
-          <h2 className="text-xl font-semibold">Squelettes</h2>
+          <h2 className="text-2xl">Squelettes</h2>
           <p className="text-sm text-muted">
             Un diaporama générique par thème, à relire et compléter avant le jour J. Le deck final s&apos;appuie dessus.
           </p>
@@ -275,7 +282,7 @@ export function SkeletonBoard({
           const busy = display === "running" || batch.running;
           return (
             <li key={theme.id} className="card flex flex-col overflow-hidden">
-              <div className="border-b border-border bg-surface-2 p-3">
+              <div className="border-b border-border bg-surface-2 p-4">
                 {theme.skeleton ? (
                   <SlidePreview slide={theme.skeleton.cover} brand={brand} format={format} clamp decorative />
                 ) : (
@@ -289,7 +296,7 @@ export function SkeletonBoard({
               </div>
               <div className="flex flex-1 flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold">{theme.name}</h3>
+                  <h3 className="text-lg">{theme.name}</h3>
                   <span
                     className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-sm font-semibold ${STATUS_STYLE[display]}`}
                   >
@@ -297,9 +304,11 @@ export function SkeletonBoard({
                     {STATUS_LABEL[display]}
                   </span>
                 </div>
+                {theme.skeleton?.engine ? <EngineBadge engine={theme.skeleton.engine} className="self-start" /> : null}
                 {theme.skeleton ? (
                   <p className="text-sm text-muted">
-                    {theme.skeleton.slideCount} diapos · {theme.skeleton.updatedAtLabel}
+                    <span className="num font-semibold text-text">{theme.skeleton.slideCount} diapos</span> ·{" "}
+                    {theme.skeleton.updatedAtLabel}
                   </p>
                 ) : null}
                 {run?.kind === "error" ? <p className="text-sm font-medium text-danger">{run.message}</p> : null}

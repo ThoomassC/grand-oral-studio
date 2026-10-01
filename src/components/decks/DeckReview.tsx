@@ -8,6 +8,7 @@ import { SlidePreview } from "@/components/slides/SlidePreview";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { CanvaPanel } from "./CanvaPanel";
+import { isToComplete } from "./EngineBadge";
 import { PptxDownloadButton } from "./PptxDownloadButton";
 import { SlideEditor } from "./SlideEditor";
 
@@ -88,8 +89,8 @@ export function DeckReview({
       <LiveRegion>{announce}</LiveRegion>
 
       <section aria-labelledby={`${baseId}-slides`}>
-        <h2 id={`${baseId}-slides`} className="text-lg font-semibold">
-          {spec.slides.length} diapos
+        <h2 id={`${baseId}-slides`} className="text-xl">
+          <span className="num">{spec.slides.length}</span> diapos
         </h2>
         <ol className="mt-3 flex flex-col gap-4">
           {spec.slides.map((slide, index) => {
@@ -97,8 +98,12 @@ export function DeckReview({
               slide.sectionId === "cover" ? "Couverture" : (sectionTitle.get(slide.sectionId) ?? slide.sectionId);
             return (
               <li key={index} className="card p-4 sm:p-5">
-                <h3 className="font-semibold">
-                  Diapo {index + 1} — {slide.title}
+                <h3 className="text-lg">
+                  <span aria-hidden="true" className="num mr-2 text-base text-muted">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="sr-only">Diapo {index + 1} — </span>
+                  {slide.title}
                 </h3>
                 <p className="mt-0.5 text-sm text-muted">
                   {section} · {LAYOUT_LABEL[slide.layout]}
@@ -119,7 +124,9 @@ export function DeckReview({
                         {slide.bullets.length > 0 ? (
                           <ul className="mt-1 list-disc space-y-0.5 pl-5">
                             {slide.bullets.map((b, i) => (
-                              <li key={i}>{b}</li>
+                              <li key={i}>
+                                {isToComplete(b) ? <mark className="rounded-sm bg-highlight-soft px-1 text-text">{b}</mark> : b}
+                              </li>
                             ))}
                           </ul>
                         ) : null}

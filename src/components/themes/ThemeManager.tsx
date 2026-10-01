@@ -122,7 +122,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id={IDS.listTitle} tabIndex={-1} className="text-xl font-semibold focus:outline-none">
+          <h2 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
             Thèmes
           </h2>
           <p className="text-sm text-muted">
@@ -192,7 +192,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       </LiveRegion>
 
       {optimisticThemes.length === 0 ? (
-        <div className="card border-dashed p-6">
+        <div className="card-empty p-6">
           <p className="font-display text-lg font-semibold">Aucun thème</p>
           <p className="mt-1 text-muted">
             Ajoutez les thèmes de votre programme un par un, ou importez-les en une fois depuis une liste.
@@ -204,7 +204,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             const neighbour = optimisticThemes[index + 1] ?? optimisticThemes[index - 1];
             const { question, confirm } = deleteQuestion(theme);
             return (
-              <li key={theme.id} className="card p-4 sm:p-5">
+              <li key={theme.id} className="card card-bristol p-4 pt-6 sm:p-5 sm:pt-7">
                 {editingId === theme.id ? (
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm
@@ -224,13 +224,13 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-sm font-bold tabular-nums"
+                        className="num flex h-8 min-w-8 shrink-0 items-center justify-center rounded-sm border border-border-strong px-1 text-sm font-bold"
                         aria-hidden="true"
                       >
                         {index + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="pt-1 font-semibold">
+                        <h3 className="pt-1 text-lg">
                           <span className="sr-only">Thème {index + 1} : </span>
                           {theme.name}
                         </h3>
@@ -238,7 +238,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                         {theme.keywords.length > 0 ? (
                           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">
                             {theme.keywords.map((kw) => (
-                              <li key={kw} className="rounded-md bg-surface-2 px-2 py-0.5 text-sm">
+                              <li key={kw} className="rounded-sm bg-surface-2 px-2 py-0.5 text-sm ring-1 ring-inset ring-border">
                                 {kw}
                               </li>
                             ))}

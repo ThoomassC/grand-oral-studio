@@ -27,7 +27,8 @@ const GROUPS = [
 /**
  * Navigation entre les sections d'un programme. Ce sont des liens (chaque
  * onglet est une page) : `aria-current="page"` signale la section active, le
- * style ne repose pas que sur la couleur (soulignement épais + graisse).
+ * style ne repose pas que sur la couleur (surlignage jaune + soulignement
+ * épais à l'encre + graisse).
  * Une seule ligne, défilante sur mobile ; l'onglet actif est ramené en vue.
  * Si l'éditeur ouvert a des modifications non enregistrées, le changement
  * d'onglet demande confirmation.
@@ -76,10 +77,10 @@ export function ProgramTabs({ programId }: { programId: string }) {
                           setPendingHref(href);
                           window.setTimeout(() => stayRef.current?.focus(), 0);
                         }}
-                        className={`inline-flex min-h-11 items-center border-b-[3px] px-3 transition-colors ${
+                        className={`inline-flex min-h-11 items-center rounded-t-md border-b-[3px] px-3 transition-colors ${
                           active
-                            ? "border-accent font-bold text-text"
-                            : "border-transparent font-medium text-muted hover:border-border-strong hover:text-text"
+                            ? "hl border-on-highlight font-bold"
+                            : "border-transparent font-medium text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text"
                         }`}
                       >
                         {tab.label}

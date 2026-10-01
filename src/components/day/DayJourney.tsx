@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import type { ClassificationResult } from "@/domain/contracts";
+import type { ClassificationOutcome } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { classifyProblem, generateFinalDeck } from "@/server/actions/generation";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
@@ -38,7 +38,7 @@ interface Draft {
   problem: string;
   hintedThemeId: string;
   stage: "input" | "chosen";
-  result: ClassificationResult | null;
+  result: ClassificationOutcome | null;
   choice: string;
   otherThemeId: string;
 }
@@ -55,7 +55,15 @@ function readDraft(key: string): Draft | null {
       problem: d.problem,
       hintedThemeId: typeof d.hintedThemeId === "string" ? d.hintedThemeId : "",
       stage: d.stage === "chosen" ? "chosen" : "input",
-      result: d.result && Array.isArray(d.result.ranked) ? d.result : null,
+      result:
+        d.result && Array.isArray(d.result.ranked)
+          ? {
+              ...d.result,
+              // Brouillon antérieur au moteur gratuit : reconnaissance par IA, sans repli.
+              source: d.result.source === "free" ? "free" : "ai",
+              fallbackReason: typeof d.result.fallbackReason === "string" ? d.result.fallbackReason : null,
+            }
+          : null,
       choice: typeof d.choice === "string" ? d.choice : "",
       otherThemeId: typeof d.otherThemeId === "string" ? d.otherThemeId : "",
     };
@@ -75,15 +83,15 @@ function writeDraft(key: string, draft: Draft | null): void {
 
 function StepTitle({ n, children, id, state }: { n: number; children: React.ReactNode; id: string; state: "current" | "done" | "todo" }) {
   return (
-    <h2 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl font-semibold focus:outline-none">
+    <h2 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
       <span
         aria-hidden="true"
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-base font-bold ${
+        className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
           state === "current"
-            ? "bg-accent text-on-accent"
+            ? "hl ring-2 ring-on-highlight ring-offset-2 ring-offset-surface"
             : state === "done"
-              ? "bg-success-soft text-success"
-              : "bg-surface-2 text-muted"
+              ? "bg-success-soft text-success ring-1 ring-success"
+              : "bg-surface-2 text-muted ring-1 ring-border-strong"
         }`}
       >
         {state === "done" ? "✓" : n}
@@ -101,6 +109,11 @@ interface DayJourneyProps {
   programId: string;
   themes: DayTheme[];
   recentDeck: RecentDeck | null;
+  /**
+   * Moteur qui rédigera le deck : libellé prêt à afficher (ex. « Ollama · mistral »)
+   * et `outlineOnly` pour le moteur gratuit (trame à compléter, pas de rédaction).
+   */
+  writer: { label: string; outlineOnly: boolean };
 }
 
 const draftKey = (programId: string) => `grand-oral-studio:jour-j:${programId}`;
@@ -122,7 +135,7 @@ export function DayJourney(props: DayJourneyProps) {
   );
 }
 
-function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJourneyProps & { initialDraft: Draft | null }) {
+function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }: DayJourneyProps & { initialDraft: Draft | null }) {
   const router = useRouter();
   const baseId = useId();
   const ids = {
@@ -142,7 +155,7 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
   const [problem, setProblem] = useState(initialDraft?.problem ?? "");
   const [hintedThemeId, setHintedThemeId] = useState(initialDraft?.hintedThemeId ?? "");
   const [stage, setStage] = useState<"input" | "chosen">(initialDraft?.stage ?? "input");
-  const [result, setResult] = useState<ClassificationResult | null>(initialDraft?.result ?? null);
+  const [result, setResult] = useState<ClassificationOutcome | null>(initialDraft?.result ?? null);
   const [choice, setChoice] = useState<string>(initialDraft?.choice ?? "");
   const [otherThemeId, setOtherThemeId] = useState(initialDraft?.otherThemeId ?? "");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -264,7 +277,7 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
 
   if (themes.length === 0) {
     return (
-      <div className="card border-dashed p-6">
+      <div className="card-empty p-6">
         <h2 className="font-display text-lg font-semibold">Aucun thème dans ce programme</h2>
         <p className="mt-1 text-muted">La reconnaissance a besoin des thèmes du programme. Ajoutez-les d&apos;abord.</p>
         <Link href={`/programmes/${programId}`} className="btn btn-primary mt-4">
@@ -406,6 +419,17 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
                 <p className="text-sm font-semibold text-muted">Problématique reformulée</p>
                 <p className="mt-1">{result.reformulatedProblem}</p>
               </div>
+
+              {result.source === "free" && result.fallbackReason ? (
+                <p className="mt-4 flex gap-2 rounded-lg border border-border-strong bg-surface p-3 text-sm">
+                  <InfoIcon />
+                  <span>
+                    Reconnaissance sans IA : {result.fallbackReason} Vérifiez le thème proposé.
+                  </span>
+                </p>
+              ) : result.source === "free" ? (
+                <p className="mt-3 text-sm text-muted">Reconnaissance sans IA, par mots-clés</p>
+              ) : null}
 
               <fieldset className="mt-5">
                 <legend className="field-label">Thème retenu pour le diaporama</legend>
@@ -576,7 +600,10 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
           </StepTitle>
           {selectedTheme ? (
             <p className="mt-3">
-              Deck complet avec notes d&apos;orateur pour le thème <strong>{selectedTheme.name}</strong>
+              {writer.outlineOnly
+                ? "Trame du diaporama, à compléter, pour le thème "
+                : "Deck complet avec notes d'orateur pour le thème "}
+              <strong>{selectedTheme.name}</strong>
               {selectedTheme.hasSkeleton ? ", à partir de son squelette." : "."}
             </p>
           ) : null}
@@ -586,6 +613,16 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
               quand même, mais sans votre travail de préparation.
             </p>
           ) : null}
+
+          <p className="mt-4 flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span>
+              <span className="text-muted">Rédaction : </span>
+              <strong>{writer.label}</strong>
+            </span>
+            <Link href="/parametres" className="link">
+              Changer<span className="sr-only"> le moteur de rédaction</span>
+            </Link>
+          </p>
 
           <div className="mt-4">
             <button
@@ -637,12 +674,27 @@ function DayJourneyInner({ programId, themes, recentDeck, initialDraft }: DayJou
             {generation.kind === "error" ? (
               <div className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-danger">
                 <p className="font-semibold">{generation.message}</p>
-                <p className="mt-1 text-sm">Votre problématique et votre choix sont conservés : relancez la génération.</p>
+                <p className="mt-1 text-sm">
+                  Votre problématique et votre choix sont conservés : relancez la génération, ou{" "}
+                  <Link href="/parametres" className="font-semibold underline underline-offset-2">
+                    changez de moteur dans les Paramètres
+                  </Link>
+                  .
+                </p>
               </div>
             ) : null}
           </LiveRegion>
         </section>
       ) : null}
     </div>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 9v4.5M10 6.2v.1" />
+    </svg>
   );
 }

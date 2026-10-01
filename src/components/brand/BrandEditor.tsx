@@ -172,7 +172,7 @@ export function BrandEditor({
 
       <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
-          <h2 className="text-xl font-semibold">Charte graphique</h2>
+          <h2 className="text-2xl">Charte graphique</h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
         </div>
 

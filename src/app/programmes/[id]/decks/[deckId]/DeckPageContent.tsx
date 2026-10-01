@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
+import { EngineBadge } from "@/components/decks/EngineBadge";
 import { formatDateTime } from "@/components/ui/format";
 import { loadDeck } from "../../../_lib/load";
 
@@ -33,10 +34,15 @@ export async function DeckPageContent({
             {isSkeleton ? "Retour aux squelettes" : "Retour aux decks"}
           </Link>
         </p>
-        <p className="mt-3 text-sm font-semibold uppercase tracking-[0.08em] text-accent-strong">
+        <p className="eyebrow mt-4 text-accent-strong">
           {isSkeleton ? "Squelette" : "Deck final"} · {deck.themeName}
         </p>
-        <h2 className="mt-1 text-2xl font-bold sm:text-3xl">{deck.spec.title}</h2>
+        <h2 className="mt-2 text-2xl sm:text-3xl">{deck.spec.title}</h2>
+        {deck.engine ? (
+          <p className="mt-2">
+            <EngineBadge engine={deck.engine} />
+          </p>
+        ) : null}
         {showSubtitle ? <p className="mt-1 text-lg text-muted">{deck.spec.subtitle}</p> : null}
         {showProblem ? (
           <p className="mt-2">
@@ -47,10 +53,22 @@ export async function DeckPageContent({
         <p className="mt-1 text-sm text-muted">Mis à jour le {formatDateTime(new Date(updatedAt))}</p>
       </div>
 
+      {deck.engine === "free" ? (
+        <div className="flex gap-3 rounded-lg border border-border-strong bg-surface p-4">
+          <span aria-hidden="true" className="mt-1.5 h-3 w-6 shrink-0 rounded-sm bg-highlight" />
+          <p>
+            Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces « À compléter » sont
+            à remplacer par vos contenus.
+          </p>
+        </div>
+      ) : null}
+
       {isNew ? (
         <div role="status" className="rounded-lg border border-success/40 bg-success-soft p-4">
           <p className="font-semibold">
-            Votre diaporama est prêt : {deck.spec.slides.length} diapos avec notes d&apos;orateur.
+            {deck.engine === "free"
+              ? `Votre trame est prête : ${deck.spec.slides.length} diapos à compléter.`
+              : `Votre diaporama est prêt : ${deck.spec.slides.length} diapos avec notes d'orateur.`}
           </p>
           <p className="mt-1 text-sm">Relisez-le, puis téléchargez le .pptx pour Canva.</p>
         </div>

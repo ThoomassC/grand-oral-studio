@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
+import { EngineBadge } from "@/components/decks/EngineBadge";
 import { formatDateTime } from "@/components/ui/format";
 import { listFinalDecks } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -20,13 +21,13 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 id="decks-title" tabIndex={-1} className="text-xl font-semibold focus:outline-none">
+        <h2 id="decks-title" tabIndex={-1} className="text-2xl focus:outline-none">
           Decks du jour J
         </h2>
         <p className="text-sm text-muted">Les diaporamas complets générés à partir d&apos;une problématique.</p>
       </div>
       {decks.length === 0 ? (
-        <div className="card border-dashed p-6">
+        <div className="card-empty p-6">
           <p className="font-display text-lg font-semibold">Aucun deck pour l&apos;instant</p>
           <p className="mt-1 text-muted">
             Saisissez une problématique dans l&apos;onglet Jour J pour générer votre premier deck complet.
@@ -47,8 +48,11 @@ export default async function DecksPage({ params }: PageProps<"/programmes/[id]/
                     {d.problem}
                   </Link>
                 </h3>
-                <p className="mt-1 text-sm text-muted">
-                  Thème : <span className="text-text">{d.themeName}</span> · généré le {formatDateTime(d.createdAt)}
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+                  <span>
+                    Thème : <span className="text-text">{d.themeName}</span> · généré le {formatDateTime(d.createdAt)}
+                  </span>
+                  <EngineBadge engine={d.engine} />
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-start gap-2">

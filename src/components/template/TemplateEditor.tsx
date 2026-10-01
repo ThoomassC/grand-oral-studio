@@ -134,7 +134,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
     <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Gabarit de présentation</h2>
+          <h2 className="text-2xl">Gabarit de présentation</h2>
           <p className="max-w-2xl text-sm text-muted">
             Structure imposée à l&apos;IA pour chaque diaporama : format, durée, sections dans l&apos;ordre et
             consignes.
@@ -203,12 +203,12 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
       <div id={ids.summary} className={`rounded-lg border p-4 ${tooFar ? "border-warning/60 bg-warning-soft" : "border-border bg-surface-2"}`}>
         <p className="flex flex-wrap gap-x-6 gap-y-1">
           <span>
-            Total : <strong className="tabular-nums">{total ?? "—"} diapos</strong>{" "}
+            Total : <strong className="num">{total ?? "—"} diapos</strong>{" "}
             <span className="text-sm text-muted">(couverture comprise)</span>
           </span>
           <span>
             Conseillé pour {durationOk ? `${template.durationMinutes} min` : "cette durée"} :{" "}
-            <strong className="tabular-nums">{suggested ?? "—"}</strong>
+            <strong className="num">{suggested ?? "—"}</strong>
           </span>
         </p>
         <LiveRegion className="mt-2 text-sm font-medium text-warning">
@@ -237,7 +237,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
                 <div className="flex flex-col gap-4 md:flex-row md:items-start">
                   <span
                     aria-hidden="true"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-sm font-bold tabular-nums"
+                    className="num flex h-8 min-w-8 shrink-0 items-center justify-center rounded-sm border border-border-strong px-1 text-sm font-bold"
                   >
                     {index + 1}
                   </span>

@@ -20,6 +20,7 @@ export default async function SkeletonsPage({ params }: PageProps<"/programmes/[
         t.skeleton && cover
           ? {
               deckId: t.skeleton.id,
+              engine: t.skeleton.engine,
               slideCount: t.skeleton.spec.slides.length,
               updatedAtLabel: `mis à jour le ${formatDateTime(t.skeleton.updatedAt)}`,
               cover: { layout: cover.layout, title: cover.title, subtitle: cover.subtitle, bullets: cover.bullets },

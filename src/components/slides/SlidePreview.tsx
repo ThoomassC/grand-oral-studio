@@ -168,7 +168,7 @@ export function SlidePreview({
 
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-md border border-border ${className}`}
+      className={`relative w-full overflow-hidden rounded-[3px] border border-border shadow-slide ${className}`}
       style={{
         aspectRatio: format === "4:3" ? "4 / 3" : "16 / 9",
         containerType: "inline-size",

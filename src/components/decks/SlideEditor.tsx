@@ -8,6 +8,7 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { isToComplete } from "./EngineBadge";
 
 const MAX_BULLETS = LIMITS.bullets;
 const MAX_BULLET_CHARS = LIMITS.bullet;
@@ -199,7 +200,7 @@ export function SlideEditor({
                     </label>
                     <input
                       id={id}
-                      className="input"
+                      className={`input ${isToComplete(b.text) ? "bg-highlight-soft" : ""}`}
                       value={b.text}
                       onChange={(e) => {
                         const text = e.target.value;

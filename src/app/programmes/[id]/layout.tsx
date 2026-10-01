@@ -16,19 +16,19 @@ export default async function ProgramLayout({ children, params }: LayoutProps<"/
     <UnsavedChangesProvider>
       <div className="flex flex-1 flex-col">
         <div className="border-b border-border bg-surface">
-          <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-5">
+          <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
             <p className="text-sm">
               <Link href="/programmes" className="link text-muted">
                 Mes programmes
               </Link>
             </p>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <h1 className="line-clamp-2 min-w-0 text-xl font-bold break-words sm:text-2xl" title={program.name}>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <h1 className="line-clamp-2 min-w-0 text-2xl break-words sm:text-3xl" title={program.name}>
                 {program.name}
               </h1>
               <ReadinessMeter ready={ready} total={total} label={readiness} programId={program.id} />
             </div>
-            <div className="mt-3">
+            <div className="mt-4">
               <ProgramTabs programId={program.id} />
             </div>
           </div>

@@ -14,7 +14,8 @@ export default async function ProgramsPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-3xl font-bold">Mes programmes</h1>
+      <p className="eyebrow">Espace de préparation</p>
+      <h1 className="mt-2 text-3xl sm:text-4xl">Mes programmes</h1>
       <p className="mt-2 max-w-2xl text-muted">
         Un programme regroupe les thèmes d&apos;une formation, sa charte graphique et son gabarit de présentation.
       </p>
@@ -25,8 +26,8 @@ export default async function ProgramsPage() {
             Liste des programmes
           </h2>
           {programs.length === 0 ? (
-            <div className="card flex flex-col items-start gap-2 border-dashed p-6">
-              <p className="font-display text-lg font-semibold">Aucun programme pour l&apos;instant</p>
+            <div className="card-empty flex flex-col items-start gap-2 p-6">
+              <p className="font-display text-lg font-bold">Aucun programme pour l&apos;instant</p>
               <p className="text-muted">Créez votre premier programme avec le formulaire, puis ajoutez ses thèmes.</p>
             </div>
           ) : (
@@ -34,10 +35,14 @@ export default async function ProgramsPage() {
               {programs.map((p, i) => {
                 const neighbour = programs[i + 1] ?? programs[i - 1];
                 return (
-                  <li key={p.id} className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+                  <li key={p.id} className="card card-bristol flex flex-col gap-4 p-5 pt-7 sm:flex-row sm:items-start sm:justify-between sm:p-6 sm:pt-8">
                     <div className="min-w-0">
-                      <h3 className="text-lg font-semibold">
-                        <Link id={`programme-${p.id}`} href={`/programmes/${p.id}`} className="hover:underline">
+                      <h3 className="text-xl">
+                        <Link
+                          id={`programme-${p.id}`}
+                          href={`/programmes/${p.id}`}
+                          className="underline-offset-4 hover:underline"
+                        >
                           {p.name}
                         </Link>
                       </h3>
@@ -45,11 +50,11 @@ export default async function ProgramsPage() {
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                         <div className="flex gap-1">
                           <dt className="text-muted">Thèmes :</dt>
-                          <dd className="font-semibold tabular-nums">{p.themeCount}</dd>
+                          <dd className="num font-bold">{p.themeCount}</dd>
                         </div>
                         <div className="flex gap-1">
                           <dt className="text-muted">Squelettes générés :</dt>
-                          <dd className="font-semibold tabular-nums">
+                          <dd className="num font-bold">
                             {p.skeletonCount}/{p.themeCount}
                           </dd>
                         </div>
@@ -76,11 +81,13 @@ export default async function ProgramsPage() {
               })}
             </ul>
           )}
-          {programs.length > 0 ? <p className="mt-3 text-sm text-muted">{plural(programs.length, "programme")}</p> : null}
+          {programs.length > 0 ? (
+            <p className="num mt-3 text-sm text-muted">{plural(programs.length, "programme")}</p>
+          ) : null}
         </section>
 
-        <section aria-labelledby="nouveau-programme" className="card h-fit p-5">
-          <h2 id="nouveau-programme" className="text-lg font-semibold">
+        <section aria-labelledby="nouveau-programme" className="card h-fit p-5 sm:p-6 lg:sticky lg:top-6">
+          <h2 id="nouveau-programme" className="text-xl">
             Nouveau programme
           </h2>
           <p className="mt-1 text-sm text-muted">
