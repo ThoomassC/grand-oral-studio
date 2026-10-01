@@ -9,7 +9,7 @@ const ITEMS = [
 ] as const;
 
 /**
- * Classe d'un onglet-lien, partagée avec la navigation d'un projet (ProgramTabs) :
+ * Classe d'un onglet-lien, partagée avec la navigation d'un projet (ProjectSteps) :
  * le style des onglets de la vitrine d'Opale (`.app-tab`, globals.css). L'état
  * courant est porté par `aria-current`, pas seulement par la couleur (graisse).
  */

@@ -1,5 +1,6 @@
 "use client";
 
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Notice } from "@/components/ui/Notice";
 import { TextArea } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
@@ -118,6 +119,14 @@ export function ThemeImport({
               <p className="mt-1">
                 Ignoré{outcome.skipped.length > 1 ? "s" : ""} (déjà présent{outcome.skipped.length > 1 ? "s" : ""}) :{" "}
                 {outcome.skipped.join(", ")}.
+              </p>
+            ) : null}
+            {outcome.created > 0 ? (
+              // Après un import réussi, l'étape suivante est mise en avant (Charte et Gabarit sont facultatifs).
+              <p className="mt-3">
+                <ButtonLink href={`/projets/${programId}/squelettes`} size="small">
+                  Passer aux squelettes<span aria-hidden="true"> →</span>
+                </ButtonLink>
               </p>
             ) : null}
           </Notice>

@@ -368,6 +368,156 @@
   }
 
   /*
+   * Fil d'étapes d'un projet (components/layout/ProjectSteps.tsx). Numéro dans
+   * une pastille (coche quand l'étape est faite, cadenas + texte quand elle est
+   * bloquée), libellé, résumé ; étapes reliées par un trait. Courante : lavis
+   * et pastille au primaire ; faite : pastille au vert de succès. Jamais la
+   * couleur seule : coche, cadenas, graisse et texte masqué disent l'état.
+   */
+  .project-steps {
+    /* Contient les textes `sr-only` (absolus) : sinon ils débordent de la page. */
+    position: relative;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .project-steps__list {
+    display: flex;
+    min-width: max-content;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    margin: 0;
+    padding: 3px 0;
+    list-style: none;
+  }
+  .project-steps__item {
+    display: flex;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+  }
+  .project-steps__connector {
+    width: 1.25rem;
+    height: 2px;
+    flex: none;
+    border-radius: 1px;
+    background: var(--opale-field-border);
+  }
+  .project-steps__connector[data-done] {
+    background: var(--opale-success);
+  }
+  .project-step {
+    position: relative;
+    display: inline-flex;
+    min-height: var(--opale-control-md);
+    align-items: center;
+    gap: var(--opale-space-xs);
+    padding: var(--opale-space-2xs) var(--opale-space-sm) var(--opale-space-2xs) var(--opale-space-2xs);
+    border-radius: var(--opale-radius-sm);
+    color: var(--opale-text-secondary);
+    text-decoration: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .project-step:hover {
+    background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
+    color: var(--opale-text);
+  }
+  .project-step:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: calc(-1 * var(--opale-focus-ring-width));
+  }
+  .project-step__dot {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    place-items: center;
+    border: 1.5px solid var(--opale-field-border);
+    border-radius: var(--opale-radius-pill);
+    background: var(--opale-surface);
+    color: var(--opale-text-secondary);
+    font-size: var(--opale-text-sm);
+    font-weight: 600;
+  }
+  /* `.opale-icon` porte sa taille (24 px, boîte de 40) et le primaire : ici, celles du texte. */
+  .project-step__dot .opale-icon,
+  .project-step__summary .opale-icon {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .project-step__dot .opale-icon {
+    font-size: 0.95rem;
+  }
+  .project-step__dot .opale-icon svg,
+  .project-step__summary .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+  .project-step__dot .opale-icon svg {
+    stroke-width: 2.5;
+  }
+  .project-step[data-state="done"] .project-step__dot {
+    border-color: var(--opale-success);
+    background: var(--opale-success);
+    color: var(--opale-on-fill);
+  }
+  .project-step[data-state="blocked"] .project-step__dot {
+    border-style: dashed;
+  }
+  .project-step[aria-current="step"] {
+    background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step[aria-current="step"] .project-step__dot {
+    border-color: var(--opale-primary);
+    background: var(--opale-primary);
+    color: var(--opale-on-primary);
+  }
+  .project-step__text {
+    display: grid;
+    line-height: var(--opale-leading-snug);
+  }
+  .project-step__label {
+    color: var(--opale-text);
+    font-size: var(--opale-text-sm);
+    font-weight: 600;
+  }
+  .project-step[aria-current="step"] .project-step__label {
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step__summary {
+    display: inline-flex;
+    /* Trois étapes : la place permet le résumé complet (« 9 thèmes · charte et gabarit par défaut »). */
+    max-width: 20rem;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    overflow: hidden;
+    font-size: var(--opale-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .project-step__summary--blocked {
+    color: var(--opale-warning-on-surface);
+  }
+
+  /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */
+  .opale-breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--opale-space-xs);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .project-step {
+      transition: none;
+    }
+  }
+
+  /*
    * Sommaire des Paramètres (Sidebar d'Opale), sur le modèle du rail gauche de
    * la vitrine d'Opale : collé au bord gauche, fond de page, filet à droite,
    * sans carte. L'en-tête n'étant pas collant, le rail se colle en haut de la

@@ -69,7 +69,10 @@ export function ProgramMetaForm({
       <Button
         id={ids.toggle}
         type="button"
-        variant="text" size="small"
+        variant="text"
+        size="small"
+        // Texte aligné sur le titre de section (le bouton « texte » garde sa marge interne).
+        className="-ml-[var(--opale-button-padding-inline-sm)]"
         aria-expanded={open}
         aria-controls={open ? ids.panel : undefined}
         onClick={() => {

@@ -20,7 +20,7 @@ export default async function ThemesPage({ params }: PageProps<"/projets/[id]">)
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
       <ProgramMetaForm programId={program.id} name={program.name} description={program.description} />
       <ThemeManager programId={program.id} themes={themes} />
     </div>

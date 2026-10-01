@@ -1,8 +1,8 @@
-import { Feedback } from "@thomascaron/opale-ui";
-import Link from "next/link";
+import { Breadcrumb, Feedback } from "@thomascaron/opale-ui";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
 import { EngineBadge } from "@/components/decks/EngineBadge";
+import { projectCrumbs } from "@/components/projects/crumbs";
 import { FocusOnMount } from "@/components/ui/FocusOnMount";
 import { formatDateTime } from "@/components/ui/format";
 import { loadDeck } from "../../../_lib/load";
@@ -31,11 +31,16 @@ export async function DeckPageContent({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-sm">
-          <Link href={backHref} className="opale-link">
-            {isSkeleton ? "Retour aux squelettes" : "Retour aux decks"}
-          </Link>
-        </p>
+        {/* Fil d'Ariane du deck ouvert (celui de l'en-tête du projet s'efface sur ces pages). */}
+        <Breadcrumb
+          aria-label="Fil d'Ariane"
+          items={projectCrumbs(id, deck.program.name, [
+            isSkeleton
+              ? { id: "squelettes", href: backHref, label: "Étape 2 · Squelettes" }
+              : { id: "decks", href: backHref, label: "Decks" },
+            { id: "deck", label: deck.spec.title },
+          ])}
+        />
         <p className="eyebrow mt-4 text-accent-strong">
           {isSkeleton ? "Squelette" : "Deck final"} · {deck.themeName}
         </p>

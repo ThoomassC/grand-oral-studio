@@ -1,8 +1,8 @@
-import { ButtonLink } from "@/components/ui/ButtonLink";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateProgramForm } from "@/components/programs/CreateProgramForm";
 import { ProgramActions } from "@/components/programs/ProgramActions";
+import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
 import { formatDate, plural } from "@/components/ui/format";
 import { listPrograms } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -54,21 +54,13 @@ export default async function ProgramsPage() {
                           <dd className="num font-bold">{p.themeCount}</dd>
                         </div>
                         <div className="flex gap-1">
-                          <dt className="text-muted">Squelettes générés :</dt>
-                          <dd className="num font-bold">
-                            {p.skeletonCount}/{p.themeCount}
-                          </dd>
-                        </div>
-                        <div className="flex gap-1">
                           <dt className="text-muted">Modifié le</dt>
                           <dd>{formatDate(p.updatedAt)}</dd>
                         </div>
                       </dl>
                     </div>
                     <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                      <ButtonLink href={`/projets/${p.id}/jour-j`} variant="ghost" size="small">
-                        Commencer le Jour J<span className="sr-only"> pour {p.name}</span>
-                      </ButtonLink>
+                      <ProjectProgressSummary programId={p.id} programName={p.name} progress={p.progress} />
                       <ProgramActions
                         programId={p.id}
                         programName={p.name}

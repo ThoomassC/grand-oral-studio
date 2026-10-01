@@ -29,8 +29,3 @@ export const loadDeck = cache(async (programId: string, deckId: string): Promise
     throw error;
   }
 });
-
-/** Compte des squelettes générés d'un projet. */
-export function skeletonCount(program: ProgramDetail): number {
-  return program.themes.filter((t) => t.skeleton !== null).length;
-}
