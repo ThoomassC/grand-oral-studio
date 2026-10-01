@@ -59,7 +59,7 @@ export async function addTheme(userId: string, programId: string, input: ThemeIn
     await lockOwnedProgram(tx, userId, programId);
     const { position, count } = await nextPosition(tx, programId);
     if (count >= MAX_THEMES_PER_PROGRAM) {
-      throw new LimitExceededError(`Un programme est limité à ${MAX_THEMES_PER_PROGRAM} thèmes.`);
+      throw new LimitExceededError(`Un projet est limité à ${MAX_THEMES_PER_PROGRAM} thèmes.`);
     }
     const row = await tx.theme.create({
       data: { programId, position, name: input.name, description: input.description, keywords: input.keywords },
@@ -157,7 +157,7 @@ export async function importThemes(
     }
     if (existing.length + fresh.length > MAX_THEMES_PER_PROGRAM) {
       throw new LimitExceededError(
-        `Un programme est limité à ${MAX_THEMES_PER_PROGRAM} thèmes (${existing.length} existants, ${fresh.length} à importer).`,
+        `Un projet est limité à ${MAX_THEMES_PER_PROGRAM} thèmes (${existing.length} existants, ${fresh.length} à importer).`,
       );
     }
     if (fresh.length > 0) {

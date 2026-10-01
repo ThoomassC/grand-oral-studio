@@ -70,8 +70,8 @@ export const ProgramMetaSchema = z.object({
     .string()
     .overwrite(stripControlChars)
     .trim()
-    .min(2, "Le nom du programme doit faire au moins 2 caractères.")
-    .max(120, "Le nom du programme ne doit pas dépasser 120 caractères."),
+    .min(2, "Le nom du projet doit faire au moins 2 caractères.")
+    .max(120, "Le nom du projet ne doit pas dépasser 120 caractères."),
   description: z
     .string()
     .overwrite(stripControlChars)

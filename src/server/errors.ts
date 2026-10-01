@@ -43,11 +43,14 @@ export abstract class AppError extends Error {
  * Ressource absente OU appartenant à un autre utilisateur : on ne distingue pas
  * les deux cas pour ne pas révéler l'existence d'un objet.
  */
+const RESOURCE_LABELS = { programme: "projet", thème: "thème", deck: "deck" } as const;
+
 export class NotFoundError extends AppError {
   readonly code = "NOT_FOUND" as const;
   readonly status = 404;
   constructor(resource: "programme" | "thème" | "deck" = "programme") {
-    super(`Ce ${resource} est introuvable.`);
+    // Clé interne « programme » ; l'interface parle de « projet ».
+    super(`Ce ${RESOURCE_LABELS[resource]} est introuvable.`);
   }
 }
 

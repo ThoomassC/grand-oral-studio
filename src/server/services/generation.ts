@@ -175,7 +175,7 @@ export async function classifyProblem(
 ): Promise<ClassificationOutcome> {
   const g = await getGenerationContext(userId, programId);
   if (g.themes.length === 0) {
-    throw new ValidationError("Ajoutez au moins un thème au programme avant la reconnaissance.");
+    throw new ValidationError("Ajoutez au moins un thème au projet avant la reconnaissance.");
   }
   if (deps.mode === "free") {
     await consumeFreeEngineQuota(userId);

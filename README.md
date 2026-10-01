@@ -2,7 +2,7 @@
 
 Prépare un grand oral à plusieurs thèmes : un diaporama squelette par thème avant le jour J, puis, à partir de la problématique tirée au sort, reconnaissance du thème et génération du diaporama complet avec notes d'orateur. Export `.pptx`, import dans Canva ou prompt prêt à coller dans l'IA de Canva.
 
-L'app est générique : thèmes, charte graphique et gabarit de prompt sont des données propres à chaque programme.
+L'app est générique : thèmes, charte graphique et gabarit de prompt sont des données propres à chaque projet.
 
 ## Parcours
 
