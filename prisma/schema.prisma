@@ -16,13 +16,13 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id
+  id            String          @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String          @unique
+  emailVerified Boolean         @default(false)
   image         String?
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
   programs      Program[]
@@ -93,19 +93,24 @@ model RateLimit {
 // ---------------------------------------------------------------------------
 
 model Program {
-  id          String   @id @default(cuid())
-  ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  name        String
-  description String   @default("")
+  id              String    @id @default(cuid())
+  ownerId         String
+  owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  description     String    @default("")
   /// BrandSchema (validé par zod à la lecture et à l'écriture)
-  brand       Json
+  brand           Json
   /// PromptTemplateSchema (validé par zod à la lecture et à l'écriture)
-  template    Json
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
-  themes      Theme[]
-  decks       Deck[]
+  template        Json
+  /// Dernier enregistrement explicite de la charte (étape 2 du parcours) ; NULL = jamais
+  /// enregistrée (charte par défaut). Pas de rétro-remplissage des projets existants.
+  brandSavedAt    DateTime? @db.Timestamptz(3)
+  /// Dernier enregistrement explicite du gabarit (étape 3 du parcours) ; NULL = jamais.
+  templateSavedAt DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  themes          Theme[]
+  decks           Deck[]
 
   @@index([ownerId, updatedAt(sort: Desc)])
 }
@@ -149,10 +154,10 @@ model Deck {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  @@index([programId, kind, createdAt(sort: Desc)])
-  @@index([themeId])
   /// Au plus un squelette par thème : garanti par la base, pas par le code.
   @@unique([themeId], map: "Deck_one_skeleton_per_theme", where: { kind: "SKELETON" })
+  @@index([programId, kind, createdAt(sort: Desc)])
+  @@index([themeId])
 }
 
 /// Réglages IA propres à un utilisateur (une ligne au plus) :
