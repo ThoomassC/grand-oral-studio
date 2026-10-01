@@ -11,8 +11,17 @@ import {
 } from "@/domain/normalize";
 import { ClassificationSchema, DeckSpecSchema, type Classification, type DeckSpec, type PromptTemplate } from "@/domain/schemas";
 import { totalSlides } from "@/domain/slides";
-import { AiInvalidOutputError, AiRefusalError, AiUnavailableError } from "../errors";
+import {
+  AiCreditExhaustedError,
+  AiInvalidOutputError,
+  AiKeyRejectedError,
+  AiRefusalError,
+  AiUnavailableError,
+} from "../errors";
 import { createLogger } from "../logger";
+import { createAnthropicClient } from "./anthropic-client";
+import { DEFAULT_MODEL } from "./model";
+import { parseStructured, strict } from "./structured";
 import type { AiProvider, DeckHints } from "./types";
 
 /**
@@ -37,7 +46,7 @@ import type { AiProvider, DeckHints } from "./types";
  * fallbacks "default". Pas de temperature, pas de budget_tokens, pas de prefill.
  */
 
-export const DEFAULT_MODEL = "claude-opus-5-5";
+export { DEFAULT_MODEL };
 
 const DEFAULT_DECK_BUDGET_MS = Number(process.env.AI_DECK_TIMEOUT_MS ?? 240_000);
 const DEFAULT_CLASSIFY_BUDGET_MS = 90_000;
@@ -72,6 +81,12 @@ export interface AnthropicProviderOptions {
   fetch?: typeof fetch;
   deckBudgetMs?: number;
   classifyBudgetMs?: number;
+  /**
+   * Propriétaire de la clé. "user" : une 401/403 est une erreur ATTENDUE
+   * (AiKeyRejectedError, à corriger dans Paramètres) ; "server" (défaut) : c'est
+   * une panne de configuration (AiUnavailableError, journalisée).
+   */
+  keySource?: "user" | "server";
 }
 
 type Operation = "generateDeck" | "classify";
@@ -80,7 +95,8 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
   const model = options.model || DEFAULT_MODEL;
   const deckBudgetMs = options.deckBudgetMs ?? DEFAULT_DECK_BUDGET_MS;
   const classifyBudgetMs = options.classifyBudgetMs ?? DEFAULT_CLASSIFY_BUDGET_MS;
-  const client = new Anthropic({ apiKey: options.apiKey, fetch: options.fetch, maxRetries: 0 });
+  const keySource = options.keySource ?? "server";
+  const client = createAnthropicClient({ apiKey: options.apiKey, fetch: options.fetch, maxRetries: 0 });
 
   function baseParams(prompt: PromptPair, maxTokens: number, effort: "low" | "medium", format: ReturnType<typeof jsonFormat>) {
     return {
@@ -101,10 +117,11 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
     try {
       message = await send(signal);
     } catch (error) {
-      throw mapSdkError(operation, error, signal);
+      throw mapSdkError(operation, error, signal, keySource);
     }
     log.info("ai.call", {
       operation,
+      keySource,
       model: message.model,
       stopReason: message.stop_reason,
       inputTokens: message.usage.input_tokens,
@@ -116,6 +133,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
 
   return {
     name: `anthropic:${model}`,
+    engine: "claude",
 
     async generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
       const params = baseParams(prompt, deckMaxTokens(hints?.template), "medium", DECK_FORMAT);
@@ -156,33 +174,17 @@ export function interpret<S extends z.ZodType>(operation: Operation, message: Be
   if (!text) {
     throw new AiInvalidOutputError(`${operation}: réponse sans texte (stop_reason=${message.stop_reason})`);
   }
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch (error) {
-    throw new AiInvalidOutputError(`${operation}: JSON invalide`, { cause: error });
-  }
-  const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    throw new AiInvalidOutputError(`${operation}: forme JSON inattendue`, { cause: parsed.error });
-  }
-  return parsed.data;
+  return parseStructured(operation, text, schema);
 }
 
-function strict<S extends z.ZodType>(operation: Operation, schema: S, value: unknown): z.output<S> {
-  const checked = schema.safeParse(value);
-  if (!checked.success) {
-    throw new AiInvalidOutputError(`${operation}: sortie hors schéma après normalisation`, { cause: checked.error });
-  }
-  return checked.data;
-}
 
 /**
  * Erreurs du SDK → erreurs typées. Indisponibilité (réseau, 429, 5xx, budget de
- * temps, clé invalide) → AiUnavailableError (503). Une autre 4xx est un bug de
+ * temps, clé SERVEUR invalide) → AiUnavailableError (503) ; clé UTILISATEUR
+ * refusée → AiKeyRejectedError. Une autre 4xx est un bug de
  * notre requête : relancée telle quelle pour être journalisée comme une panne.
  */
-function mapSdkError(operation: string, error: unknown, signal: AbortSignal): Error {
+function mapSdkError(operation: string, error: unknown, signal: AbortSignal, keySource: "user" | "server"): Error {
   if (signal.aborted || error instanceof Anthropic.APIUserAbortError) {
     return new AiUnavailableError(`${operation}: budget de temps dépassé`, { cause: error });
   }
@@ -193,11 +195,23 @@ function mapSdkError(operation: string, error: unknown, signal: AbortSignal): Er
     return new AiUnavailableError(`${operation}: connexion`, { cause: error });
   }
   if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
+    if (keySource === "user") {
+      log.warn("ai.user_key_rejected", { operation, status: error.status });
+      return new AiKeyRejectedError({ cause: error });
+    }
     log.error("ai.config_error", { operation, status: error.status });
     return new AiUnavailableError(`${operation}: authentification refusée (${error.status})`, { cause: error });
   }
   if (error instanceof Anthropic.RateLimitError || error instanceof Anthropic.InternalServerError) {
     return new AiUnavailableError(`${operation}: ${error.status}`, { cause: error });
+  }
+  if (error instanceof Anthropic.BadRequestError && /credit balance/i.test(error.message)) {
+    if (keySource === "user") {
+      log.warn("ai.user_credit_exhausted", { operation });
+      return new AiCreditExhaustedError({ cause: error });
+    }
+    log.error("ai.server_credit_exhausted", { operation });
+    return new AiUnavailableError(`${operation}: crédit du compte serveur épuisé`, { cause: error });
   }
   if (error instanceof Anthropic.APIError) {
     if (typeof error.status === "number" && error.status >= 500) {

@@ -151,6 +151,7 @@ function buildClassification(h: ClassifyHints): Classification {
 export function createMockProvider(): AiProvider {
   return {
     name: "mock",
+    engine: "mock",
     async generateDeck(_prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour generateDeck");
       return buildDeck(hints);

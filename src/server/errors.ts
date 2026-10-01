@@ -17,6 +17,12 @@ export type AppErrorCode =
   | "AI_REFUSAL"
   | "AI_INVALID_OUTPUT"
   | "AI_UNAVAILABLE"
+  | "AI_KEY_REQUIRED"
+  | "AI_KEY_REJECTED"
+  | "AI_KEY_UNREADABLE"
+  | "AI_CREDIT_EXHAUSTED"
+  | "ENGINE_UNAVAILABLE"
+  | "CONFIGURATION"
   | "UNAUTHENTICATED";
 
 export abstract class AppError extends Error {
@@ -74,14 +80,19 @@ export class RateLimitedError extends AppError {
   readonly status = 429;
   constructor(
     readonly retryAfterSeconds: number,
-    /** "user" : quota de l'utilisateur ; "global" : plafond de coût de toute l'application. */
-    readonly scope: "user" | "global" = "user",
+    /**
+     * "user" : quota de l'utilisateur ; "global" : plafond de coût de toute
+     * l'application ; "verify" : vérifications de clé API.
+     */
+    readonly scope: "user" | "global" | "verify" = "user",
   ) {
     const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
     super(
       scope === "global"
         ? `Le service de génération est très sollicité en ce moment. Réessayez dans ${minutes} min.`
-        : `Trop de générations en peu de temps. Réessayez dans ${minutes} min.`,
+        : scope === "verify"
+          ? `Trop de vérifications de clé en peu de temps. Réessayez dans ${minutes} min.`
+          : `Trop de générations en peu de temps. Réessayez dans ${minutes} min.`,
     );
   }
 }
@@ -121,11 +132,86 @@ export class AiInvalidOutputError extends AppError {
 export class AiUnavailableError extends AppError {
   readonly code = "AI_UNAVAILABLE" as const;
   readonly status = 503;
+  /**
+   * Rien n'a été calculé (connexion refusée, file d'attente pleine) : l'unité de
+   * quota consommée peut être restituée.
+   */
+  readonly refundable: boolean;
   constructor(
     readonly detail: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; userMessage?: string; refundable?: boolean },
   ) {
-    super("Le service de génération est momentanément indisponible. Réessayez dans un instant.", options);
+    super(
+      options?.userMessage ?? "Le service de génération est momentanément indisponible. Réessayez dans un instant.",
+      options,
+    );
+    this.refundable = options?.refundable ?? false;
+  }
+}
+
+/** Aucune clé API utilisable (ni celle de l'utilisateur, ni celle du serveur) hors mode simulé. */
+export class AiKeyRequiredError extends AppError {
+  readonly code = "AI_KEY_REQUIRED" as const;
+  readonly status = 422;
+  constructor() {
+    super("Ajoutez votre clé API Anthropic dans Paramètres pour lancer une génération.");
+  }
+}
+
+/** La clé API de l'UTILISATEUR est refusée par Anthropic (401/403). */
+export class AiKeyRejectedError extends AppError {
+  readonly code = "AI_KEY_REJECTED" as const;
+  readonly status = 422;
+  constructor(options?: { cause?: unknown }) {
+    super("Votre clé API Anthropic est refusée. Mettez-la à jour dans Paramètres.", options);
+  }
+}
+
+/** Le compte Anthropic de l'UTILISATEUR n'a plus de crédit (400 « credit balance too low »). */
+export class AiCreditExhaustedError extends AppError {
+  readonly code = "AI_CREDIT_EXHAUSTED" as const;
+  readonly status = 422;
+  constructor(options?: { cause?: unknown }) {
+    super(
+      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans Paramètres.",
+      options,
+    );
+  }
+}
+
+/**
+ * Le moteur de rédaction choisi par l'utilisateur n'est pas utilisable (Ollama
+ * non configuré, modèle non choisi…). Jamais de bascule silencieuse : le message
+ * renvoie vers Paramètres.
+ */
+export class EngineUnavailableError extends AppError {
+  readonly code = "ENGINE_UNAVAILABLE" as const;
+  readonly status = 422;
+}
+
+/**
+ * La clé enregistrée existe mais ne se déchiffre pas (clé maître absente,
+ * changée sans rotation, ou valeur altérée). On ne bascule PAS silencieusement
+ * sur la clé serveur : l'utilisateur doit savoir que sa clé n'est pas utilisée.
+ */
+export class AiKeyUnreadableError extends AppError {
+  readonly code = "AI_KEY_UNREADABLE" as const;
+  readonly status = 503;
+  constructor(options?: { cause?: unknown }) {
+    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans Paramètres.", options);
+  }
+}
+
+/** Configuration serveur manquante pour une fonctionnalité (ex. clé maître de chiffrement). */
+export class ConfigurationError extends AppError {
+  readonly code = "CONFIGURATION" as const;
+  readonly status = 503;
+  constructor(
+    userMessage: string,
+    /** Détail destiné au journal (jamais de secret). */
+    readonly detail: string,
+  ) {
+    super(userMessage);
   }
 }
 

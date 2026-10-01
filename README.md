@@ -26,7 +26,56 @@ npm run db:migrate
 npm run dev
 ```
 
-Sans `ANTHROPIC_API_KEY`, l'IA est simulée (`AI_PROVIDER=mock`) : le parcours complet fonctionne, avec des contenus factices. Pour de vrais contenus, renseigner `ANTHROPIC_API_KEY` et `AI_PROVIDER=anthropic`.
+Sans aucune clé, le moteur gratuit (sans IA) rédige des trames à compléter : le parcours complet fonctionne. `AI_PROVIDER=mock` (dev/tests) remplace la clé serveur par un mock déterministe. Voir « Moteurs de rédaction ».
+
+## Moteurs de rédaction
+
+Chaque utilisateur choisit son moteur dans **Paramètres** :
+
+| Moteur | Coût | Qualité | Prérequis |
+|---|---|---|---|
+| **Gratuit** | aucun, instantané, sans réseau | trame conforme au gabarit, à compléter (« Généré sans IA ») | aucun |
+| **Claude** | crédits Anthropic de l'utilisateur (ou du serveur) | contenu rédigé | une clé API (voir « Clé API ») |
+| **Ollama** | calcul local | dépend du modèle ; lent | Ollama sur le serveur |
+
+Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Si le moteur choisi n'est plus disponible (clé supprimée, Ollama arrêté), la génération échoue avec un message qui renvoie vers Paramètres : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du thème** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
+
+Chaque deck garde la trace du moteur qui l'a produit (`engine` : `claude`, `ollama`, `free`, `mock`, ou `null` pour les decks antérieurs).
+
+### Ollama
+
+```bash
+brew install ollama          # ou https://ollama.com/download
+ollama serve                 # écoute sur http://localhost:11434
+ollama pull mistral          # au moins un modèle
+```
+
+Puis dans `.env` : `OLLAMA_BASE_URL=http://localhost:11434`, et redémarrer `npm run dev`. L'utilisateur choisit ensuite un modèle parmi ceux installés (`GET /api/tags`) ; l'URL n'est jamais saisie par l'utilisateur (protection SSRF). Ne pas mettre `AI_PROVIDER=ollama` : le serveur refuse de démarrer (seules valeurs : `anthropic`, `mock`).
+
+Limites : délai `AI_OLLAMA_TIMEOUT_MS` pour un deck (défaut 10 min) et `AI_OLLAMA_CLASSIFY_TIMEOUT_MS` pour la reconnaissance (défaut 45 s, puis repli sans IA) ; `AI_OLLAMA_MAX_CONCURRENCY` appels simultanés par instance (défaut 2, puis « Le modèle local est occupé ») ; quotas `AI_QUOTA_PER_HOUR_OLLAMA` (80/h par utilisateur) et `AI_OLLAMA_GLOBAL_HOURLY_LIMIT` (200/h au total) ; réponse bornée à 2 Mo. Un appel qui n'a pas pu joindre Ollama ne consomme pas de quota.
+
+**En production, Ollama doit tourner sur le serveur (ou un hôte interne joignable par lui), pas sur le poste de l'utilisateur** : c'est le serveur qui l'appelle. Un petit modèle sur CPU peut dépasser le délai pour un deck complet ; préférer un GPU ou un modèle léger.
+
+## Clé API
+
+Chaque utilisateur peut enregistrer **sa** clé API Anthropic dans **Paramètres** (`/parametres`). Ses générations (squelettes, reconnaissance du thème, deck final) l'utilisent alors. Ordre de résolution :
+
+1. la clé de l'utilisateur ;
+2. la clé du serveur `ANTHROPIC_API_KEY` (sauf `AI_PROVIDER=mock`) ;
+3. le mode simulé, hors production uniquement ;
+4. sinon : « Ajoutez votre clé API Anthropic dans Paramètres pour lancer une génération. »
+
+Prérequis serveur : la clé maître de chiffrement, à générer une fois puis à ajouter au `.env` (redémarrer ensuite `npm run dev`) :
+
+```bash
+openssl rand -base64 32   # → SETTINGS_ENCRYPTION_KEY=...
+```
+
+- À l'enregistrement, la clé est vérifiée auprès d'Anthropic par un appel gratuit (`GET /v1/models`, aucune génération), puis stockée chiffrée (AES-256-GCM, liée à l'utilisateur). Seuls ses 4 derniers caractères sont affichés ; elle n'est jamais renvoyée au navigateur ni journalisée.
+- Vérifications limitées à 10 par heure et par utilisateur, 200 par heure au total.
+- La clé ne part que vers `ANTHROPIC_API_URL` (défaut `https://api.anthropic.com`) : les variables `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` et `ANTHROPIC_CUSTOM_HEADERS` de l'environnement du processus sont ignorées. Les arguments des Server Actions ne sont pas journalisés par `next dev` (`logging.serverFunctions: false`).
+- Avec sa propre clé, le plafond global `AI_GLOBAL_HOURLY_LIMIT` ne s'applique pas ; le quota par utilisateur reste (`AI_QUOTA_PER_HOUR_OWN_KEY`, défaut 200/h).
+- Rotation de la clé maître : voir `SETTINGS_ENCRYPTION_KEY_VERSION` et `SETTINGS_ENCRYPTION_KEY_PREVIOUS` dans `.env.example`. Perdre la clé maître rend les clés enregistrées illisibles : les utilisateurs devront les saisir à nouveau.
 
 ## Connexion avec Google
 

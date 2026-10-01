@@ -9,20 +9,28 @@ import { randomUUID } from "node:crypto";
 type Level = "debug" | "info" | "warn" | "error";
 export type LogFields = Record<string, unknown>;
 
-const SENSITIVE_KEY = /pass(word)?|secret|token|api[-_]?key|authorization|cookie|session|logo|dataurl/i;
+const SENSITIVE_KEY =
+  /pass(word)?|secret|token|api[-_]?key|anthropic[-_]?key|ciphertext|plaintext|authorization|cookie|session|logo|dataurl/i;
+/** Clé Anthropic apparaissant dans une valeur libre (message d'erreur, pile, note). */
+const ANTHROPIC_KEY_PATTERN = /sk-ant-[A-Za-z0-9_-]+/g;
 const MAX_STRING = 500;
+
+function scrub(text: string): string {
+  return text.replace(ANTHROPIC_KEY_PATTERN, "sk-ant-[masqué]");
+}
 
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 5) return "[profondeur]";
   if (typeof value === "string") {
-    return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[${value.length} car.]` : value;
+    const clean = scrub(value);
+    return clean.length > MAX_STRING ? `${clean.slice(0, MAX_STRING)}…[${clean.length} car.]` : clean;
   }
   if (value instanceof Error) {
     return {
       name: value.name,
-      message: value.message,
+      message: scrub(value.message),
       // La pile reste côté serveur (journal), jamais renvoyée au client.
-      stack: value.stack?.split("\n").slice(0, 8).join("\n"),
+      stack: value.stack === undefined ? undefined : scrub(value.stack.split("\n").slice(0, 8).join("\n")),
       cause: value.cause === undefined ? undefined : redact(value.cause, depth + 1),
     };
   }

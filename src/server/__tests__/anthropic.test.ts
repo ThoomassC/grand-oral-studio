@@ -3,7 +3,7 @@ import type { PromptPair } from "@/domain/contracts";
 import { DeckSpecSchema } from "@/domain/schemas";
 import { createAnthropicProvider } from "@/server/ai/anthropic";
 import type { DeckHints } from "@/server/ai/types";
-import { AiInvalidOutputError, AiRefusalError, AiUnavailableError } from "@/server/errors";
+import { AiCreditExhaustedError, AiInvalidOutputError, AiKeyRejectedError, AiRefusalError, AiUnavailableError } from "@/server/errors";
 import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
 
 /**
@@ -21,6 +21,8 @@ interface Reply {
   text?: string;
   stopReason?: string;
   stopDetails?: { type: "refusal"; category: string | null; explanation: string | null } | null;
+  /** Corps d'erreur JSON (statut >= 400). */
+  errorBody?: unknown;
   /** Ne répond jamais (jusqu'à l'abandon par le signal). */
   hang?: boolean;
 }
@@ -77,7 +79,7 @@ function fakeFetch(replies: Reply[]) {
       });
     }
     if (reply.status && reply.status >= 400) {
-      return new Response(JSON.stringify({ type: "error", error: { type: "api_error", message: "boom" } }), {
+      return new Response(JSON.stringify(reply.errorBody ?? { type: "error", error: { type: "api_error", message: "boom" } }), {
         status: reply.status,
         headers: { "content-type": "application/json", "x-should-retry": "true", "retry-after-ms": "10" },
       });
@@ -90,9 +92,12 @@ function fakeFetch(replies: Reply[]) {
   return { fetchImpl, calls };
 }
 
-function provider(replies: Reply[], budgets: { deckBudgetMs?: number; classifyBudgetMs?: number } = {}) {
+function provider(
+  replies: Reply[],
+  options: { deckBudgetMs?: number; classifyBudgetMs?: number; keySource?: "user" | "server" } = {},
+) {
   const { fetchImpl, calls } = fakeFetch(replies);
-  return { ai: createAnthropicProvider({ apiKey: "test-key", fetch: fetchImpl, ...budgets }), calls };
+  return { ai: createAnthropicProvider({ apiKey: "test-key", fetch: fetchImpl, ...options }), calls };
 }
 
 const VALID_DECK = JSON.stringify(makeConformingDeck());
@@ -211,5 +216,61 @@ describe("createAnthropicProvider — classify", () => {
   it("devrait lever AiInvalidOutputError quand la réponse est tronquée", async () => {
     const { ai } = provider([{ text: VALID.slice(0, 20), stopReason: "max_tokens" }]);
     await expect(ai.classify(PROMPT)).rejects.toBeInstanceOf(AiInvalidOutputError);
+  });
+});
+
+describe("createAnthropicProvider — clé refusée (401/403)", () => {
+  it.each([401, 403])("devrait lever AiKeyRejectedError (message Paramètres) quand la clé de l'utilisateur est refusée (%s)", async (status) => {
+    const { ai, calls } = provider([{ status }], { keySource: "user" });
+    const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiKeyRejectedError);
+    expect((error as AiKeyRejectedError).userMessage).toBe(
+      "Votre clé API Anthropic est refusée. Mettez-la à jour dans Paramètres.",
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  it("devrait lever AiKeyRejectedError aussi pour la classification avec la clé de l'utilisateur", async () => {
+    const { ai } = provider([{ status: 401 }], { keySource: "user" });
+    await expect(ai.classify(PROMPT)).rejects.toBeInstanceOf(AiKeyRejectedError);
+  });
+
+  it("devrait rester une indisponibilité (configuration serveur) quand la clé serveur est refusée", async () => {
+    const { ai } = provider([{ status: 401 }], { keySource: "server" });
+    await expect(ai.generateDeck(PROMPT, HINTS)).rejects.toBeInstanceOf(AiUnavailableError);
+  });
+});
+
+describe("createAnthropicProvider — crédit épuisé (400 credit balance)", () => {
+  const CREDIT = {
+    status: 400,
+    errorBody: {
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.",
+      },
+    },
+  };
+
+  it("devrait lever AiCreditExhaustedError avec la clé de l'utilisateur", async () => {
+    const { ai } = provider([CREDIT], { keySource: "user" });
+    const error = (await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e)) as AiCreditExhaustedError;
+    expect(error).toBeInstanceOf(AiCreditExhaustedError);
+    expect(error.userMessage).toBe(
+      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans Paramètres.",
+    );
+  });
+
+  it("devrait être une indisponibilité (pas un message sur « votre compte ») avec la clé du serveur", async () => {
+    const { ai } = provider([CREDIT], { keySource: "server" });
+    await expect(ai.classify(PROMPT)).rejects.toBeInstanceOf(AiUnavailableError);
+  });
+
+  it("devrait laisser une autre 400 remonter comme une panne", async () => {
+    const { ai } = provider([{ status: 400 }], { keySource: "user" });
+    const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(AiCreditExhaustedError);
+    expect(error).not.toBeInstanceOf(AiUnavailableError);
   });
 });

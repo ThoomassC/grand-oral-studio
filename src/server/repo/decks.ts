@@ -6,7 +6,7 @@ import { ConflictError, NotFoundError, ValidationError } from "../errors";
 import { parseStored } from "../validation";
 import { readBrand, readTemplate, specJson, toDeckView } from "./mappers";
 import { lockOwnedDeck, ownedProgram, prismaErrorCode } from "./ownership";
-import type { DeckView, DeckWithProgram, FinalDeckSummary } from "./types";
+import type { DeckEngine, DeckView, DeckWithProgram, FinalDeckSummary } from "./types";
 
 /**
  * Decks. Un deck appartient au programme qui appartient à l'utilisateur ; la
@@ -81,14 +81,20 @@ export async function getThemeGenerationContext(
  * concurrente a gagné (P2002) il retombe sur la mise à jour. Jamais deux
  * squelettes, jamais d'erreur visible pour une double génération.
  */
-export async function upsertSkeleton(userId: string, themeId: string, spec: DeckSpec): Promise<{ deckId: string }> {
+export async function upsertSkeleton(
+  userId: string,
+  themeId: string,
+  spec: DeckSpec,
+  /** Toujours fourni par le service ; null = inconnu. */
+  engine: DeckEngine | null = null,
+): Promise<{ deckId: string }> {
   const json = specJson(spec);
   const owned = { themeId, kind: "SKELETON" as const, program: ownedProgram(userId) };
 
   const update = async (): Promise<{ deckId: string } | null> => {
     const existing = await db().deck.findFirst({ where: owned, select: { id: true } });
     if (!existing) return null;
-    const { count } = await db().deck.updateMany({ where: { id: existing.id, ...owned }, data: { spec: json } });
+    const { count } = await db().deck.updateMany({ where: { id: existing.id, ...owned }, data: { spec: json, engine } });
     return count === 1 ? { deckId: existing.id } : null;
   };
 
@@ -103,7 +109,7 @@ export async function upsertSkeleton(userId: string, themeId: string, spec: Deck
 
   try {
     const created = await db().deck.create({
-      data: { programId: theme.programId, themeId, kind: "SKELETON", spec: json },
+      data: { programId: theme.programId, themeId, kind: "SKELETON", spec: json, engine },
       select: { id: true },
     });
     return { deckId: created.id };
@@ -121,7 +127,7 @@ export async function upsertSkeleton(userId: string, themeId: string, spec: Deck
 
 export async function createFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; spec: DeckSpec },
+  input: { programId: string; themeId: string; problem: string; spec: DeckSpec; engine?: DeckEngine | null },
 ): Promise<{ deckId: string }> {
   const json = specJson(input.spec);
   return db().$transaction(async (tx) => {
@@ -132,7 +138,14 @@ export async function createFinalDeck(
     if (!program) throw new NotFoundError("programme");
     try {
       const created = await tx.deck.create({
-        data: { programId: program.id, themeId: input.themeId, kind: "FINAL", problem: input.problem, spec: json },
+        data: {
+          programId: program.id,
+          themeId: input.themeId,
+          kind: "FINAL",
+          problem: input.problem,
+          spec: json,
+          engine: input.engine ?? null,
+        },
         select: { id: true },
       });
       return { deckId: created.id };
@@ -150,7 +163,7 @@ export async function createFinalDeck(
  */
 export async function findRecentFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; sinceMs: number },
+  input: { programId: string; themeId: string; problem: string; sinceMs: number; engine?: DeckEngine },
 ): Promise<{ deckId: string } | null> {
   const row = await db().deck.findFirst({
     where: {
@@ -158,6 +171,8 @@ export async function findRecentFinalDeck(
       themeId: input.themeId,
       kind: "FINAL",
       problem: input.problem,
+      // Changer de moteur puis relancer doit produire un nouveau deck, pas renvoyer l'ancien.
+      ...(input.engine !== undefined ? { engine: input.engine } : {}),
       createdAt: { gte: new Date(Date.now() - input.sinceMs) },
       program: ownedProgram(userId),
     },
@@ -271,6 +286,7 @@ export async function listFinalDecks(userId: string, programId: string): Promise
     const view = toDeckView(r);
     return {
       id: r.id,
+      engine: view.engine,
       themeId: r.themeId,
       themeName: r.theme.name,
       problem: r.problem ?? "",

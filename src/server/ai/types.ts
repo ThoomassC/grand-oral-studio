@@ -24,6 +24,8 @@ export interface ClassifyHints {
 
 export interface AiProvider {
   readonly name: string;
+  /** Moteur, enregistré sur les decks produits (défaut côté service : "claude"). */
+  readonly engine?: "claude" | "ollama" | "mock";
   generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec>;
   classify(prompt: PromptPair, hints?: ClassifyHints): Promise<Classification>;
 }

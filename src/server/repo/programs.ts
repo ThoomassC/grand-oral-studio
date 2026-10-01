@@ -175,7 +175,8 @@ export async function duplicateProgram(userId: string, programId: string): Promi
       const deck = t.decks[0];
       const themeId = idByPosition.get(t.position);
       if (!deck || !themeId) return [];
-      return [{ programId: copy.id, themeId, kind: "SKELETON" as const, spec: specJson(toDeckView(deck).spec) }];
+      const view = toDeckView(deck);
+      return [{ programId: copy.id, themeId, kind: "SKELETON" as const, spec: specJson(view.spec), engine: view.engine }];
     });
     if (skeletons.length > 0) {
       await tx.deck.createMany({ data: skeletons });

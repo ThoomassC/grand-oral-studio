@@ -2,7 +2,8 @@ import { BrandSchema, DeckSpecSchema, PromptTemplateSchema, type Brand, type Pro
 import type { Prisma } from "../db/generated/prisma/client";
 import type { DeckKind } from "../db/generated/prisma/enums";
 import { assertWritable, parseStored } from "../validation";
-import type { DeckView, ThemeView } from "./types";
+import { z } from "zod";
+import type { DeckEngine, DeckView, ThemeView } from "./types";
 
 /** Lignes brutes → vues typées, avec validation zod des colonnes JSON. */
 
@@ -12,10 +13,13 @@ interface DeckRow {
   themeId: string;
   kind: DeckKind;
   problem: string | null;
+  engine: string | null;
   spec: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const DeckEngineSchema = z.enum(["claude", "ollama", "free", "mock"]).nullable() satisfies z.ZodType<DeckEngine | null>;
 
 export function toDeckView(row: DeckRow): DeckView {
   return {
@@ -24,6 +28,7 @@ export function toDeckView(row: DeckRow): DeckView {
     themeId: row.themeId,
     kind: row.kind,
     problem: row.problem,
+    engine: parseStored(DeckEngineSchema, row.engine, "Deck.engine", row.id),
     spec: parseStored(DeckSpecSchema, row.spec, "Deck.spec", row.id),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

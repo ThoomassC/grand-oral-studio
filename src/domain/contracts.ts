@@ -62,3 +62,13 @@ export type DomainFns = {
   /** src/domain/deck.ts — remplace une diapo par index, sans muter l'entrée. */
   replaceSlide(deck: DeckSpec, index: number, slide: Slide): DeckSpec;
 };
+
+/**
+ * Résultat de la reconnaissance tel que renvoyé au client : `source` dit qui
+ * l'a produit ; `fallbackReason` (FR, affichable) explique un repli sur la
+ * reconnaissance sans IA, null sinon (y compris quand le moteur gratuit est choisi).
+ */
+export interface ClassificationOutcome extends ClassificationResult {
+  source: "ai" | "free";
+  fallbackReason: string | null;
+}

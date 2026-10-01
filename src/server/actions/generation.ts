@@ -1,9 +1,10 @@
 "use server";
 
 import { z } from "zod";
-import type { ClassificationResult } from "@/domain/contracts";
+import type { ClassificationOutcome } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
-import { getAiProvider } from "../ai";
+import { getEngineForUser } from "../ai";
+import { isAppError } from "../errors";
 import * as service from "../services/generation";
 import { IdSchema, parseInput } from "../validation";
 import type { ActionResult } from "./result";
@@ -12,13 +13,37 @@ import { runAction, type ActionContext } from "./run";
 
 type ProblemFormInput = z.input<typeof ProblemInputSchema>;
 
-const deps = (ctx: ActionContext): service.GenerationDeps => ({ ai: getAiProvider(), log: ctx.log });
+/**
+ * Moteur de l'utilisateur (sa préférence, sinon Claude s'il a une clé, sinon
+ * gratuit). Un moteur choisi mais indisponible lève une erreur qui renvoie vers
+ * Paramètres : pas de bascule silencieuse.
+ */
+async function deps(ctx: ActionContext): Promise<service.GenerationDeps> {
+  const resolved = await getEngineForUser(ctx.user.id, { log: ctx.log });
+  if (resolved.engine === "free") return { mode: "free", log: ctx.log };
+  return { ai: resolved.provider, log: ctx.log, billing: resolved.billing };
+}
+
+/**
+ * Pour la reconnaissance du jour J seulement : si le moteur choisi est
+ * indisponible, la reconnaissance sans IA (gratuite, instantanée) répond quand
+ * même, avec l'explication. Aucun moteur payant n'est substitué.
+ */
+async function classifyDeps(ctx: ActionContext): Promise<service.GenerationDeps> {
+  try {
+    return await deps(ctx);
+  } catch (error) {
+    if (!isAppError(error)) throw error;
+    ctx.log.warn("classify.engine_unavailable", { code: error.code });
+    return { mode: "free", log: ctx.log, fallbackReason: error.userMessage };
+  }
+}
 
 /** Génère (ou régénère) le squelette d'un thème. Rejouable : un seul squelette par thème. */
 export async function generateSkeleton(themeId: string): Promise<ActionResult<{ deckId: string; warnings: string[] }>> {
   return runAction("generateSkeleton", async (ctx) => {
     const id = parseInput(IdSchema, themeId);
-    const { deckId, warnings, programId } = await service.generateSkeleton(ctx.user.id, id, deps(ctx));
+    const { deckId, warnings, programId } = await service.generateSkeleton(ctx.user.id, id, await deps(ctx));
     revalidatePrograms(programId);
     return { deckId, warnings };
   });
@@ -37,7 +62,7 @@ export async function generateAllSkeletons(
   return runAction("generateAllSkeletons", async (ctx) => {
     const id = parseInput(IdSchema, programId);
     const m = parseInput(BatchModeSchema, mode);
-    const results = await service.generateAllSkeletons(ctx.user.id, id, deps(ctx), m);
+    const results = await service.generateAllSkeletons(ctx.user.id, id, await deps(ctx), m);
     revalidatePrograms(id);
     return results;
   });
@@ -47,11 +72,11 @@ export async function generateAllSkeletons(
 export async function classifyProblem(
   programId: string,
   input: ProblemFormInput,
-): Promise<ActionResult<ClassificationResult>> {
+): Promise<ActionResult<ClassificationOutcome>> {
   return runAction("classifyProblem", async (ctx) => {
     const id = parseInput(IdSchema, programId);
     const problem = parseInput(ProblemInputSchema, input);
-    return service.classifyProblem(ctx.user.id, id, problem, deps(ctx));
+    return service.classifyProblem(ctx.user.id, id, problem, await classifyDeps(ctx));
   });
 }
 
@@ -68,7 +93,7 @@ export async function generateFinalDeck(
     const { deckId } = await service.generateFinalDeck(
       ctx.user.id,
       { programId: pid, themeId: tid, problem: text },
-      deps(ctx),
+      await deps(ctx),
     );
     revalidatePrograms(pid);
     return { deckId };

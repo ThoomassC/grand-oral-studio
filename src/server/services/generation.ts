@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
-import type { ClassificationResult } from "@/domain/contracts";
-import { normalizeClassification } from "@/domain/classification";
+import type { ClassificationOutcome } from "@/domain/contracts";
 import { checkDeckAgainstTemplate } from "@/domain/deck";
+import { buildFreeFinalDeck, buildFreeSkeleton } from "@/domain/free";
 import { buildClassificationPrompt, buildFinalDeckPrompt, buildSkeletonPrompt } from "@/domain/prompts";
-import type { ProblemInput } from "@/domain/schemas";
+import type { DeckSpec, ProblemInput } from "@/domain/schemas";
 import type { AiProvider } from "../ai/types";
-import { isAppError, NotFoundError, ValidationError } from "../errors";
+import { AiUnavailableError, isAppError, NotFoundError, ValidationError } from "../errors";
 import type { Logger } from "../logger";
-import { consumeAiQuota } from "../rate-limit";
+import { consumeAiQuotaFor, consumeFreeEngineQuota, refundAiQuotaFor, type AiBilling } from "../rate-limit";
 import {
   createFinalDeck,
   findRecentFinalDeck,
@@ -16,20 +16,65 @@ import {
   listSkeletonThemeIds,
   upsertSkeleton,
 } from "../repo/decks";
+import type { DeckEngine } from "../repo/types";
 import { singleFlight } from "../single-flight";
+import { classifyWithFallback } from "./classification";
 
 /**
  * Logique métier de génération, indépendante de Next et de HTTP : l'appelant
  * fournit l'utilisateur, le fournisseur IA et le logger. Ordre immuable :
  *   1. lecture autorisée du contexte (requête filtrée par propriétaire),
- *   2. quota,
- *   3. appel IA — HORS de toute transaction,
- *   4. écriture courte qui revérifie la propriété (le thème a pu disparaître).
+ *   2. quota (IA, ou limite anti-abus légère pour le moteur gratuit),
+ *   3. rédaction : appel IA HORS de toute transaction, ou moteur gratuit (pur),
+ *   4. écriture courte qui revérifie la propriété (le thème a pu disparaître),
+ *      avec le moteur qui a produit le deck.
  */
 
-export interface GenerationDeps {
+/** Rédaction par un fournisseur IA (Claude, Ollama, mock). */
+export interface AiGenerationDeps {
+  mode?: "ai";
   ai: AiProvider;
   log: Logger;
+  /**
+   * Qui paie l'appel : "user" (sa propre clé → quota propre, sans plafond
+   * global), "local" (Ollama) ou "server" (défaut : quota utilisateur + plafond global).
+   */
+  billing?: AiBilling;
+}
+
+/** Moteur gratuit : sans réseau, instantané, aucun quota IA. */
+export interface FreeGenerationDeps {
+  mode: "free";
+  log: Logger;
+  /** Explication affichable quand la reconnaissance a dû se passer d'IA (moteur indisponible). */
+  fallbackReason?: string;
+}
+
+export type GenerationDeps = AiGenerationDeps | FreeGenerationDeps;
+
+function engineOf(deps: GenerationDeps): DeckEngine {
+  return deps.mode === "free" ? "free" : (deps.ai.engine ?? "claude");
+}
+
+async function consumeGenerationQuota(userId: string, deps: GenerationDeps): Promise<void> {
+  if (deps.mode === "free") await consumeFreeEngineQuota(userId);
+  else await consumeAiQuotaFor(deps.billing ?? "server", userId, 1);
+}
+
+/**
+ * Appel IA facturé : si l'échec prouve que rien n'a été calculé (connexion
+ * refusée, file d'attente pleine), l'unité de quota est restituée.
+ */
+async function billedAiCall<T>(userId: string, deps: AiGenerationDeps, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (error instanceof AiUnavailableError && error.refundable) {
+      await refundAiQuotaFor(deps.billing ?? "server", userId, 1);
+      deps.log.info("ai.quota_refunded", { detail: error.detail });
+    }
+    throw error;
+  }
 }
 
 export interface SkeletonResult {
@@ -41,21 +86,27 @@ export interface SkeletonResult {
 }
 
 export async function generateSkeleton(userId: string, themeId: string, deps: GenerationDeps): Promise<SkeletonResult> {
-  return singleFlight(`skeleton:${userId}:${themeId}`, async () => {
+  // Le moteur fait partie de la clé : deux demandes simultanées de moteurs différents ne fusionnent pas.
+  return singleFlight(`skeleton:${userId}:${themeId}:${engineOf(deps)}`, async () => {
     const g = await getThemeGenerationContext(userId, themeId);
-    await consumeAiQuota(userId, 1);
+    await consumeGenerationQuota(userId, deps);
 
-    const prompt = buildSkeletonPrompt(g.ctx, g.theme);
-    const spec = await deps.ai.generateDeck(prompt, {
-      template: g.ctx.template,
-      theme: g.theme,
-      programName: g.ctx.name,
-    });
+    let spec: DeckSpec;
+    if (deps.mode === "free") {
+      spec = buildFreeSkeleton(g.ctx, g.theme);
+    } else {
+      const prompt = buildSkeletonPrompt(g.ctx, g.theme);
+      const ai = deps.ai;
+      spec = await billedAiCall(userId, deps, () =>
+        ai.generateDeck(prompt, { template: g.ctx.template, theme: g.theme, programName: g.ctx.name }),
+      );
+    }
     const warnings = checkDeckAgainstTemplate(spec, g.ctx.template);
     if (warnings.length > 0) deps.log.warn("deck.template_mismatch", { themeId, kind: "SKELETON", warnings });
 
-    const { deckId } = await upsertSkeleton(userId, themeId, spec);
-    deps.log.info("deck.skeleton_saved", { themeId, deckId, provider: deps.ai.name });
+    const engine = engineOf(deps);
+    const { deckId } = await upsertSkeleton(userId, themeId, spec, engine);
+    deps.log.info("deck.skeleton_saved", { themeId, deckId, engine });
     return { deckId, programId: g.programId, warnings };
   });
 }
@@ -111,26 +162,39 @@ export async function generateAllSkeletons(
   return results;
 }
 
+/**
+ * Reconnaissance du thème. Moteur gratuit → sans IA. Moteur IA → tentative IA
+ * (quota compris) avec repli automatique sur la reconnaissance sans IA en cas
+ * d'échec ; `source` et `fallbackReason` le disent à l'interface.
+ */
 export async function classifyProblem(
   userId: string,
   programId: string,
   input: ProblemInput,
   deps: GenerationDeps,
-): Promise<ClassificationResult> {
+): Promise<ClassificationOutcome> {
   const g = await getGenerationContext(userId, programId);
   if (g.themes.length === 0) {
     throw new ValidationError("Ajoutez au moins un thème au programme avant la reconnaissance.");
   }
-  await consumeAiQuota(userId, 1);
-
-  const prompt = buildClassificationPrompt(g.ctx, input.problem);
-  const raw = await deps.ai.classify(prompt, {
-    themes: g.themes,
-    problem: input.problem,
-    hintedThemeId: input.hintedThemeId,
-  });
-  // Filtre les ids inventés ou étrangers au programme, borne et trie.
-  return normalizeClassification(raw, g.themes, input.hintedThemeId);
+  if (deps.mode === "free") {
+    await consumeFreeEngineQuota(userId);
+    const result = await classifyWithFallback(g.ctx, input, null, deps.log);
+    return { ...result, fallbackReason: deps.fallbackReason ?? null };
+  }
+  const ai = deps.ai;
+  return classifyWithFallback(
+    g.ctx,
+    input,
+    async () => {
+      await consumeAiQuotaFor(deps.billing ?? "server", userId, 1);
+      const prompt = buildClassificationPrompt(g.ctx, input.problem);
+      return billedAiCall(userId, deps, () =>
+        ai.classify(prompt, { themes: g.themes, problem: input.problem, hintedThemeId: input.hintedThemeId }),
+      );
+    },
+    deps.log,
+  );
 }
 
 /** Fenêtre pendant laquelle une même demande de deck final renvoie le deck déjà produit. */
@@ -142,31 +206,40 @@ export async function generateFinalDeck(
   deps: GenerationDeps,
 ): Promise<{ deckId: string; warnings: string[]; reused: boolean }> {
   const problemHash = createHash("sha256").update(input.problem).digest("hex").slice(0, 16);
-  return singleFlight(`final:${userId}:${input.themeId}:${problemHash}`, async () => {
+  return singleFlight(`final:${userId}:${input.themeId}:${problemHash}:${engineOf(deps)}`, async () => {
     const g = await getThemeGenerationContext(userId, input.themeId);
     // Le thème doit appartenir au programme annoncé (sinon : introuvable).
     if (g.programId !== input.programId) throw new NotFoundError("thème");
 
-    const recent = await findRecentFinalDeck(userId, { ...input, sinceMs: FINAL_DECK_DEDUP_MS });
+    const engine = engineOf(deps);
+    const recent = await findRecentFinalDeck(userId, { ...input, sinceMs: FINAL_DECK_DEDUP_MS, engine });
     if (recent) {
       deps.log.info("deck.final_reused", { deckId: recent.deckId });
       return { deckId: recent.deckId, warnings: [], reused: true };
     }
 
-    await consumeAiQuota(userId, 1);
-    const prompt = buildFinalDeckPrompt(g.ctx, g.theme, g.skeleton, input.problem);
-    const spec = await deps.ai.generateDeck(prompt, {
-      template: g.ctx.template,
-      theme: g.theme,
-      programName: g.ctx.name,
-      problem: input.problem,
-      skeleton: g.skeleton,
-    });
+    await consumeGenerationQuota(userId, deps);
+    let spec: DeckSpec;
+    if (deps.mode === "free") {
+      spec = buildFreeFinalDeck(g.ctx, g.theme, g.skeleton, input.problem);
+    } else {
+      const prompt = buildFinalDeckPrompt(g.ctx, g.theme, g.skeleton, input.problem);
+      const ai = deps.ai;
+      spec = await billedAiCall(userId, deps, () =>
+        ai.generateDeck(prompt, {
+          template: g.ctx.template,
+          theme: g.theme,
+          programName: g.ctx.name,
+          problem: input.problem,
+          skeleton: g.skeleton,
+        }),
+      );
+    }
     const warnings = checkDeckAgainstTemplate(spec, g.ctx.template);
     if (warnings.length > 0) deps.log.warn("deck.template_mismatch", { themeId: input.themeId, kind: "FINAL", warnings });
 
-    const { deckId } = await createFinalDeck(userId, { ...input, spec });
-    deps.log.info("deck.final_saved", { deckId, themeId: input.themeId, provider: deps.ai.name });
+    const { deckId } = await createFinalDeck(userId, { ...input, spec, engine });
+    deps.log.info("deck.final_saved", { deckId, themeId: input.themeId, engine });
     return { deckId, warnings, reused: false };
   });
 }
