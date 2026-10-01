@@ -94,4 +94,16 @@ describe("SettingsToc", () => {
     expect(window.location.hash).toBe("#cle-api");
     expect(screen.getByRole("link", { name: /Clé API Anthropic/ })).toHaveAttribute("aria-current", "page");
   });
+
+  it("devrait retenir la dernière partie quand la page est tout en bas", () => {
+    render(<SettingsToc />);
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 800 });
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("scrollY", 1200);
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(screen.getByRole("link", { name: /Apparence/ })).toHaveAttribute("aria-current", "page");
+  });
 });

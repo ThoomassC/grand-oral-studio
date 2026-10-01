@@ -368,10 +368,42 @@
   }
 
   /*
-   * Sommaire des Paramètres (Sidebar d'Opale). Sous 768 px il passe au-dessus
-   * du contenu : pleine largeur déplié, en ligne (bascule + icônes) replié,
-   * pour ne pas occuper toute la hauteur de l'écran.
+   * Sommaire des Paramètres (Sidebar d'Opale), sur le modèle du rail gauche de
+   * la vitrine d'Opale : collé au bord gauche, fond de page, filet à droite,
+   * sans carte. L'en-tête n'étant pas collant, le rail se colle en haut de la
+   * fenêtre (`top: 0`) et mesure `100dvh` : sous l'en-tête en haut de page,
+   * pleine fenêtre dès que l'en-tête est sorti de l'écran. Défilement interne
+   * si son contenu dépasse. Plié, il se réduit à sa colonne d'icônes (largeur
+   * animée par Opale, coupée si prefers-reduced-motion) et le contenu reprend
+   * la place.
    */
+  .settings-rail {
+    padding: var(--opale-space-lg) var(--opale-space-md) 0;
+  }
+  .settings-rail .settings-toc {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  @media (min-width: 768px) {
+    .settings-rail {
+      position: sticky;
+      top: 0;
+      flex: none;
+      align-self: flex-start;
+      height: 100dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0;
+      border-right: 1px solid var(--opale-divider);
+      background: var(--opale-background);
+    }
+    .settings-rail .settings-toc {
+      min-height: 100%;
+    }
+  }
+  /* Sous 768 px : en haut, pleine largeur déplié, en ligne (bascule + icônes) replié. */
   @media (max-width: 767px) {
     .settings-toc {
       width: 100%;

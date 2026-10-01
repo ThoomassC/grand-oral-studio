@@ -39,6 +39,11 @@ function subscribeCollapsed(onChange: () => void): () => void {
   };
 }
 
+function atBottom(): boolean {
+  const root = document.documentElement;
+  return root.scrollHeight > root.clientHeight && window.scrollY + window.innerHeight >= root.scrollHeight - 2;
+}
+
 function sectionOf(id: string): HTMLElement | null {
   return document.getElementById(id)?.closest("section") ?? null;
 }
@@ -73,14 +78,23 @@ export function SettingsToc() {
           if (entry.isIntersecting) visible.set(id, entry.boundingClientRect?.top ?? 0);
           else visible.delete(id);
         }
-        if (Date.now() < lockUntil.current || visible.size === 0) return;
+        if (Date.now() < lockUntil.current || atBottom()) return;
+        if (visible.size === 0) return;
         const top = [...visible.entries()].sort((a, b) => a[1] - b[1])[0]![0];
         setActive(top);
       },
       { rootMargin: "-15% 0px -55% 0px" },
     );
     for (const section of ids.keys()) observer.observe(section);
-    return () => observer.disconnect();
+    // En bas de page, la dernière partie ne peut pas atteindre la bande observée : on la retient.
+    const onScroll = () => {
+      if (Date.now() >= lockUntil.current && atBottom()) setActive(TOC_SECTIONS[TOC_SECTIONS.length - 1]!.id);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   function goTo(id: string) {
