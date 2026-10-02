@@ -7,8 +7,20 @@ const production = process.env.NODE_ENV === "production";
 // Échoue au démarrage plutôt qu'à la première génération (message explicite).
 assertAiProviderEnv(process.env);
 
+/**
+ * Corps maximal d'une Server Action : l'import de charte accepte un fichier de
+ * 20 Mo (cf. BRAND_FILE_MAX_BYTES) ; la limite porte sur le corps HTTP brut,
+ * enveloppe multipart comprise, d'où 1 Mo de marge — et pas davantage.
+ */
+export const SERVER_ACTION_BODY_LIMIT = "21mb";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    serverActions: { bodySizeLimit: SERVER_ACTION_BODY_LIMIT },
+    // src/proxy.ts couvre /projets/** : sans ce réglage, le corps y serait tronqué à 10 Mo.
+    proxyClientMaxBodySize: SERVER_ACTION_BODY_LIMIT,
+  },
   // En dev, Next journalise par défaut les arguments des Server Functions : la clé
   // API saisie dans Paramètres apparaîtrait en clair dans le terminal.
   logging: { serverFunctions: false },

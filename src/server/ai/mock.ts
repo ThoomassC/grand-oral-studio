@@ -9,7 +9,9 @@ import {
   type SlideLayout,
 } from "@/domain/schemas";
 import { AiInvalidOutputError } from "../errors";
-import type { AiProvider, ClassifyHints, DeckHints } from "./types";
+import type { RawBrandDraft } from "@/domain/import/brand-from-draft";
+import { parseTemplateText, type RawTemplateDraft } from "@/domain/import/template-from-text";
+import type { AiProvider, ClassifyHints, DeckHints, TemplateDraftHints } from "./types";
 
 /**
  * Fournisseur déterministe, sans réseau : même entrée → même sortie. Sert au dev
@@ -155,6 +157,19 @@ export function createMockProvider(): AiProvider {
     async generateDeck(_prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour generateDeck");
       return buildDeck(hints);
+    },
+    async draftTemplate(_prompt: PromptPair, hints: TemplateDraftHints): Promise<RawTemplateDraft> {
+      // Déterministe : les heuristiques du moteur gratuit, présentées comme un brouillon d'IA.
+      const { template } = parseTemplateText(hints.text, hints.base);
+      return { ...template };
+    },
+    async deduceBrand(): Promise<RawBrandDraft> {
+      return {
+        name: "Charte simulée",
+        colors: { primary: "#1E3A5F", secondary: "#4A6A8A", accent: "#D9822B", background: "#FFFFFF", text: "#1F2933" },
+        headingFont: "Georgia",
+        bodyFont: "Arial",
+      };
     },
     async classify(_prompt: PromptPair, hints?: ClassifyHints): Promise<Classification> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour classify");

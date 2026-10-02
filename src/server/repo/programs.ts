@@ -112,6 +112,22 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
   };
 }
 
+/** Lève NotFoundError si le programme n'existe pas ou n'appartient pas à `userId` (lecture par clé primaire). */
+export async function assertProgramOwned(userId: string, programId: string): Promise<void> {
+  const row = await db().program.findFirst({ where: { id: programId, ...ownedProgram(userId) }, select: { id: true } });
+  if (!row) throw new NotFoundError("programme");
+}
+
+/** Gabarit enregistré d'un programme possédé par `userId` (base d'un import). */
+export async function getProgramTemplate(userId: string, programId: string): Promise<PromptTemplate> {
+  const row = await db().program.findFirst({
+    where: { id: programId, ...ownedProgram(userId) },
+    select: { id: true, template: true },
+  });
+  if (!row) throw new NotFoundError("programme");
+  return readTemplate(row.template, row.id);
+}
+
 export async function createProgram(
   userId: string,
   input: ProgramMeta & { brand: Brand; template: PromptTemplate },

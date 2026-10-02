@@ -211,3 +211,18 @@ export async function consumeApiKeyVerifyQuota(userId: string, policy: QuotaPoli
     1,
   );
 }
+
+/**
+ * Imports (charte depuis un fichier, gabarit depuis un texte) par utilisateur :
+ * la lecture d'une archive Office coûte du calcul (décompression bornée). Les
+ * imports par IA consomment EN PLUS le quota IA, comme une génération.
+ */
+export const IMPORT_QUOTA: QuotaPolicy = { limit: 60, windowSeconds: 3600 };
+
+export function importQuotaKey(userId: string): string {
+  return `import:${userId}`;
+}
+
+export async function consumeImportQuota(userId: string, policy: QuotaPolicy = IMPORT_QUOTA): Promise<void> {
+  await consumeQuota(importQuotaKey(userId), 1, policy, "import");
+}
