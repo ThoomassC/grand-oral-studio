@@ -159,6 +159,49 @@ test.describe("6. Squelettes — ouvrir et modifier une diapo", () => {
     await expect(page).toHaveURL(new RegExp(`/projets/${id}/squelettes/[a-z0-9]+$`));
   });
 
+  test("devrait déclencher l'alerte native beforeunload en rechargeant avec une diapo modifiée", async ({ page, account }) => {
+    void account;
+    const id = await openSkeleton(page);
+    const url = page.url();
+    await page.getByRole("button", { name: "Modifier la diapo 2" }).click();
+    await page.getByRole("textbox", { name: "Titre", exact: true }).fill("Modification en cours");
+    const dialogPromise = page.waitForEvent("dialog");
+    void page.reload().catch(() => undefined);
+    const native = await dialogPromise;
+    expect(native.type()).toBe("beforeunload");
+    await native.dismiss();
+    await expect(page).toHaveURL(url);
+    await expect(page).toHaveURL(new RegExp(`/projets/${id}/squelettes/[a-z0-9]+$`));
+    await expect(page.getByRole("textbox", { name: "Titre", exact: true })).toHaveValue("Modification en cours");
+  });
+
+  test("devrait demander confirmation sur « Précédent » et par l'en-tête avec une diapo modifiée", async ({ page, account }) => {
+    void account;
+    await openSkeleton(page);
+    const url = page.url();
+    await page.getByRole("button", { name: "Modifier la diapo 2" }).click();
+    await page.getByRole("textbox", { name: "Titre", exact: true }).fill("Modification en cours");
+    await page.goBack();
+    const modal = dialog(page, "Quitter sans enregistrer ?");
+    await expect(modal).toBeVisible();
+    await modal.getByRole("button", { name: "Rester sur la page" }).click();
+    await expect(page).toHaveURL(url);
+    await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Projets" }).click();
+    await expect(dialog(page, "Quitter sans enregistrer ?")).toBeVisible();
+    await expect(page).toHaveURL(url);
+  });
+
+  test("ne devrait plus demander de confirmation après enregistrement de la diapo", async ({ page, account }) => {
+    void account;
+    const id = await openSkeleton(page);
+    await page.getByRole("button", { name: "Modifier la diapo 2" }).click();
+    await page.getByRole("textbox", { name: "Titre", exact: true }).fill("Titre enregistré");
+    await page.getByRole("button", { name: "Enregistrer la diapo" }).click();
+    await expect(page.getByText("Diapo 2 enregistrée.")).toBeAttached();
+    await page.getByRole("navigation", { name: "Fil d'Ariane" }).getByRole("link", { name: /Squelettes/ }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/squelettes`);
+  });
+
   test("devrait revenir à la liste des squelettes par le fil d'Ariane", async ({ page, account }) => {
     void account;
     const id = await openSkeleton(page);

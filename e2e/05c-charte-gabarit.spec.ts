@@ -76,6 +76,65 @@ for (const which of ["charte", "gabarit"] as const) {
       await expect(page, "« Précédent » a quitté la page sans confirmation").toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
     });
 
+    test(`devrait confirmer « Précédent » sur la ${which} modifiée : rester, puis quitter vers la page précédente`, async ({ page, account }) => {
+      void account;
+      const id = await createProject(page, `Garde retour modale ${which}`);
+      await page
+        .getByRole("navigation", { name: "Préparer : thèmes, charte et gabarit" })
+        .getByRole("link", { name: which === "charte" ? /^Charte/ : /^Gabarit/ })
+        .click();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
+      await makeDirty(page, which);
+      await page.goBack();
+      const modal = dialog(page, LEAVE);
+      await expect(modal).toBeVisible();
+      await modal.getByRole("button", { name: "Rester sur la page" }).click();
+      await expect(modal).toBeHidden();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
+      // La saisie est conservée, et « Précédent » est de nouveau gardé.
+      if (which === "charte") await expect(page.getByRole("textbox", { name: "Principale (hexadécimal)" })).toHaveValue("#ABCDEF");
+      else await expect(page.getByRole("spinbutton", { name: "Durée de l'oral (minutes)" })).toHaveValue("25");
+      await page.goBack();
+      await dialog(page, LEAVE).getByRole("button", { name: "Quitter sans enregistrer" }).click();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}`);
+      await expect(page.getByRole("heading", { name: "Thèmes", level: 2 })).toBeVisible();
+    });
+
+    test(`ne devrait pas allonger l'historique : après enregistrement de la ${which}, « Précédent » revient à la page précédente`, async ({ page, account }) => {
+      void account;
+      const id = await createProject(page, `Historique ${which}`);
+      await page
+        .getByRole("navigation", { name: "Préparer : thèmes, charte et gabarit" })
+        .getByRole("link", { name: which === "charte" ? /^Charte/ : /^Gabarit/ })
+        .click();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
+      await makeDirty(page, which);
+      await page.getByRole("button", { name: which === "charte" ? "Enregistrer la charte" : "Enregistrer le gabarit" }).click();
+      await expect(page.getByText(which === "charte" ? "Charte enregistrée." : "Gabarit enregistré.")).toBeVisible();
+      await page.goBack();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}`);
+      await expect(dialog(page, LEAVE)).toHaveCount(0);
+    });
+
+    test(`ne devrait pas laisser d'entrée en double après avoir quitté la ${which} modifiée par un lien`, async ({ page, account }) => {
+      void account;
+      const id = await createProject(page, `Historique lien ${which}`);
+      await page
+        .getByRole("navigation", { name: "Préparer : thèmes, charte et gabarit" })
+        .getByRole("link", { name: which === "charte" ? /^Charte/ : /^Gabarit/ })
+        .click();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
+      await makeDirty(page, which);
+      await page.getByRole("navigation", { name: "Fil d'Ariane" }).getByRole("link", { name: "Projets" }).click();
+      await dialog(page, LEAVE).getByRole("button", { name: "Quitter sans enregistrer" }).click();
+      await expect(page).toHaveURL(`${BASE_URL}/projets`);
+      // Projets ← page (une seule entrée) ← Thèmes.
+      await page.goBack();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/${which}`);
+      await page.goBack();
+      await expect(page).toHaveURL(`${BASE_URL}/projets/${id}`);
+    });
+
     test(`devrait déclencher l'alerte native beforeunload en quittant la ${which} modifiée pour un autre site`, async ({ page, account }) => {
       void account;
       const id = await createProject(page, `Garde unload ${which}`);

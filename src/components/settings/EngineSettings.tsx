@@ -10,6 +10,7 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 
 type Engine = "claude" | "ollama" | "free";
 
@@ -61,6 +62,9 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
   const formRef = useRef<HTMLFormElement>(null);
   const baseId = useId();
   const [choice, setChoice] = useState<Engine>(() => initialChoice(status));
+  /** Le moteur enregistré : mis à jour avec le message de succès, avant le rafraîchissement de la page. */
+  const [savedChoice, setSavedChoice] = useState<Engine>(() => initialChoice(status));
+  useUnsavedChanges(choice !== savedChoice);
   const { ollama } = status.available;
   const ollamaUsable = ollama.configured && ollama.reachable && ollama.models.length > 0;
   const ollamaNote = !ollama.configured ? (
@@ -103,6 +107,7 @@ export function EngineSettings({ status }: { status: EngineStatus }) {
       if (firstError(fieldErrors, "ollamaModel")) focusFirstInvalid(formRef.current);
       return { status: { kind: "error", message: result.error }, fieldErrors };
     }
+    setSavedChoice(engine);
     router.refresh();
     const label = engineLabel(engine, engine === "ollama" ? ollamaModel : null);
     return { status: { kind: "success", message: `Moteur enregistré : ${label}.` }, fieldErrors: {} };

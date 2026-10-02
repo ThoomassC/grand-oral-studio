@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { opaleThemeScript } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InlineScript } from "@/components/ui/InlineScript";
@@ -44,10 +45,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           >
             Aller au contenu
           </a>
-          <SiteHeader />
-          <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
-            {children}
-          </main>
+          {/* La garde « modifications non enregistrées » englobe l'en-tête : logo, onglets et menu du compte. */}
+          <UnsavedChangesProvider>
+            <SiteHeader />
+            <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
+              {children}
+            </main>
+            <UnsavedChangesBanner />
+          </UnsavedChangesProvider>
         </ThemeProvider>
       </body>
     </html>
