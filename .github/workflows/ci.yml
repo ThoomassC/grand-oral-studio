@@ -53,6 +53,11 @@ jobs:
           echo "::add-mask::$secret"
           echo "BETTER_AUTH_SECRET=$secret" >> "$GITHUB_ENV"
 
+      - name: Types des routes Next
+        # PageProps / LayoutProps et next-env.d.ts sont générés (non versionnés) : sans eux,
+        # tsc échoue sur un clone neuf.
+        run: npx next typegen
+
       - name: Typage
         run: npx tsc --noEmit
 
