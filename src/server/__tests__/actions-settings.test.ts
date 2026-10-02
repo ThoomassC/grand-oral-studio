@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@/server/errors";
 
-/** Transport des actions Paramètres : session, revalidation, traduction des erreurs. */
+/** Transport des actions Configuration IA : session, revalidation, traduction des erreurs. */
 
 const revalidatePath = vi.fn();
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
@@ -26,12 +26,12 @@ beforeEach(() => {
 });
 
 describe("saveAnthropicApiKey", () => {
-  it("devrait enregistrer pour l'utilisateur connecté, renvoyer les 4 derniers caractères et revalider /parametres", async () => {
+  it("devrait enregistrer pour l'utilisateur connecté, renvoyer les 4 derniers caractères et revalider /configuration-ia", async () => {
     service.saveApiKey.mockResolvedValue({ last4: "AAAA" });
     const result = await actions.saveAnthropicApiKey({ apiKey: "sk-ant-x" });
     expect(result).toEqual({ ok: true, data: { last4: "AAAA" } });
     expect(service.saveApiKey.mock.calls[0]![0]).toBe("user-1");
-    expect(revalidatePath).toHaveBeenCalledWith("/parametres");
+    expect(revalidatePath).toHaveBeenCalledWith("/configuration-ia");
   });
 
   it("devrait transmettre l'erreur de champ apiKey au client", async () => {
@@ -55,7 +55,7 @@ describe("deleteAnthropicApiKey / testAnthropicApiKey", () => {
     service.deleteApiKey.mockResolvedValue(undefined);
     expect(await actions.deleteAnthropicApiKey()).toEqual({ ok: true, data: null });
     expect(service.deleteApiKey.mock.calls[0]![0]).toBe("user-1");
-    expect(revalidatePath).toHaveBeenCalledWith("/parametres");
+    expect(revalidatePath).toHaveBeenCalledWith("/configuration-ia");
   });
 
   it("devrait renvoyer la source et le modèle testés", async () => {
@@ -73,7 +73,7 @@ describe("setAiEngine", () => {
     expect(input).toEqual({ engine: "free" });
     expect(deps.env).toBe(process.env);
     expect(typeof deps.listOllamaModels).toBe("function");
-    expect(revalidatePath).toHaveBeenCalledWith("/parametres");
+    expect(revalidatePath).toHaveBeenCalledWith("/configuration-ia");
   });
 
   it("devrait transmettre l'erreur de champ ollamaModel", async () => {

@@ -4,14 +4,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 let pathname = "/projets/p1/charte";
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push }) }));
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push, replace }) }));
 
 const { ProjectBreadcrumb } = await import("@/components/projects/ProjectBreadcrumb");
 const { UnsavedChangesBanner, UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Le démontage retire la sentinelle d'historique de la garde (`history.back()`, asynchrone).
+  await new Promise((resolve) => setTimeout(resolve, 20));
   push.mockReset();
+  replace.mockReset();
   pathname = "/projets/p1/charte";
 });
 
@@ -45,7 +49,9 @@ describe("ProjectBreadcrumb", () => {
     expect(screen.getByRole("dialog", { name: "Quitter sans enregistrer ?" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
-    expect(push).toHaveBeenCalledWith("/projets");
+    // La destination remplace la sentinelle d'historique de la garde : pas d'entrée en double.
+    expect(replace).toHaveBeenCalledWith("/projets");
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("ne devrait lier aucune entrée à la page courante (Thèmes)", () => {

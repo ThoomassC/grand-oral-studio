@@ -16,7 +16,7 @@ type ProblemFormInput = z.input<typeof ProblemInputSchema>;
 /**
  * Moteur de l'utilisateur (sa préférence, sinon Claude s'il a une clé, sinon
  * gratuit). Un moteur choisi mais indisponible lève une erreur qui renvoie vers
- * Paramètres : pas de bascule silencieuse.
+ * la Configuration IA : pas de bascule silencieuse.
  */
 async function deps(ctx: ActionContext): Promise<service.GenerationDeps> {
   const resolved = await getEngineForUser(ctx.user.id, { log: ctx.log });

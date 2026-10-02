@@ -11,12 +11,12 @@ import {
   type OpaleIconName,
 } from "@thomascaron/opale-ui";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { prefersReducedMotion } from "@/components/preferences/store";
 
-/** Les parties de la page Paramètres : `id` = celui du titre (h2) de la section. */
+/** Les parties de la page Configuration IA : `id` = celui du titre (h2) de la section. */
 export const TOC_SECTIONS: readonly { id: string; label: string; icon: OpaleIconName; group: string }[] = [
   { id: "moteur", label: "Moteur de rédaction", icon: "sparkle", group: "Rédaction" },
-  { id: "cle-api", label: "Clé API Anthropic", icon: "key", group: "Rédaction" },
-  { id: "apparence", label: "Apparence", icon: "palette", group: "Interface" },
+  { id: "cle-api", label: "Clé API Anthropic", icon: "key", group: "Accès" },
 ];
 
 /** Les parties du sommaire (`Sidebar.Group`), dans l'ordre des sections. */
@@ -26,14 +26,14 @@ const TOC_GROUPS = [...new Set(TOC_SECTIONS.map((s) => s.group))].map((title) =>
 }));
 
 const LABELS = {
-  items: "Sommaire des paramètres",
+  items: "Sommaire de la configuration IA",
   expand: "Déplier le sommaire",
   collapse: "Replier le sommaire",
   scroll: "Défilement du sommaire",
   scrollStart: "Début du sommaire",
   resize: "Largeur du sommaire",
   menu: "Sommaire",
-  shortcuts: "Parties des paramètres",
+  shortcuts: "Parties de la configuration IA",
 };
 const STORAGE_KEY = "grand-oral-studio:sommaire-replie";
 const CHANGE_EVENT = "grand-oral-studio:sommaire-change";
@@ -84,13 +84,14 @@ function sectionOf(id: string): HTMLElement | null {
 }
 
 /**
- * Sommaire de la page Paramètres : le `Sidebar` d'Opale, comme le sommaire de
- * sa documentation (parties repliables, barre de défilement d'Opale, poignée
- * de largeur, format mobile sous 30 rem), pliable (`SidebarToggle` :
- * `aria-expanded` + `aria-controls`), entrées-liens vers les sections. L'entrée active (`aria-current`, posé par Opale) suit la
- * section visible ; un clic fait défiler jusqu'à la section (sans animation
- * si l'utilisateur limite les mouvements), place le focus sur son titre et
- * inscrit le fragment dans l'URL.
+ * Sommaire de la page Configuration IA : le `Sidebar` d'Opale, comme le
+ * sommaire de sa documentation (parties repliables, barre de défilement
+ * d'Opale, poignée de largeur, format mobile sous 30 rem), pliable
+ * (`SidebarToggle` : `aria-expanded` + `aria-controls`), entrées-liens vers
+ * les sections. L'entrée active (`aria-current`, posé par Opale) suit la
+ * section visible ; un clic fait défiler jusqu'à la section (sans animation si
+ * l'utilisateur limite les mouvements, sur son appareil ou dans Réglages),
+ * place le focus sur son titre et inscrit le fragment dans l'URL.
  */
 export function SettingsToc() {
   const storedCollapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
@@ -139,7 +140,7 @@ export function SettingsToc() {
     const section = sectionOf(id);
     const heading = document.getElementById(id);
     if (!section || !heading) return;
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const reduced = prefersReducedMotion();
     lockUntil.current = Date.now() + 800;
     setActive(id);
     section.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });

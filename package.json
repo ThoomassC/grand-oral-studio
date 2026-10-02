@@ -17,13 +17,14 @@
     "db:studio": "prisma studio",
     "db:test:migrate": "PRISMA_DB=test prisma migrate deploy",
     "postinstall": "prisma generate",
-    "test:int": "VITEST_INTEGRATION=1 vitest run --project integration"
+    "test:int": "VITEST_INTEGRATION=1 vitest run --project integration",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "@thomascaron/opale-ui": "https://github.com/ThoomassC/opale-ui/releases/download/v3.0.2/thomascaron-opale-ui-3.0.2.tgz",
+    "@thomascaron/opale-ui": "https://github.com/ThoomassC/opale-ui/releases/download/v3.0.3/thomascaron-opale-ui-3.0.3.tgz",
     "better-auth": "^1.7.7",
     "dotenv": "^18.0.5",
     "jszip": "^3.10.2",
@@ -35,6 +36,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

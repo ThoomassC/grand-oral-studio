@@ -22,13 +22,16 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize: SERVER_ACTION_BODY_LIMIT,
   },
   // En dev, Next journalise par défaut les arguments des Server Functions : la clé
-  // API saisie dans Paramètres apparaîtrait en clair dans le terminal.
+  // API saisie dans la Configuration IA apparaîtrait en clair dans le terminal.
   logging: { serverFunctions: false },
-  // Les pages des projets vivaient sous /programmes : les anciens liens et favoris restent valides.
+  // Anciennes adresses : les liens et favoris restent valides. Les pages des projets
+  // vivaient sous /programmes ; la page des réglages IA s'appelait /parametres.
   async redirects() {
     return [
       { source: "/programmes", destination: "/projets", permanent: true },
       { source: "/programmes/:path*", destination: "/projets/:path*", permanent: true },
+      { source: "/parametres", destination: "/configuration-ia", permanent: true },
+      { source: "/parametres/:path*", destination: "/configuration-ia/:path*", permanent: true },
     ];
   },
   async headers() {

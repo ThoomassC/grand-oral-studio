@@ -101,7 +101,7 @@ export interface AnthropicProviderOptions {
   classifyBudgetMs?: number;
   /**
    * Propriétaire de la clé. "user" : une 401/403 est une erreur ATTENDUE
-   * (AiKeyRejectedError, à corriger dans Paramètres) ; "server" (défaut) : c'est
+   * (AiKeyRejectedError, à corriger dans la Configuration IA) ; "server" (défaut) : c'est
    * une panne de configuration (AiUnavailableError, journalisée).
    */
   keySource?: "user" | "server";

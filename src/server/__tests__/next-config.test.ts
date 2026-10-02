@@ -29,6 +29,16 @@ describe("next.config", () => {
       ]),
     );
   });
+
+  it("devrait rediriger durablement l'ancienne page /parametres vers /configuration-ia", async () => {
+    const redirects = await nextConfig.redirects?.();
+    expect(redirects).toEqual(
+      expect.arrayContaining([
+        { source: "/parametres", destination: "/configuration-ia", permanent: true },
+        { source: "/parametres/:path*", destination: "/configuration-ia/:path*", permanent: true },
+      ]),
+    );
+  });
 });
 
 describe("assertAiProviderEnv (validation au démarrage)", () => {

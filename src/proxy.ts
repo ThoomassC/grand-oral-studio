@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * Filet de sécurité optimiste (Next 16 : `proxy` remplace `middleware`) : sans
- * cookie de session, /projets/** et /parametres redirigent vers /connexion. Ce n'est PAS
+ * cookie de session, /projets/** et /configuration-ia redirigent vers /connexion. Ce n'est PAS
  * l'autorisation : la présence d'un cookie ne prouve rien. Chaque page appelle
  * requireUser() et chaque action/route revérifie la session et la propriété
  * de la ressource.
@@ -18,5 +18,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/projets", "/projets/:path*", "/parametres", "/profil"],
+  matcher: ["/projets", "/projets/:path*", "/configuration-ia", "/profil"],
 };

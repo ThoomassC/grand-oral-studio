@@ -12,6 +12,7 @@ import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } from "@/components/ui/focus";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { isToComplete } from "./EngineBadge";
 
 const MAX_BULLETS = LIMITS.bullets;
@@ -63,6 +64,8 @@ export function SlideEditor({
     subtitle !== slide.subtitle ||
     notes !== slide.notes ||
     JSON.stringify(bullets.map((b) => b.text)) !== JSON.stringify(slide.bullets);
+  // Quitter la page (lien, « Précédent », rechargement) avec une diapo modifiée demande confirmation.
+  useUnsavedChanges(dirty);
   const full = bullets.length >= MAX_BULLETS;
 
   const ids = {

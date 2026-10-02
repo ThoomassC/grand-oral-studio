@@ -2,7 +2,7 @@
 
 import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useId, useRef } from "react";
+import { startTransition, useActionState, useId, useRef, useState } from "react";
 import type { ActionResult } from "@/server/actions/result";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -10,6 +10,7 @@ import { FieldError } from "@/components/ui/FieldError";
 import { TextInput } from "@/components/ui/Field";
 import { focusFirstInvalid } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { ProfileNameSchema, type ProfileNameInput } from "./schema";
 
 interface State {
@@ -29,6 +30,11 @@ export function ProfileNameForm({
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
+  // Champ non contrôlé : la saisie et le nom enregistré ne sont suivis que pour la garde
+  // « modifications non enregistrées » (`state.value` garde aussi une saisie refusée).
+  const [typed, setTyped] = useState(initialName);
+  const [savedName, setSavedName] = useState(initialName);
+  useUnsavedChanges(typed.trim() !== savedName.trim());
 
   const [state, submit, pending] = useActionState<State, FormData>(
     async (_prev, formData) => {
@@ -49,6 +55,7 @@ export function ProfileNameForm({
         if (firstError(fieldErrors, "name")) focusFirstInvalid(formRef.current);
         return { status: { kind: "error", message: result.error }, fieldErrors, value };
       }
+      setSavedName(result.data.name);
       router.refresh();
       return { status: { kind: "success", message: "Nom enregistré." }, fieldErrors: {}, value: result.data.name };
     },
@@ -77,6 +84,7 @@ export function ProfileNameForm({
           autoComplete="name"
           maxLength={80}
           defaultValue={state.value}
+          onChange={(e) => setTyped(e.target.value)}
           {...errorProps(state.fieldErrors, "name", `${id}-err`)}
         />
         <FieldError id={`${id}-err`} message={firstError(state.fieldErrors, "name")} />

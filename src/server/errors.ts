@@ -160,7 +160,7 @@ export class AiKeyRequiredError extends AppError {
   readonly code = "AI_KEY_REQUIRED" as const;
   readonly status = 422;
   constructor() {
-    super("Ajoutez votre clé API Anthropic dans Paramètres pour lancer une génération.");
+    super("Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.");
   }
 }
 
@@ -169,7 +169,7 @@ export class AiKeyRejectedError extends AppError {
   readonly code = "AI_KEY_REJECTED" as const;
   readonly status = 422;
   constructor(options?: { cause?: unknown }) {
-    super("Votre clé API Anthropic est refusée. Mettez-la à jour dans Paramètres.", options);
+    super("Votre clé API Anthropic est refusée. Mettez-la à jour dans la Configuration IA.", options);
   }
 }
 
@@ -179,7 +179,7 @@ export class AiCreditExhaustedError extends AppError {
   readonly status = 422;
   constructor(options?: { cause?: unknown }) {
     super(
-      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans Paramètres.",
+      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans la Configuration IA.",
       options,
     );
   }
@@ -188,7 +188,7 @@ export class AiCreditExhaustedError extends AppError {
 /**
  * Le moteur de rédaction choisi par l'utilisateur n'est pas utilisable (Ollama
  * non configuré, modèle non choisi…). Jamais de bascule silencieuse : le message
- * renvoie vers Paramètres.
+ * renvoie vers la Configuration IA.
  */
 export class EngineUnavailableError extends AppError {
   readonly code = "ENGINE_UNAVAILABLE" as const;
@@ -204,7 +204,7 @@ export class AiKeyUnreadableError extends AppError {
   readonly code = "AI_KEY_UNREADABLE" as const;
   readonly status = 503;
   constructor(options?: { cause?: unknown }) {
-    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans Paramètres.", options);
+    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans la Configuration IA.", options);
   }
 }
 
