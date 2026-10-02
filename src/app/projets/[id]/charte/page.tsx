@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BrandEditor } from "@/components/brand/BrandEditor";
+import { BrandWorkspace } from "@/components/brand/BrandWorkspace";
 import { loadProgram } from "../../_lib/load";
 
 export async function generateMetadata({ params }: PageProps<"/projets/[id]/charte">): Promise<Metadata> {
@@ -9,5 +9,5 @@ export async function generateMetadata({ params }: PageProps<"/projets/[id]/char
 
 export default async function BrandPage({ params }: PageProps<"/projets/[id]/charte">) {
   const program = await loadProgram((await params).id);
-  return <BrandEditor programId={program.id} initialBrand={program.brand} format={program.template.format} />;
+  return <BrandWorkspace programId={program.id} initialBrand={program.brand} format={program.template.format} />;
 }

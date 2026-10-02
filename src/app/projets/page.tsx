@@ -1,8 +1,8 @@
-import { ButtonLink } from "@/components/ui/ButtonLink";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateProgramForm } from "@/components/programs/CreateProgramForm";
 import { ProgramActions } from "@/components/programs/ProgramActions";
+import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
 import { formatDate, plural } from "@/components/ui/format";
 import { listPrograms } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -37,7 +37,7 @@ export default async function ProgramsPage() {
                 const neighbour = programs[i + 1] ?? programs[i - 1];
                 return (
                   <li key={p.id} className="opale-card opale-card--e1 flex flex-col gap-4 p-5 pt-7 sm:flex-row sm:items-start sm:justify-between sm:p-6 sm:pt-8">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-xl">
                         <Link
                           id={`programme-${p.id}`}
@@ -49,26 +49,18 @@ export default async function ProgramsPage() {
                       </h3>
                       {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 whitespace-nowrap">
                           <dt className="text-muted">Thèmes :</dt>
                           <dd className="num font-bold">{p.themeCount}</dd>
                         </div>
-                        <div className="flex gap-1">
-                          <dt className="text-muted">Squelettes générés :</dt>
-                          <dd className="num font-bold">
-                            {p.skeletonCount}/{p.themeCount}
-                          </dd>
-                        </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 whitespace-nowrap">
                           <dt className="text-muted">Modifié le</dt>
                           <dd>{formatDate(p.updatedAt)}</dd>
                         </div>
                       </dl>
                     </div>
                     <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                      <ButtonLink href={`/projets/${p.id}/jour-j`} variant="ghost" size="small">
-                        Commencer le Jour J<span className="sr-only"> pour {p.name}</span>
-                      </ButtonLink>
+                      <ProjectProgressSummary programId={p.id} programName={p.name} progress={p.progress} />
                       <ProgramActions
                         programId={p.id}
                         programName={p.name}

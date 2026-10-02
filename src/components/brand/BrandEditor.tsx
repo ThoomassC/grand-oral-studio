@@ -99,6 +99,7 @@ export function BrandEditor({
     setStatus(IDLE);
   }
 
+
   async function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
     setLogoError(null);
     const file = e.target.files?.[0];
@@ -174,7 +175,9 @@ export function BrandEditor({
 
       <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
-          <h2 className="text-2xl">Charte graphique</h2>
+          <h2 tabIndex={-1} className="text-2xl focus:outline-none">
+            Charte graphique
+          </h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
         </div>
 

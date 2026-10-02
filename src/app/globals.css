@@ -368,6 +368,228 @@
   }
 
   /*
+   * Fil d'étapes d'un projet (components/layout/ProjectSteps.tsx). Numéro dans
+   * une pastille (coche quand l'étape est faite, cadenas quand elle est
+   * bloquée, à toutes les largeurs), libellé, résumé ; étapes reliées par un
+   * trait. Courante : lavis et pastille au primaire ; faite : pastille cerclée
+   * et coche au vert « sur surface » (contraste ≥ 3:1 dans les deux thèmes).
+   * Jamais la couleur seule : coche, cadenas, graisse et texte masqué disent
+   * l'état.
+   */
+  /* Engrenage « Paramètres du projet », à côté du titre (ProjectSettingsMenu). */
+  .project-settings-trigger {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--opale-radius-sm);
+    background: transparent;
+    color: var(--opale-text-secondary);
+    cursor: pointer;
+    transition: background var(--opale-motion) var(--opale-ease), border-color var(--opale-motion) var(--opale-ease);
+  }
+  .project-settings-trigger:hover,
+  .project-settings-trigger[aria-expanded="true"] {
+    border-color: var(--opale-field-border);
+    background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
+    color: var(--opale-text);
+  }
+  .project-settings-trigger:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: var(--opale-focus-ring-offset);
+  }
+  .project-settings-trigger .opale-icon {
+    display: inline-grid;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+  }
+  .project-settings-trigger .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .project-steps {
+    /* Contient les textes `sr-only` (absolus) : sinon ils débordent de la page. */
+    position: relative;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--opale-space-md);
+    scrollbar-width: thin;
+  }
+  .project-steps__list {
+    display: flex;
+    min-width: max-content;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    margin: 0;
+    padding: 3px 0;
+    list-style: none;
+  }
+  .project-steps__item {
+    display: flex;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+  }
+  .project-steps__connector {
+    width: 1.25rem;
+    height: 2px;
+    flex: none;
+    border-radius: 1px;
+    background: var(--opale-field-border);
+  }
+  .project-steps__connector[data-done] {
+    background: var(--opale-success-on-surface);
+  }
+  /*
+   * Boîte d'une étape, courante ou non (même gabarit : rien ne saute quand on
+   * change d'étape) : marges internes généreuses pour que le titre respire.
+   * Sous 768 px, le fil compact ne montre que le libellé courant ; la boîte
+   * reste assez étroite pour tenir à 320 px (pastille + libellé + 2 numéros).
+   */
+  .project-step {
+    position: relative;
+    display: inline-flex;
+    min-height: 3.25rem;
+    align-items: center;
+    gap: var(--opale-space-sm);
+    padding: var(--opale-space-xs) var(--opale-space-lg) var(--opale-space-xs) var(--opale-space-sm);
+    border-radius: var(--opale-radius-md);
+    color: var(--opale-text-secondary);
+    text-decoration: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .project-step:hover {
+    background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
+    color: var(--opale-text);
+  }
+  .project-step:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: calc(-1 * var(--opale-focus-ring-width));
+  }
+  .project-step__dot {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    place-items: center;
+    border: 1.5px solid var(--opale-field-border);
+    border-radius: var(--opale-radius-pill);
+    background: var(--opale-surface);
+    color: var(--opale-text-secondary);
+    font-size: var(--opale-text-sm);
+    font-weight: 600;
+  }
+  /* `.opale-icon` porte sa taille (24 px, boîte de 40) et le primaire : ici, celles du texte. */
+  .project-step__dot .opale-icon,
+  .project-step__summary .opale-icon {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .project-step__dot .opale-icon {
+    font-size: 0.95rem;
+  }
+  .project-step__dot .opale-icon svg,
+  .project-step__summary .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+  .project-step__dot .opale-icon svg {
+    stroke-width: 2.5;
+  }
+  .project-step[data-state="done"] .project-step__dot {
+    border-color: var(--opale-success-on-surface);
+    color: var(--opale-success-on-surface);
+  }
+  .project-step[data-state="blocked"] .project-step__dot {
+    border-style: dashed;
+    color: var(--opale-warning-on-surface);
+  }
+  .project-step[aria-current="step"] {
+    background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step[aria-current="step"] .project-step__dot {
+    border-color: var(--opale-primary);
+    background: var(--opale-primary);
+    color: var(--opale-on-primary);
+  }
+  .project-step__text {
+    display: grid;
+    line-height: var(--opale-leading-snug);
+  }
+  .project-step__label {
+    color: var(--opale-text);
+    font-size: var(--opale-text-md);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  @media (max-width: 47.99rem) {
+    .project-step {
+      min-height: var(--opale-control-md);
+      gap: var(--opale-space-xs);
+      padding: var(--opale-space-xs) var(--opale-space-md) var(--opale-space-xs) var(--opale-space-xs);
+    }
+  }
+  .project-step[aria-current="step"] .project-step__label {
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step__summary {
+    display: inline-flex;
+    /* Trois étapes : la place permet le résumé complet (« 9 thèmes · charte et gabarit par défaut »). */
+    max-width: 20rem;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    overflow: hidden;
+    font-size: var(--opale-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .project-step__summary--blocked {
+    color: var(--opale-warning-on-surface);
+  }
+
+  /* Cadenas de « Étape suivante » bloquée (StepNav) : à la taille du texte du bouton. */
+  .step-nav__lock {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .step-nav__lock svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */
+  .opale-breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--opale-space-xs);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .project-step,
+    .project-settings-trigger {
+      transition: none;
+    }
+  }
+
+  /*
    * Sommaire des Paramètres (Sidebar d'Opale), sur le modèle du rail gauche de
    * la vitrine d'Opale : collé au bord gauche, fond de page, filet à droite,
    * sans carte. L'en-tête n'étant pas collant, le rail se colle en haut de la

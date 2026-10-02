@@ -189,6 +189,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
               <ConfirmAction
                 triggerId={`${baseId}-delete`}
                 triggerLabel="Supprimer ma clé"
+                title="Supprimer votre clé ?"
                 size="medium"
                 triggerDisabled={busy}
                 question={

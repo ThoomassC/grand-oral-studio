@@ -2,7 +2,7 @@
 
 import { SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useImperativeHandle, useRef, useState, useTransition, type Ref } from "react";
 import { defaultTemplate } from "@/domain/defaults";
 import { PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
 import { suggestSlideCount, totalSlides } from "@/domain/slides";
@@ -27,7 +27,25 @@ function toNumber(raw: string): number {
   return raw.trim() === "" ? Number.NaN : Number(raw);
 }
 
-export function TemplateEditor({ programId, initialTemplate }: { programId: string; initialTemplate: PromptTemplate }) {
+/** Pilotage de l'éditeur depuis l'import (« Appliquer au gabarit »). */
+export interface TemplateEditorHandle {
+  /**
+   * Remplit le formulaire avec un gabarit importé, SANS l'enregistrer : le
+   * formulaire devient « modifié » (garde de navigation) et le focus va au
+   * titre de l'éditeur.
+   */
+  applyImport(imported: PromptTemplate): void;
+}
+
+export function TemplateEditor({
+  programId,
+  initialTemplate,
+  ref,
+}: {
+  programId: string;
+  initialTemplate: PromptTemplate;
+  ref?: Ref<TemplateEditorHandle>;
+}) {
   const [saved, setSaved] = useState<PromptTemplate>(initialTemplate);
   const [template, setTemplate] = useState<PromptTemplate>(initialTemplate);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -36,6 +54,7 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
   const [pending, startTransition] = useTransition();
   const baseId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   const dirty = JSON.stringify(template) !== JSON.stringify(saved);
   useUnsavedChanges(dirty);
@@ -45,6 +64,17 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
   const suggested = durationOk ? suggestSlideCount(template.durationMinutes) : null;
   const gap = total !== null && suggested !== null && suggested > 0 ? (total - suggested) / suggested : 0;
   const tooFar = Math.abs(gap) > 0.3;
+
+  useImperativeHandle(ref, () => ({
+    applyImport(imported) {
+      setTemplate(imported);
+      setFieldErrors({});
+      setAnnounce("");
+      setStatus({ kind: "success", message: "Gabarit importé dans le formulaire : vérifiez puis enregistrez." });
+      // Après le rendu : l'aperçu d'import, au-dessus, disparaît dans le même lot et décalerait la page.
+      window.setTimeout(() => headingRef.current?.focus(), 0);
+    },
+  }));
 
   function patch(next: Partial<PromptTemplate>) {
     setTemplate((t) => ({ ...t, ...next }));
@@ -136,7 +166,9 @@ export function TemplateEditor({ programId, initialTemplate }: { programId: stri
     <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl">Gabarit de présentation</h2>
+          <h2 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
+            Gabarit de présentation
+          </h2>
           <p className="max-w-2xl text-sm text-muted">
             Structure imposée à l&apos;IA pour chaque diaporama : format, durée, sections dans l&apos;ordre et
             consignes.

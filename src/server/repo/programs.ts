@@ -1,5 +1,7 @@
+import { computeProjectProgress } from "@/domain/progress";
 import type { Brand, PromptTemplate } from "@/domain/schemas";
-import { db } from "../db/client";
+import { totalSlides } from "@/domain/slides";
+import { db, type Db } from "../db/client";
 import { NotFoundError } from "../errors";
 import type { ProgramMeta } from "../validation";
 import { brandJson, readBrand, readTemplate, specJson, templateJson, toDeckView, toThemeView } from "./mappers";
@@ -13,8 +15,13 @@ import type { ProgramDetail, ProgramSummary } from "./types";
 
 const LIST_LIMIT = 200;
 
-export async function listPrograms(userId: string): Promise<ProgramSummary[]> {
-  const rows = await db().program.findMany({
+/**
+ * Liste des projets avec leur avancement. Deux requêtes, quel que soit le nombre
+ * de projets : la liste (compteurs de thèmes et de squelettes agrégés), puis un
+ * GROUP BY des decks finaux pour ces projets. Pas de N+1.
+ */
+export async function listPrograms(userId: string, client: Db = db()): Promise<ProgramSummary[]> {
+  const rows = await client.program.findMany({
     where: ownedProgram(userId),
     orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
     take: LIST_LIMIT,
@@ -22,21 +29,43 @@ export async function listPrograms(userId: string): Promise<ProgramSummary[]> {
       id: true,
       name: true,
       description: true,
+      brandSavedAt: true,
+      templateSavedAt: true,
       createdAt: true,
       updatedAt: true,
       _count: { select: { themes: true, decks: { where: { kind: "SKELETON" } } } },
     },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    description: r.description,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    themeCount: r._count.themes,
-    // Un squelette au plus par thème (index unique partiel) : compter les decks SKELETON = compter les thèmes couverts.
-    skeletonCount: r._count.decks,
-  }));
+  if (rows.length === 0) return [];
+
+  // Les ids viennent de la requête filtrée par propriétaire : pas de fuite entre utilisateurs.
+  const finals = await client.deck.groupBy({
+    by: ["programId"],
+    where: { programId: { in: rows.map((r) => r.id) }, kind: "FINAL" },
+    _count: { _all: true },
+  });
+  const finalsByProgram = new Map(finals.map((f) => [f.programId, f._count._all]));
+
+  return rows.map((r) => {
+    const { doneCount, total, nextStep } = computeProjectProgress({
+      themeCount: r._count.themes,
+      brandSavedAt: r.brandSavedAt?.toISOString() ?? null,
+      templateSavedAt: r.templateSavedAt?.toISOString() ?? null,
+      skeletonCount: r._count.decks,
+      finalDeckCount: finalsByProgram.get(r.id) ?? 0,
+    });
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      themeCount: r._count.themes,
+      // Un squelette au plus par thème (index unique partiel) : compter les decks SKELETON = compter les thèmes couverts.
+      skeletonCount: r._count.decks,
+      progress: { doneCount, total, nextStep },
+    };
+  });
 }
 
 /** Programme avec ses thèmes ordonnés et le squelette de chaque thème (une seule requête). */
@@ -54,19 +83,59 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     },
   });
   if (!row) throw new NotFoundError("programme");
+  const template = readTemplate(row.template, row.id);
+  const themes = row.themes.map((t) => {
+    const skeleton = t.decks[0];
+    return { ...toThemeView(t), skeleton: skeleton ? toDeckView(skeleton) : null, finalDeckCount: t._count.decks };
+  });
+  const brandSavedAt = row.brandSavedAt?.toISOString() ?? null;
+  const templateSavedAt = row.templateSavedAt?.toISOString() ?? null;
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     brand: readBrand(row.brand, row.id),
-    template: readTemplate(row.template, row.id),
+    template,
+    brandSavedAt,
+    templateSavedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    themes: row.themes.map((t) => {
-      const skeleton = t.decks[0];
-      return { ...toThemeView(t), skeleton: skeleton ? toDeckView(skeleton) : null, finalDeckCount: t._count.decks };
+    themes,
+    progress: computeProjectProgress({
+      themeCount: themes.length,
+      brandSavedAt,
+      templateSavedAt,
+      skeletonCount: themes.filter((t) => t.skeleton !== null).length,
+      finalDeckCount: themes.reduce((sum, t) => sum + t.finalDeckCount, 0),
+      template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),
   };
+}
+
+/** Lève NotFoundError si le programme n'existe pas ou n'appartient pas à `userId` (lecture par clé primaire). */
+export async function assertProgramOwned(userId: string, programId: string): Promise<void> {
+  const row = await db().program.findFirst({ where: { id: programId, ...ownedProgram(userId) }, select: { id: true } });
+  if (!row) throw new NotFoundError("programme");
+}
+
+/** Gabarit enregistré d'un programme possédé par `userId` (base d'un import). */
+export async function getProgramTemplate(userId: string, programId: string): Promise<PromptTemplate> {
+  const row = await db().program.findFirst({
+    where: { id: programId, ...ownedProgram(userId) },
+    select: { id: true, template: true },
+  });
+  if (!row) throw new NotFoundError("programme");
+  return readTemplate(row.template, row.id);
+}
+
+/** Charte enregistrée d'un programme possédé par `userId` (base d'un import). */
+export async function getProgramBrand(userId: string, programId: string): Promise<Brand> {
+  const row = await db().program.findFirst({
+    where: { id: programId, ...ownedProgram(userId) },
+    select: { id: true, brand: true },
+  });
+  if (!row) throw new NotFoundError("programme");
+  return readBrand(row.brand, row.id);
 }
 
 export async function createProgram(
@@ -100,7 +169,8 @@ export async function updateBrand(userId: string, programId: string, brand: Bran
   await orNotFound(
     db().program.update({
       where: { id: programId, ...ownedProgram(userId) },
-      data: { brand: brandJson(brand) },
+      // Même horloge que updatedAt (@updatedAt est posé par le client Prisma).
+      data: { brand: brandJson(brand), brandSavedAt: new Date() },
       select: { id: true },
     }),
     "programme",
@@ -111,7 +181,7 @@ export async function updateTemplate(userId: string, programId: string, template
   await orNotFound(
     db().program.update({
       where: { id: programId, ...ownedProgram(userId) },
-      data: { template: templateJson(template) },
+      data: { template: templateJson(template), templateSavedAt: new Date() },
       select: { id: true },
     }),
     "programme",
@@ -152,6 +222,9 @@ export async function duplicateProgram(userId: string, programId: string): Promi
         // Revalidés : on ne recopie pas aveuglément un JSON qui aurait dérivé.
         brand: brandJson(readBrand(source.brand, source.id)),
         template: templateJson(readTemplate(source.template, source.id)),
+        // La copie reprend l'avancement de la source : charte et gabarit sont recopiés tels quels.
+        brandSavedAt: source.brandSavedAt,
+        templateSavedAt: source.templateSavedAt,
       },
       select: { id: true },
     });

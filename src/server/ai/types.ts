@@ -1,5 +1,8 @@
 import type { PromptPair, ThemeRef } from "@/domain/contracts";
-import type { Classification, DeckSpec, PromptTemplate } from "@/domain/schemas";
+import type { RawBrandDraft } from "@/domain/import/brand-from-draft";
+import type { RawTemplateDraft } from "@/domain/import/template-from-text";
+import type { RawThemePromptDraft } from "@/domain/import/themes-from-text";
+import type { Brand, Classification, DeckSpec, PromptTemplate } from "@/domain/schemas";
 
 /**
  * Indications structurées passées en plus du prompt. Le fournisseur réel les
@@ -22,10 +25,32 @@ export interface ClassifyHints {
   hintedThemeId?: string | null;
 }
 
+/** Document envoyé à la vision (contenu base64, type vérifié par signature en amont). */
+export interface BrandDocument {
+  kind: "pdf" | "png" | "jpeg";
+  base64: string;
+}
+
+export interface TemplateDraftHints {
+  text: string;
+  base: PromptTemplate;
+}
+
+export interface ThemePromptHints {
+  text: string;
+  brand: Brand;
+}
+
 export interface AiProvider {
   readonly name: string;
   /** Moteur, enregistré sur les decks produits (défaut côté service : "claude"). */
   readonly engine?: "claude" | "ollama" | "mock";
   generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec>;
   classify(prompt: PromptPair, hints?: ClassifyHints): Promise<Classification>;
+  /** Gabarit depuis des consignes : brouillon PERMISSIF (normalisé par l'appelant). Claude, Ollama, mock. */
+  draftTemplate?(prompt: PromptPair, hints: TemplateDraftHints): Promise<RawTemplateDraft>;
+  /** Thèmes et charte depuis un prompt libre : brouillon PERMISSIF (normalisé par l'appelant). Claude, Ollama, mock. */
+  draftThemes?(prompt: PromptPair, hints: ThemePromptHints): Promise<RawThemePromptDraft>;
+  /** Charte depuis un PDF ou une image (vision) : brouillon permissif. Claude et mock seulement. */
+  deduceBrand?(document: BrandDocument): Promise<RawBrandDraft>;
 }

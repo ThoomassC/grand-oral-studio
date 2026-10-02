@@ -85,9 +85,10 @@ export class RateLimitedError extends AppError {
     readonly retryAfterSeconds: number,
     /**
      * "user" : quota de l'utilisateur ; "global" : plafond de coût de toute
-     * l'application ; "verify" : vérifications de clé API.
+     * l'application ; "verify" : vérifications de clé API ; "import" : imports
+     * de charte ou de gabarit.
      */
-    readonly scope: "user" | "global" | "verify" = "user",
+    readonly scope: "user" | "global" | "verify" | "import" = "user",
   ) {
     const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
     super(
@@ -95,7 +96,9 @@ export class RateLimitedError extends AppError {
         ? `Le service de génération est très sollicité en ce moment. Réessayez dans ${minutes} min.`
         : scope === "verify"
           ? `Trop de vérifications de clé en peu de temps. Réessayez dans ${minutes} min.`
-          : `Trop de générations en peu de temps. Réessayez dans ${minutes} min.`,
+          : scope === "import"
+            ? `Trop d'imports en peu de temps. Réessayez dans ${minutes} min.`
+            : `Trop de générations en peu de temps. Réessayez dans ${minutes} min.`,
     );
   }
 }

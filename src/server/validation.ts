@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { stripControlChars } from "@/domain/schemas";
+import { stripControlChars, ThemeInputSchema } from "@/domain/schemas";
 import { DataIntegrityError, ValidationError } from "./errors";
 
 // Messages d'erreur zod en français pour tout le serveur.
@@ -93,6 +93,14 @@ export const ThemeImportTextSchema = z
   .refine((s) => Buffer.byteLength(s, "utf8") <= THEME_IMPORT_MAX_BYTES, {
     message: `Le texte importé dépasse ${THEME_IMPORT_MAX_BYTES / 1024} Ko.`,
   });
+
+/** Liste de thèmes à ajouter (proposition d'une analyse de prompt, relue par l'utilisateur). */
+export const ThemeListImportSchema = z.object({
+  themes: z
+    .array(ThemeInputSchema)
+    .min(1, "Aucun thème à ajouter.")
+    .max(MAX_THEMES_PER_PROGRAM, `${MAX_THEMES_PER_PROGRAM} thèmes au plus.`),
+});
 
 export const ThemeIdListSchema = z.array(IdSchema).min(1).max(MAX_THEMES_PER_PROGRAM);
 

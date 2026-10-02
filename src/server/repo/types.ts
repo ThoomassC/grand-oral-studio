@@ -1,5 +1,6 @@
 import type { ThemeRef } from "@/domain/contracts";
 import type { Brand, DeckSpec, PromptTemplate } from "@/domain/schemas";
+import type { ProjectProgress, ProjectProgressSummary } from "@/domain/progress";
 import type { DeckKind } from "../db/generated/prisma/enums";
 
 /**
@@ -18,6 +19,8 @@ export interface ProgramSummary {
   skeletonCount: number;
   createdAt: Date;
   updatedAt: Date;
+  /** Avancement du parcours en 5 étapes (résumé, sans le détail des étapes). */
+  progress: ProjectProgressSummary;
 }
 
 /** Moteur qui a produit un deck ("free" : généré sans IA, à compléter). */
@@ -53,9 +56,14 @@ export interface ProgramDetail {
   description: string;
   brand: Brand;
   template: PromptTemplate;
+  /** Dernier enregistrement de la charte (ISO) ; null = charte par défaut jamais enregistrée. */
+  brandSavedAt: string | null;
+  templateSavedAt: string | null;
   createdAt: Date;
   updatedAt: Date;
   themes: ThemeWithSkeleton[];
+  /** Parcours en 5 étapes : thèmes, charte, gabarit, squelettes, jour J. */
+  progress: ProjectProgress;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ProgramMetaForm } from "@/components/programs/ProgramMetaForm";
+import { SubjectImport } from "@/components/themes/SubjectImport";
 import { ThemeManager, type ThemeItem } from "@/components/themes/ThemeManager";
 import { loadProgram } from "../_lib/load";
 
@@ -20,8 +20,12 @@ export default async function ThemesPage({ params }: PageProps<"/projets/[id]">)
   }));
 
   return (
-    <div className="flex flex-col gap-6">
-      <ProgramMetaForm programId={program.id} name={program.name} description={program.description} />
+    <div className="flex flex-col gap-8">
+      <SubjectImport
+        programId={program.id}
+        currentBrand={{ logoDataUrl: program.brand.logoDataUrl }}
+        format={program.template.format}
+      />
       <ThemeManager programId={program.id} themes={themes} />
     </div>
   );

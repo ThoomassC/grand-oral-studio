@@ -1,39 +1,56 @@
-import Link from "next/link";
-import { ProgramTabs } from "@/components/layout/ProgramTabs";
-import { ReadinessMeter } from "@/components/layout/ReadinessMeter";
-import { UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
-import { loadProgram, skeletonCount } from "../_lib/load";
+import { Meter } from "@/components/ui/Meter";
+import { ProjectSettingsMenu } from "@/components/programs/ProjectSettingsMenu";
+import { ProjectSteps } from "@/components/layout/ProjectSteps";
+import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
+import { PrepareNav } from "@/components/projects/PrepareNav";
+import { StepBlockedNotice, StepNav } from "@/components/projects/StepNav";
+import { loadProgram } from "../_lib/load";
 
-export default async function ProgramLayout({ children, params }: LayoutProps<"/projets/[id]">) {
+/**
+ * En-tête commun des pages d'un projet : fil d'Ariane (slot `@crumbs`, qui
+ * connaît le deck ouvert), titre, avancement, fil d'étapes ; puis la
+ * confirmation unique « modifications non enregistrées » et la page.
+ */
+export default async function ProgramLayout({ children, crumbs, params }: LayoutProps<"/projets/[id]">) {
   const { id } = await params;
   const program = await loadProgram(id);
-  const total = program.themes.length;
-  const ready = skeletonCount(program);
-  const readiness =
-    total === 0 ? "Aucun thème" : `${ready}/${total} squelette${ready > 1 ? "s" : ""} généré${ready > 1 ? "s" : ""}`;
+  const { steps, prepare, doneCount, total } = program.progress;
+  const deckCount = program.themes.reduce((n, t) => n + t.finalDeckCount, 0);
+  const label = `${doneCount}/${total} étapes`;
 
   return (
     <UnsavedChangesProvider>
       <div className="flex flex-1 flex-col">
         <div className="border-b border-border bg-surface">
-          <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
-            <p className="text-sm">
-              <Link href="/projets" className="opale-link">
-                Projets
-              </Link>
-            </p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <h1 className="line-clamp-2 min-w-0 text-2xl break-words sm:text-3xl" title={program.name}>
-                {program.name}
-              </h1>
-              <ReadinessMeter ready={ready} total={total} label={readiness} programId={program.id} />
+          <div className="mx-auto w-full max-w-6xl px-4 pt-3 pb-3 sm:px-6 sm:pt-4">
+            {crumbs}
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex min-w-0 items-start gap-1.5">
+                <h1 className="line-clamp-2 min-w-0 text-2xl break-words sm:text-3xl" title={program.name}>
+                  {program.name}
+                </h1>
+                <ProjectSettingsMenu programId={program.id} name={program.name} description={program.description} />
+              </div>
+              <div className="w-full shrink-0 sm:w-64">
+                <p className="text-sm font-semibold">
+                  <span className="font-normal text-muted">Préparation : </span>
+                  <span className="num">{label}</span>
+                </p>
+                <Meter className="mt-1.5" value={doneCount} max={total} label="Étapes faites" valueText={label} />
+              </div>
             </div>
             <div className="mt-4">
-              <ProgramTabs programId={program.id} />
+              <ProjectSteps programId={program.id} steps={steps} deckCount={deckCount} />
             </div>
           </div>
         </div>
-        <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</div>
+        <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
+          <UnsavedChangesBanner />
+          <StepBlockedNotice programId={program.id} steps={steps} />
+          <PrepareNav programId={program.id} items={prepare} />
+          {children}
+          <StepNav programId={program.id} prepare={prepare} steps={steps} />
+        </div>
       </div>
     </UnsavedChangesProvider>
   );

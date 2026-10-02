@@ -1,5 +1,4 @@
 import { Feedback } from "@thomascaron/opale-ui";
-import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
 import { EngineBadge } from "@/components/decks/EngineBadge";
@@ -31,12 +30,7 @@ export async function DeckPageContent({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-sm">
-          <Link href={backHref} className="opale-link">
-            {isSkeleton ? "Retour aux squelettes" : "Retour aux decks"}
-          </Link>
-        </p>
-        <p className="eyebrow mt-4 text-accent-strong">
+        <p className="eyebrow text-accent-strong">
           {isSkeleton ? "Squelette" : "Deck final"} · {deck.themeName}
         </p>
         <h2

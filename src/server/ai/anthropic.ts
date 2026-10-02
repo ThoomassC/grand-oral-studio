@@ -1,6 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import type { BetaMessage, MessageCreateParamsBase } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type {
+  BetaContentBlockParam,
+  BetaMessage,
+  MessageCreateParamsBase,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import { RawBrandDraftSchema, type RawBrandDraft } from "@/domain/import/brand-from-draft";
+import { buildBrandVisionPrompt } from "@/domain/import/prompts";
+import { RawTemplateDraftSchema, type RawTemplateDraft } from "@/domain/import/template-from-text";
+import { RawThemePromptDraftSchema, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
 import type { z } from "zod";
 import type { PromptPair } from "@/domain/contracts";
 import {
@@ -22,7 +30,7 @@ import { createLogger } from "../logger";
 import { createAnthropicClient } from "./anthropic-client";
 import { DEFAULT_MODEL } from "./model";
 import { parseStructured, strict } from "./structured";
-import type { AiProvider, DeckHints } from "./types";
+import type { AiProvider, BrandDocument, DeckHints } from "./types";
 
 /**
  * Fournisseur Anthropic.
@@ -73,6 +81,16 @@ function jsonFormat(schema: z.ZodType) {
 
 const DECK_FORMAT = jsonFormat(RawDeckSpecSchema);
 const CLASSIFY_FORMAT = jsonFormat(RawClassificationSchema);
+const TEMPLATE_FORMAT = jsonFormat(RawTemplateDraftSchema);
+const BRAND_FORMAT = jsonFormat(RawBrandDraftSchema);
+const THEMES_FORMAT = jsonFormat(RawThemePromptDraftSchema);
+
+const DRAFT_BUDGET_MS = 60_000;
+const DRAFT_MAX_TOKENS = 4_000;
+/** 60 thèmes avec description et mots-clés, plus la charte. */
+const THEMES_MAX_TOKENS = 8_000;
+const VISION_BUDGET_MS = 90_000;
+const VISION_MAX_TOKENS = 2_000;
 
 export interface AnthropicProviderOptions {
   apiKey: string;
@@ -89,7 +107,7 @@ export interface AnthropicProviderOptions {
   keySource?: "user" | "server";
 }
 
-type Operation = "generateDeck" | "classify";
+type Operation = "generateDeck" | "classify" | "draftTemplate" | "draftThemes" | "deduceBrand";
 
 export function createAnthropicProvider(options: AnthropicProviderOptions): AiProvider {
   const model = options.model || DEFAULT_MODEL;
@@ -142,6 +160,41 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
       );
       const raw = interpret("generateDeck", message, RawDeckSpecSchema);
       return strict("generateDeck", DeckSpecSchema, normalizeDeckSpec(raw));
+    },
+
+    async draftTemplate(prompt: PromptPair): Promise<RawTemplateDraft> {
+      const params = baseParams(prompt, DRAFT_MAX_TOKENS, "low", TEMPLATE_FORMAT);
+      const message = await run("draftTemplate", DRAFT_BUDGET_MS, (signal) =>
+        client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: DRAFT_BUDGET_MS }),
+      );
+      return interpret("draftTemplate", message, RawTemplateDraftSchema);
+    },
+
+    async draftThemes(prompt: PromptPair): Promise<RawThemePromptDraft> {
+      const params = baseParams(prompt, THEMES_MAX_TOKENS, "low", THEMES_FORMAT);
+      const message = await run("draftThemes", DRAFT_BUDGET_MS, (signal) =>
+        client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: DRAFT_BUDGET_MS }),
+      );
+      return interpret("draftThemes", message, RawThemePromptDraftSchema);
+    },
+
+    async deduceBrand(document: BrandDocument): Promise<RawBrandDraft> {
+      const prompt = buildBrandVisionPrompt();
+      const attachment: BetaContentBlockParam =
+        document.kind === "pdf"
+          ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: document.base64 } }
+          : {
+              type: "image",
+              source: { type: "base64", media_type: document.kind === "png" ? "image/png" : "image/jpeg", data: document.base64 },
+            };
+      const params = {
+        ...baseParams(prompt, VISION_MAX_TOKENS, "low", BRAND_FORMAT),
+        messages: [{ role: "user" as const, content: [attachment, { type: "text" as const, text: prompt.user }] }],
+      } satisfies MessageCreateParamsBase;
+      const message = await run("deduceBrand", VISION_BUDGET_MS, (signal) =>
+        client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 0, timeout: VISION_BUDGET_MS }),
+      );
+      return interpret("deduceBrand", message, RawBrandDraftSchema);
     },
 
     async classify(prompt: PromptPair): Promise<Classification> {

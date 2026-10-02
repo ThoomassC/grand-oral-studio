@@ -23,6 +23,7 @@ export function DeleteDeckButton({
     <ConfirmAction
       triggerLabel="Supprimer"
       triggerAccessibleLabel={`Supprimer le deck ${label}`}
+      title="Supprimer le deck ?"
       question={`Supprimer le deck « ${label} » ? Cette action est définitive.`}
       confirmLabel="Supprimer le deck"
       onConfirm={async () => {
