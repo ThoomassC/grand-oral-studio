@@ -8,6 +8,7 @@ import type {
 import { RawBrandDraftSchema, type RawBrandDraft } from "@/domain/import/brand-from-draft";
 import { buildBrandVisionPrompt } from "@/domain/import/prompts";
 import { RawTemplateDraftSchema, type RawTemplateDraft } from "@/domain/import/template-from-text";
+import { RawThemePromptDraftSchema, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
 import type { z } from "zod";
 import type { PromptPair } from "@/domain/contracts";
 import {
@@ -82,9 +83,12 @@ const DECK_FORMAT = jsonFormat(RawDeckSpecSchema);
 const CLASSIFY_FORMAT = jsonFormat(RawClassificationSchema);
 const TEMPLATE_FORMAT = jsonFormat(RawTemplateDraftSchema);
 const BRAND_FORMAT = jsonFormat(RawBrandDraftSchema);
+const THEMES_FORMAT = jsonFormat(RawThemePromptDraftSchema);
 
 const DRAFT_BUDGET_MS = 60_000;
 const DRAFT_MAX_TOKENS = 4_000;
+/** 60 thèmes avec description et mots-clés, plus la charte. */
+const THEMES_MAX_TOKENS = 8_000;
 const VISION_BUDGET_MS = 90_000;
 const VISION_MAX_TOKENS = 2_000;
 
@@ -103,7 +107,7 @@ export interface AnthropicProviderOptions {
   keySource?: "user" | "server";
 }
 
-type Operation = "generateDeck" | "classify" | "draftTemplate" | "deduceBrand";
+type Operation = "generateDeck" | "classify" | "draftTemplate" | "draftThemes" | "deduceBrand";
 
 export function createAnthropicProvider(options: AnthropicProviderOptions): AiProvider {
   const model = options.model || DEFAULT_MODEL;
@@ -164,6 +168,14 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
         client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: DRAFT_BUDGET_MS }),
       );
       return interpret("draftTemplate", message, RawTemplateDraftSchema);
+    },
+
+    async draftThemes(prompt: PromptPair): Promise<RawThemePromptDraft> {
+      const params = baseParams(prompt, THEMES_MAX_TOKENS, "low", THEMES_FORMAT);
+      const message = await run("draftThemes", DRAFT_BUDGET_MS, (signal) =>
+        client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: DRAFT_BUDGET_MS }),
+      );
+      return interpret("draftThemes", message, RawThemePromptDraftSchema);
     },
 
     async deduceBrand(document: BrandDocument): Promise<RawBrandDraft> {

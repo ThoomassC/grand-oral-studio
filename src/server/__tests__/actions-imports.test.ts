@@ -13,13 +13,14 @@ vi.mock("@/server/session", () => ({
 const getEngineForUser = vi.fn(async () => ({ engine: "free" as const }));
 vi.mock("@/server/ai", () => ({ getEngineForUser: () => getEngineForUser() }));
 
-const service = { analyzeBrandFile: vi.fn(), analyzeTemplatePrompt: vi.fn() };
+const service = { analyzeBrandFile: vi.fn(), analyzeTemplatePrompt: vi.fn(), analyzeThemePrompt: vi.fn() };
 vi.mock("@/server/services/imports", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/services/imports")>();
   return {
     ...actual,
     analyzeBrandFile: (...args: unknown[]) => service.analyzeBrandFile(...args),
     analyzeTemplatePrompt: (...args: unknown[]) => service.analyzeTemplatePrompt(...args),
+    analyzeThemePrompt: (...args: unknown[]) => service.analyzeThemePrompt(...args),
   };
 });
 
@@ -28,6 +29,7 @@ const actions = await import("@/server/actions/imports");
 beforeEach(() => {
   service.analyzeBrandFile.mockReset();
   service.analyzeTemplatePrompt.mockReset();
+  service.analyzeThemePrompt.mockReset();
   getEngineForUser.mockClear();
 });
 
@@ -102,5 +104,40 @@ describe("action analyzeTemplatePrompt", () => {
   it("devrait accepter exactement 20 000 caractères", async () => {
     service.analyzeTemplatePrompt.mockResolvedValue({ template: {}, found: [], source: "free", fallbackReason: null });
     expect((await actions.analyzeTemplatePrompt("prog-1", { text: "a".repeat(20_000) })).ok).toBe(true);
+  });
+});
+
+describe("action analyzeThemePrompt", () => {
+  const empty = { themes: [], brand: null, brandNotes: [], found: [], source: "free", fallbackReason: null };
+
+  it("devrait transmettre le texte validé à l'utilisateur de la session", async () => {
+    service.analyzeThemePrompt.mockResolvedValue(empty);
+    const result = await actions.analyzeThemePrompt("prog-1", { text: "1. Inflation" });
+    expect(result).toEqual({ ok: true, data: empty });
+    expect(service.analyzeThemePrompt.mock.calls[0]!.slice(0, 3)).toEqual(["user-1", "prog-1", { text: "1. Inflation" }]);
+    expect(getEngineForUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["vide", { text: "   " }],
+    ["trop long", { text: "a".repeat(20_001) }],
+    ["mal formé", { text: 42 } as unknown as { text: string }],
+    ["absent", undefined as unknown as { text: string }],
+  ])("devrait refuser un texte %s sans appeler le service", async (_label, input) => {
+    const result = await actions.analyzeThemePrompt("prog-1", input);
+    expect(result.ok).toBe(false);
+    expect(service.analyzeThemePrompt).not.toHaveBeenCalled();
+  });
+
+  it("devrait refuser un identifiant de projet invalide", async () => {
+    expect((await actions.analyzeThemePrompt("../x", { text: "a" })).ok).toBe(false);
+    expect(service.analyzeThemePrompt).not.toHaveBeenCalled();
+  });
+
+  it("ne devrait jamais renvoyer le message brut d'une panne", async () => {
+    service.analyzeThemePrompt.mockRejectedValue(new Error("ECONNRESET db secret"));
+    const result = await actions.analyzeThemePrompt("prog-1", { text: "a" });
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("secret");
   });
 });

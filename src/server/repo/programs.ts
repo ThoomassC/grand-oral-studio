@@ -128,6 +128,16 @@ export async function getProgramTemplate(userId: string, programId: string): Pro
   return readTemplate(row.template, row.id);
 }
 
+/** Charte enregistrée d'un programme possédé par `userId` (base d'un import). */
+export async function getProgramBrand(userId: string, programId: string): Promise<Brand> {
+  const row = await db().program.findFirst({
+    where: { id: programId, ...ownedProgram(userId) },
+    select: { id: true, brand: true },
+  });
+  if (!row) throw new NotFoundError("programme");
+  return readBrand(row.brand, row.id);
+}
+
 export async function createProgram(
   userId: string,
   input: ProgramMeta & { brand: Brand; template: PromptTemplate },

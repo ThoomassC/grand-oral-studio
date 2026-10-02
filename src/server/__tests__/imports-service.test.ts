@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultTemplate } from "@/domain/defaults";
+import { defaultBrand, defaultTemplate } from "@/domain/defaults";
 import type { PromptTemplate } from "@/domain/schemas";
 import { buildPptx, buildThmx, FAKE_PDF, JPEG_HEADER, PNG_1PX } from "@/domain/import/__tests__/fixtures";
 import type { ResolvedEngine } from "@/server/ai";
@@ -44,6 +44,10 @@ function fakeRepo(owner = "user-a", template: PromptTemplate = defaultTemplate()
     async getProgramTemplate(userId) {
       if (userId !== owner) throw new NotFoundError("programme");
       return template;
+    },
+    async getProgramBrand(userId) {
+      if (userId !== owner) throw new NotFoundError("programme");
+      return defaultBrand();
     },
   };
 }

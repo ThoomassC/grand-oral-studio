@@ -4,15 +4,16 @@ import { brandFromTheme } from "@/domain/import/brand-from-theme";
 import { ImportFileError } from "@/domain/import/errors";
 import { detectImportFile, isOfficeKind, type ImportFileKind } from "@/domain/import/file-kind";
 import { extractOfficeTheme } from "@/domain/import/office-theme";
-import { buildTemplateDraftPrompt } from "@/domain/import/prompts";
+import { buildTemplateDraftPrompt, buildThemePromptDraftPrompt } from "@/domain/import/prompts";
 import { normalizeTemplateDraft, parseTemplateText, type TemplateImport } from "@/domain/import/template-from-text";
+import { normalizeThemePromptDraft, parseThemePromptText, type ThemePromptImport } from "@/domain/import/themes-from-text";
 import { PromptTemplateSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import type { ResolvedEngine } from "../ai";
 import type { BrandDocument } from "../ai/types";
 import { AiInvalidOutputError, AiUnavailableError, isAppError, ValidationError, type AppError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeAiQuotaFor, consumeImportQuota, refundAiQuotaFor, type AiBilling } from "../rate-limit";
-import { assertProgramOwned, getProgramTemplate } from "../repo/programs";
+import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo/programs";
 
 /**
  * Imports de l'étape 1 d'un projet — logique métier sans Next ni HTTP.
@@ -56,6 +57,16 @@ export const TemplatePromptInputSchema = z.object({
 });
 export type TemplatePromptInput = z.output<typeof TemplatePromptInputSchema>;
 
+export const THEME_PROMPT_MAX_CHARS = 20_000;
+
+export const ThemePromptInputSchema = z.object({
+  text: z
+    .string({ message: "Collez le texte décrivant votre oral." })
+    .max(THEME_PROMPT_MAX_CHARS, { message: `Le texte ne doit pas dépasser ${THEME_PROMPT_MAX_CHARS} caractères.` })
+    .refine((s) => s.trim().length > 0, { message: "Collez le texte décrivant votre oral." }),
+});
+export type ThemePromptInput = z.output<typeof ThemePromptInputSchema>;
+
 /** Fichier à analyser : la taille est connue AVANT la lecture des octets. */
 export interface ImportFile {
   name: string;
@@ -76,6 +87,11 @@ export interface TemplateImportResult {
   fallbackReason: string | null;
 }
 
+export interface ThemePromptResult extends ThemePromptImport {
+  source: "ai" | "free";
+  fallbackReason: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Dépendances injectables
 // ---------------------------------------------------------------------------
@@ -83,6 +99,7 @@ export interface TemplateImportResult {
 export interface ImportsRepo {
   assertProgramOwned(userId: string, programId: string): Promise<void>;
   getProgramTemplate(userId: string, programId: string): Promise<PromptTemplate>;
+  getProgramBrand(userId: string, programId: string): Promise<Brand>;
 }
 
 export interface ImportsQuotas {
@@ -99,7 +116,7 @@ export interface ImportsDeps {
   quotas?: ImportsQuotas;
 }
 
-const defaultRepo: ImportsRepo = { assertProgramOwned, getProgramTemplate };
+const defaultRepo: ImportsRepo = { assertProgramOwned, getProgramTemplate, getProgramBrand };
 
 const defaultQuotas: ImportsQuotas = {
   consumeImport: (userId) => consumeImportQuota(userId),
@@ -240,6 +257,68 @@ export async function analyzeTemplatePrompt(
     // Un bug de code ou une panne de base n'est pas une défaillance de l'IA : pas de maquillage en repli.
     if (!isAppError(error)) throw error;
     deps.log.warn("import.template_fallback_free", { code: error.code });
+    return free(fallbackReasonOf(error));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// (C) Thèmes et charte depuis un prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Thèmes ET charte proposés à partir d'un texte libre décrivant l'oral. Même
+ * ordre et mêmes replis que `analyzeTemplatePrompt` : autorisation (lecture de
+ * la charte actuelle filtrée par propriétaire), quota d'import, puis IA facturée
+ * ou analyse gratuite. Rien n'est écrit ; le texte n'est jamais journalisé.
+ */
+export async function analyzeThemePrompt(
+  userId: string,
+  programId: string,
+  input: ThemePromptInput,
+  deps: ImportsDeps,
+): Promise<ThemePromptResult> {
+  const repo = deps.repo ?? defaultRepo;
+  const quotas = deps.quotas ?? defaultQuotas;
+
+  const currentBrand = await repo.getProgramBrand(userId, programId);
+  await quotas.consumeImport(userId);
+
+  const free = (fallbackReason: string | null): ThemePromptResult => {
+    const result = parseThemePromptText(input.text, currentBrand);
+    deps.log.info("import.themes_free", { themes: result.themes.length, brand: result.brand !== null, fallback: fallbackReason !== null });
+    return { ...result, source: "free", fallbackReason };
+  };
+
+  let engine: ResolvedEngine;
+  try {
+    engine = await deps.resolveEngine();
+  } catch (error) {
+    if (!isAppError(error)) throw error;
+    deps.log.warn("import.themes_engine_unavailable", { code: error.code });
+    return free(error.userMessage);
+  }
+  if (engine.engine === "free") return free(null);
+
+  const draft = engine.provider.draftThemes?.bind(engine.provider);
+  if (!draft) return free("Ce moteur ne sait pas analyser ce texte.");
+  try {
+    const prompt = buildThemePromptDraftPrompt(input.text);
+    const raw = await billed(userId, engine.billing, quotas, deps.log, () => draft(prompt, { text: input.text, brand: currentBrand }));
+    const normalized = normalizeThemePromptDraft(raw, currentBrand);
+    if (normalized.themes.length === 0 && normalized.brand === null) {
+      throw new AiInvalidOutputError("draftThemes: aucun élément repris");
+    }
+    deps.log.info("import.themes_ai", {
+      engine: engine.engine,
+      themes: normalized.themes.length,
+      brand: normalized.brand !== null,
+      notes: normalized.brandNotes.length,
+    });
+    return { ...normalized, source: "ai", fallbackReason: null };
+  } catch (error) {
+    // Un bug de code ou une panne de base n'est pas une défaillance de l'IA : pas de maquillage en repli.
+    if (!isAppError(error)) throw error;
+    deps.log.warn("import.themes_fallback_free", { code: error.code });
     return free(fallbackReasonOf(error));
   }
 }

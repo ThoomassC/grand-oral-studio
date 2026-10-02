@@ -1,4 +1,5 @@
 import { ThemeInputSchema, type ThemeInput } from "@/domain/schemas";
+import { splitKeywords, themeNameKey } from "@/domain/theme-name";
 import { THEME_IMPORT_MAX_LINES } from "./validation";
 
 /**
@@ -10,6 +11,8 @@ import { THEME_IMPORT_MAX_LINES } from "./validation";
  * et aux accents) au sein de l'import sont signalés en erreur.
  */
 
+export { themeNameKey };
+
 export interface ThemeImportLineError {
   /** Numéro de ligne (1-based) dans le texte d'origine. */
   line: number;
@@ -19,30 +22,6 @@ export interface ThemeImportLineError {
 export type ThemeImportParseResult =
   | { ok: true; themes: ThemeInput[] }
   | { ok: false; errors: ThemeImportLineError[] };
-
-/** Clé de comparaison de noms : minuscules, sans accents, espaces normalisés. */
-export function themeNameKey(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function splitKeywords(raw: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of raw.split(/[,;]/)) {
-    const kw = part.trim();
-    if (!kw) continue;
-    const key = themeNameKey(kw);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(kw);
-  }
-  return out;
-}
 
 export function parseThemeImport(text: string): ThemeImportParseResult {
   const errors: ThemeImportLineError[] = [];

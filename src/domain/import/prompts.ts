@@ -45,3 +45,20 @@ export function buildBrandVisionPrompt(): PromptPair {
   ].join("\n\n");
   return { system, user: "Extract the brand guidelines from the attached document." };
 }
+
+export function buildThemePromptDraftPrompt(text: string): PromptPair {
+  const system = [
+    "You read a free-form description of an oral presentation project (written by a student or a teacher, in French or " +
+      "English) and extract two things: the list of themes (topics) it mentions, and the visual identity it describes.",
+    "Reply only with a JSON object that conforms to the provided schema: themes (ordered list of { name, description, " +
+      "keywords }) and, only if the text describes colours or fonts, brand { colors { primary, secondary, accent, " +
+      "background, text }, fonts { heading, body } }.",
+    "A theme name is short (120 characters max) and keeps the wording and language of the text; description summarises " +
+      "what the text says about that theme (omit it otherwise); keywords are a few significant words (at most 10). At most " +
+      "60 themes, without duplicates. Colours are #RRGGBB hex codes, or the colour name as written when no code is given. " +
+      "Fonts are font family names as written. Omit any field the text does not state; never invent a theme or a colour.",
+    DATA_RULE,
+  ].join("\n\n");
+  const user = `<oral>\n${neutralize(text.trim())}\n</oral>`;
+  return { system, user };
+}

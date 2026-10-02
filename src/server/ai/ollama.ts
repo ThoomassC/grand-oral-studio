@@ -7,6 +7,7 @@ import {
   RawDeckSpecSchema,
 } from "@/domain/normalize";
 import { RawTemplateDraftSchema, type RawTemplateDraft } from "@/domain/import/template-from-text";
+import { RawThemePromptDraftSchema, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
 import { ClassificationSchema, DeckSpecSchema, type Classification, type DeckSpec } from "@/domain/schemas";
 import { AiInvalidOutputError, AiUnavailableError } from "../errors";
 import { createSemaphore, SemaphoreTimeoutError, type Semaphore } from "../concurrency";
@@ -45,9 +46,11 @@ const log = createLogger({ component: "ai.ollama" });
 const DECK_SCHEMA = z.toJSONSchema(RawDeckSpecSchema, { io: "input", unrepresentable: "any" });
 const CLASSIFY_SCHEMA = z.toJSONSchema(RawClassificationSchema, { io: "input", unrepresentable: "any" });
 const TEMPLATE_SCHEMA = z.toJSONSchema(RawTemplateDraftSchema, { io: "input", unrepresentable: "any" });
+const THEMES_SCHEMA = z.toJSONSchema(RawThemePromptDraftSchema, { io: "input", unrepresentable: "any" });
 /** Brouillon de gabarit : court, mais un modèle local est lent. */
 const DRAFT_TIMEOUT_MS = 120_000;
 const DRAFT_MAX_TOKENS = 3_000;
+const THEMES_MAX_TOKENS = 6_000;
 
 const ChatResponseSchema = z.object({
   message: z.object({ content: z.string() }),
@@ -254,6 +257,11 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     async draftTemplate(prompt: PromptPair): Promise<RawTemplateDraft> {
       const text = await chat("draftTemplate", prompt, TEMPLATE_SCHEMA, DRAFT_MAX_TOKENS, DRAFT_TIMEOUT_MS);
       return parseStructured("draftTemplate", text, RawTemplateDraftSchema);
+    },
+
+    async draftThemes(prompt: PromptPair): Promise<RawThemePromptDraft> {
+      const text = await chat("draftThemes", prompt, THEMES_SCHEMA, THEMES_MAX_TOKENS, DRAFT_TIMEOUT_MS);
+      return parseStructured("draftThemes", text, RawThemePromptDraftSchema);
     },
 
     async classify(prompt: PromptPair): Promise<Classification> {

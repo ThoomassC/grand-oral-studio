@@ -11,7 +11,8 @@ import {
 import { AiInvalidOutputError } from "../errors";
 import type { RawBrandDraft } from "@/domain/import/brand-from-draft";
 import { parseTemplateText, type RawTemplateDraft } from "@/domain/import/template-from-text";
-import type { AiProvider, ClassifyHints, DeckHints, TemplateDraftHints } from "./types";
+import { parseThemePromptText, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
+import type { AiProvider, ClassifyHints, DeckHints, TemplateDraftHints, ThemePromptHints } from "./types";
 
 /**
  * Fournisseur déterministe, sans réseau : même entrée → même sortie. Sert au dev
@@ -162,6 +163,11 @@ export function createMockProvider(): AiProvider {
       // Déterministe : les heuristiques du moteur gratuit, présentées comme un brouillon d'IA.
       const { template } = parseTemplateText(hints.text, hints.base);
       return { ...template };
+    },
+    async draftThemes(_prompt: PromptPair, hints: ThemePromptHints): Promise<RawThemePromptDraft> {
+      // Déterministe : les heuristiques du moteur gratuit, présentées comme un brouillon d'IA.
+      const { themes, brand } = parseThemePromptText(hints.text, hints.brand);
+      return { themes, ...(brand ? { brand: { colors: { ...brand.colors }, fonts: { ...brand.fonts } } } : {}) };
     },
     async deduceBrand(): Promise<RawBrandDraft> {
       return {
