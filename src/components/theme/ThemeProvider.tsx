@@ -8,7 +8,7 @@ const ThemeContext = createContext<UseOpaleThemeResult | null>(null);
 
 /**
  * L'unique appel à `useOpaleTheme` (Opale : « un seul appel par cible »),
- * partagé par le bouton de l'en-tête et la page Paramètres.
+ * partagé par le bouton de l'en-tête et le panneau Réglages.
  *
  * `defaultTheme` est le choix lu dans le cookie par le serveur (sinon
  * « system ») : il est aussi passé à `opaleThemeScript`, pour que le script,

@@ -127,7 +127,7 @@ function notReachable(baseUrl: string, production: boolean, cause: unknown): AiU
     cause,
     refundable: true,
     userMessage: production
-      ? "Le serveur Ollama ne répond pas. Réessayez plus tard ou choisissez un autre moteur dans Paramètres."
+      ? "Le serveur Ollama ne répond pas. Réessayez plus tard ou choisissez un autre moteur dans la Configuration IA."
       : `Ollama ne répond pas à ${baseUrl} : vérifiez qu'il est lancé (ollama serve).`,
   });
 }
@@ -149,7 +149,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
   function timedOut(operation: string, timeoutMs: number, cause: unknown): AiUnavailableError {
     return new AiUnavailableError(`${operation}: délai dépassé`, {
       cause,
-      userMessage: `Le modèle local n'a pas répondu dans le délai imparti (${Math.max(1, Math.round(timeoutMs / 60_000))} min). Réessayez, ou choisissez un modèle plus léger dans Paramètres.`,
+      userMessage: `Le modèle local n'a pas répondu dans le délai imparti (${Math.max(1, Math.round(timeoutMs / 60_000))} min). Réessayez, ou choisissez un modèle plus léger dans la Configuration IA.`,
     });
   }
 
@@ -204,7 +204,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
       }
       log.error("ollama.http_error", { operation, status: response.status, message: message.slice(0, 200) });
       throw new AiUnavailableError(`${operation}: HTTP ${response.status}`, {
-        userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre moteur dans Paramètres.",
+        userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre moteur dans la Configuration IA.",
       });
     }
 

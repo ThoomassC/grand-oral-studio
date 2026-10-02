@@ -100,7 +100,7 @@ export interface AiSettingsViewDeps {
   listOllamaModels: (baseUrl: string) => Promise<OllamaModels>;
 }
 
-/** Vue pour la page Paramètres : aucune donnée secrète, aucun déchiffrement ; ne lève pas si Ollama est arrêté. */
+/** Vue pour la page Configuration IA : aucune donnée secrète, aucun déchiffrement ; ne lève pas si Ollama est arrêté. */
 export async function getAiSettingsView(userId: string, deps: AiSettingsViewDeps): Promise<AiSettingsView> {
   const { env } = deps;
   const prefs = await findUserAiPrefs(userId);

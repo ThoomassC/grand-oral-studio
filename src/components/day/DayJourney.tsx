@@ -620,7 +620,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               <span className="text-muted">Rédaction : </span>
               <strong>{writer.label}</strong>
             </span>
-            <Link href="/parametres" className="opale-link">
+            <Link href="/configuration-ia" className="opale-link">
               Changer<span className="sr-only"> le moteur de rédaction</span>
             </Link>
           </p>
@@ -677,8 +677,8 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 <p className="font-semibold">{generation.message}</p>
                 <p className="mt-1 text-sm">
                   Votre problématique et votre choix sont conservés : relancez la génération, ou{" "}
-                  <Link href="/parametres" className="font-semibold underline underline-offset-2">
-                    changez de moteur dans les Paramètres
+                  <Link href="/configuration-ia" className="font-semibold underline underline-offset-2">
+                    changez de moteur dans la Configuration IA
                   </Link>
                   .
                 </p>

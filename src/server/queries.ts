@@ -39,7 +39,7 @@ export function listFinalDecks(userId: string, programId: string): Promise<Final
   return repoListFinalDecks(userId, programId);
 }
 
-/** Réglages IA de l'utilisateur (page Paramètres). Ne contient jamais la clé. */
+/** Réglages IA de l'utilisateur (page Configuration IA). Ne contient jamais la clé. */
 export function getAiSettings(userId: string): Promise<AiSettingsView> {
   return getAiSettingsView(userId, {
     env: process.env,

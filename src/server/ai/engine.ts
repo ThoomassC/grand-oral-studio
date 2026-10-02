@@ -9,7 +9,7 @@ import { resolveAiSource, safeResolveAiSource } from "./resolve";
  * moteur gratuit — y compris en production. Le mock n'apparaît qu'avec
  * AI_PROVIDER=mock (dev/tests), à la place de la clé serveur.
  *
- * Préférence enregistrée mais inutilisable → erreur qui renvoie vers Paramètres,
+ * Préférence enregistrée mais inutilisable → erreur qui renvoie vers la Configuration IA,
  * jamais de bascule silencieuse vers un autre moteur.
  */
 
@@ -76,15 +76,15 @@ export function planEngine(input: EngineInputs): EnginePlan {
     case "ollama": {
       const baseUrl = ollamaBaseUrl(input.env);
       if (!baseUrl) {
-        throw new EngineUnavailableError("Ollama n'est pas configuré sur ce serveur : choisissez un autre moteur dans Paramètres.");
+        throw new EngineUnavailableError("Ollama n'est pas configuré sur ce serveur : choisissez un autre moteur dans la Configuration IA.");
       }
-      if (!input.ollamaModel) throw new EngineUnavailableError("Choisissez un modèle Ollama dans Paramètres.");
+      if (!input.ollamaModel) throw new EngineUnavailableError("Choisissez un modèle Ollama dans la Configuration IA.");
       return { engine: "ollama", baseUrl, model: input.ollamaModel };
     }
   }
 }
 
-/** Moteur qui sera tenté (sans lever) : pour l'affichage dans Paramètres. */
+/** Moteur qui sera tenté (sans lever) : pour l'affichage dans la Configuration IA. */
 export function effectiveEngine(input: EngineInputs): EffectiveEngine {
   if (input.selected === "ollama" || input.selected === "free") return input.selected;
   const source = safeResolveAiSource(input);

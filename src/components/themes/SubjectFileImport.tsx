@@ -140,8 +140,8 @@ export function SubjectFileImport({
           <strong>Export Canva en .pptx</strong> : gratuit.
         </li>
         <li>
-          <strong>PDF ou image</strong> (export Canva en PDF, .png, .jpg) : moteur Claude, à choisir dans les
-          Paramètres (compte comme un appel IA).
+          <strong>PDF ou image</strong> (export Canva en PDF, .png, .jpg) : moteur Claude, à choisir dans la
+          Configuration IA (compte comme un appel IA).
         </li>
         <li className="text-muted">20 Mo au plus (PDF 10 Mo, image 5 Mo). Les fichiers avec macros (.pptm, .potm) sont refusés.</li>
       </ul>

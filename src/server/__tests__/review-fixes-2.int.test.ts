@@ -82,7 +82,7 @@ describe("S4 — plafond global des vérifications de clé", () => {
 describe("B1 — AI_PROVIDER invalide", () => {
   const BAD = { ...PROD, AI_PROVIDER: "ollama" };
 
-  it("ne devrait pas faire planter la page Paramètres", async () => {
+  it("ne devrait pas faire planter la page Configuration IA", async () => {
     const a = await createUser("a");
     const log = recordingLogger();
     const view = await settings.getAiSettingsView(a.id, {

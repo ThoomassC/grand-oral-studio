@@ -199,7 +199,8 @@
     font-size: var(--opale-text-md);
   }
   .header-control__moon,
-  .header-control__sun {
+  .header-control__sun,
+  .header-control__settings {
     font-size: var(--opale-text-lg);
   }
   .header-control__moon {
@@ -208,6 +209,30 @@
   .header-control__sun {
     color: var(--opale-accent-graphic);
   }
+  /*
+   * Panneau Réglages (SiteSettingsPanel) : blocs séparés par le filet d'Opale ;
+   * le dernier (réinitialisation) est mis à part.
+   */
+  .site-settings__block {
+    padding-block: var(--opale-space-md);
+    border-top: 1px solid var(--opale-divider);
+  }
+  .site-settings__block:first-child {
+    border-top: 0;
+  }
+  /*
+   * Toggle d'Opale (3.0.3) dans un conteneur qui défile : sa case native, en
+   * absolu, se positionne hors de la zone défilante si la rangée ne l'est pas ;
+   * le focus clavier restait alors hors de vue. Le rail ne se comprime pas non
+   * plus face à un long libellé (la pastille en sortait). À corriger dans Opale.
+   */
+  .site-settings .opale-toggle-row {
+    position: relative;
+  }
+  .site-settings .opale-toggle-track {
+    flex-shrink: 0;
+  }
+
   /* Bouton à libellé et chevron (menu du compte) : `.languageTrigger` d'Opale. */
   .header-control--menu {
     display: inline-flex;
@@ -603,7 +628,7 @@
   }
 
   /*
-   * Sommaire des Paramètres : le Sidebar d'Opale tel quel (rail sur le fond de
+   * Sommaire de la Configuration IA : le Sidebar d'Opale tel quel (rail sur le fond de
    * page, filet, parties, barre de défilement et poignée d'Opale). On ne fait
    * que le placer : sous 768 px en haut de page ; au-delà, collé au bord gauche
    * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
@@ -715,4 +740,35 @@
     animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/*
+ * Réglages du site (panneau Réglages), posés sur <html> avant la première
+ * peinture (preferencesScript, layout racine). Hors couche, comme le bloc
+ * ci-dessus, pour l'emporter sur Opale et Tailwind.
+ *
+ * Taille du texte : la taille de la racine, en pourcentage pour respecter la
+ * taille choisie dans le navigateur ; tout ce qui est en rem suit (texte,
+ * espacements, contrôles d'Opale).
+ */
+:root[data-text-size="large"] {
+  font-size: 112.5%;
+}
+:root[data-text-size="xlarge"] {
+  font-size: 125%;
+}
+
+/* « Réduire les animations » : la même règle que prefers-reduced-motion, quel que soit l'appareil. */
+:root[data-motion="reduced"] {
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
 }

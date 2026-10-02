@@ -110,11 +110,11 @@ test.describe("1. Comptes — connexion", () => {
     await signUpViaApi(ctx.request, user);
     await ctx.close();
 
-    await page.goto("/connexion?next=%2Fparametres");
+    await page.goto("/connexion?next=%2Fconfiguration-ia");
     await page.getByLabel("Adresse e-mail").fill(user.email);
     await page.getByLabel("Mot de passe", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Se connecter" }).click();
-    await expect(page).toHaveURL(`${BASE_URL}/parametres`);
+    await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
   });
 
   for (const next of ["//evil.example", "/%09/evil.example", "https://evil.example/", "/\\evil.example"]) {
@@ -135,14 +135,14 @@ test.describe("1. Comptes — connexion", () => {
 
   test("devrait conserver ?next= en passant de la connexion à l'inscription", async ({ page }) => {
     const user = newUser("comptes");
-    await page.goto("/connexion?next=%2Fparametres");
+    await page.goto("/connexion?next=%2Fconfiguration-ia");
     await page.getByRole("link", { name: "Créer un compte" }).last().click();
-    await expect(page).toHaveURL(`${BASE_URL}/inscription?next=%2Fparametres`);
+    await expect(page).toHaveURL(`${BASE_URL}/inscription?next=%2Fconfiguration-ia`);
     await page.getByLabel("Nom").fill(user.name);
     await page.getByLabel("Adresse e-mail").fill(user.email);
     await page.getByLabel("Mot de passe", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Créer mon compte" }).click();
-    await expect(page).toHaveURL(`${BASE_URL}/parametres`);
+    await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
   });
 
   test("devrait annoncer « Trop de tentatives » après 5 échecs de connexion en une minute", async ({ page, browser }) => {
@@ -188,7 +188,7 @@ test.describe("1. Comptes — connexion", () => {
 });
 
 test.describe("1. Comptes — pages protégées et anciennes URL", () => {
-  for (const path of ["/projets", "/parametres", "/profil", "/projets/abc123/charte"]) {
+  for (const path of ["/projets", "/configuration-ia", "/profil", "/projets/abc123/charte"]) {
     test(`devrait rediriger ${path} vers /connexion?next= sans session`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent(path)}`);
@@ -203,5 +203,19 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
     const root = await request.get("/programmes", { maxRedirects: 0 });
     expect(root.status()).toBe(308);
     expect(root.headers()["location"]).toBe("/projets");
+  });
+
+  test("devrait rediriger l'ancienne page /parametres en 308 vers /configuration-ia", async ({ request }) => {
+    const res = await request.get("/parametres?x=1", { maxRedirects: 0 });
+    expect(res.status()).toBe(308);
+    expect(res.headers()["location"]).toBe("/configuration-ia?x=1");
+    const sub = await request.get("/parametres/cle", { maxRedirects: 0 });
+    expect(sub.status()).toBe(308);
+    expect(sub.headers()["location"]).toBe("/configuration-ia/cle");
+  });
+
+  test("devrait mener /parametres à la connexion puis à /configuration-ia sans session", async ({ page }) => {
+    await page.goto("/parametres");
+    await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent("/configuration-ia")}`);
   });
 });

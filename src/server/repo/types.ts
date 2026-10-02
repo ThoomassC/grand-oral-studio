@@ -87,7 +87,7 @@ export interface FinalDeckSummary {
 }
 
 /**
- * Réglages IA d'un utilisateur, tels que montrés dans Paramètres. Ne contient
+ * Réglages IA d'un utilisateur, tels que montrés dans la Configuration IA. Ne contient
  * JAMAIS la clé (ni chiffrée ni en clair) : seulement ses 4 derniers caractères.
  * `model` vaut "mock" quand les générations sont simulées.
  */
@@ -102,7 +102,7 @@ export interface AiSettingsView {
     selected: "claude" | "ollama" | "free" | null;
     /**
      * Moteur qui sera tenté à la prochaine génération. S'il n'est pas disponible
-     * (cf. `available`), la génération échoue avec un message qui renvoie vers Paramètres.
+     * (cf. `available`), la génération échoue avec un message qui renvoie vers la Configuration IA.
      */
     effective: "claude" | "ollama" | "free" | "mock";
     available: {

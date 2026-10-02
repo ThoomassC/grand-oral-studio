@@ -38,7 +38,7 @@ export const BRAND_FILE_MAX_BYTES = 20 * MB;
 export const TEMPLATE_PROMPT_MAX_CHARS = 20_000;
 
 export const VISION_ENGINE_REQUIRED_MESSAGE =
-  "La lecture d'un PDF ou d'une image demande le moteur Claude (Paramètres). Avec un .pptx, .potx ou .thmx, l'import est gratuit.";
+  "La lecture d'un PDF ou d'une image demande le moteur Claude (Configuration IA). Avec un .pptx, .potx ou .thmx, l'import est gratuit.";
 
 /** Fichier reçu du client (FormData, champ `file`). */
 export const BrandFileSchema = z.object({

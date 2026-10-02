@@ -68,6 +68,6 @@ describe("DayJourney — reconnaissance sans IA", () => {
   it("devrait rappeler le moteur qui rédigera, avec un lien pour le changer", async () => {
     await recognize(outcome({ source: "free" }));
     expect(screen.getByText(/Rédaction :/).closest("p")).toHaveTextContent("Rédaction : Gratuit (trame à compléter)");
-    expect(screen.getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/parametres");
+    expect(screen.getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/configuration-ia");
   });
 });

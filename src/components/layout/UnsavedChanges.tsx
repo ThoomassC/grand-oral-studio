@@ -39,7 +39,7 @@ type UnsavedState = {
 
 /**
  * Signal « modifications non enregistrées » partagé entre les éditeurs
- * (charte, gabarit, diapo, thème, profil, paramètres) et toute la navigation
+ * (charte, gabarit, diapo, thème, profil, configuration IA) et toute la navigation
  * de l'application (en-tête, menu du compte, fil d'étapes, fil d'Ariane,
  * sous-navigation, bas de page, « Précédent » du navigateur). Posé une fois
  * dans le layout racine : une seule confirmation, quelle que soit la sortie.

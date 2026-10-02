@@ -41,19 +41,19 @@ function renderDirtyHeader() {
 const modal = () => screen.queryByRole("dialog", { name: "Quitter sans enregistrer ?" });
 
 describe("MainNav", () => {
-  it("devrait proposer Projets puis Paramètres dans la navigation principale", () => {
+  it("devrait proposer Projets puis Configuration IA dans la navigation principale", () => {
     render(<MainNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation principale" });
     const links = nav.querySelectorAll("a");
-    expect([...links].map((a) => a.textContent)).toEqual(["Projets", "Paramètres"]);
+    expect([...links].map((a) => a.textContent)).toEqual(["Projets", "Configuration IA"]);
     expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("href", "/projets");
-    expect(screen.getByRole("link", { name: "Paramètres" })).toHaveAttribute("href", "/parametres");
+    expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("href", "/configuration-ia");
   });
 
-  it("devrait signaler la page courante sur /parametres", () => {
-    pathname = "/parametres";
+  it("devrait signaler la page courante sur /configuration-ia", () => {
+    pathname = "/configuration-ia";
     render(<MainNav />);
-    expect(screen.getByRole("link", { name: "Paramètres" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Projets" })).not.toHaveAttribute("aria-current");
   });
 
@@ -62,7 +62,7 @@ describe("MainNav", () => {
       pathname = path;
       render(<MainNav />);
       expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("link", { name: "Paramètres" })).not.toHaveAttribute("aria-current");
+      expect(screen.getByRole("link", { name: "Configuration IA" })).not.toHaveAttribute("aria-current");
       cleanup();
     }
   });
@@ -76,7 +76,7 @@ describe("MainNav", () => {
   it("devrait demander confirmation avant de quitter par un onglet, puis rendre le focus en restant", async () => {
     const user = userEvent.setup();
     renderDirtyHeader();
-    const tab = within(screen.getByRole("navigation", { name: "Navigation principale" })).getByRole("link", { name: "Paramètres" });
+    const tab = within(screen.getByRole("navigation", { name: "Navigation principale" })).getByRole("link", { name: "Configuration IA" });
     await user.click(tab);
     expect(modal()).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe("MainNav", () => {
 
     await user.click(tab);
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
-    expect(replace).toHaveBeenCalledWith("/parametres");
+    expect(replace).toHaveBeenCalledWith("/configuration-ia");
   });
 
   it("devrait demander confirmation avant de quitter par le logo", async () => {

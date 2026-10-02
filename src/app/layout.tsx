@@ -3,6 +3,7 @@ import { opaleThemeScript } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
+import { preferencesScript } from "@/components/preferences/preferences";
 import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InlineScript } from "@/components/ui/InlineScript";
@@ -30,12 +31,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // suppressHydrationWarning : le script d'Opale pose `data-theme` sur <html>
     // avant l'hydratation (thème système, ou choix mémorisé différent du
-    // cookie). React garde l'attribut du DOM au lieu de signaler un écart ;
-    // l'option ne porte que sur cet élément, pas sur ses enfants.
+    // cookie), le nôtre `data-text-size` et `data-motion` (réglages du site).
+    // React garde les attributs du DOM au lieu de signaler un écart ; l'option
+    // ne porte que sur cet élément, pas sur ses enfants.
     <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className="h-full antialiased">
       <head>
         {/* Mêmes options que useOpaleTheme (ThemeProvider), sans quoi script et React divergent. */}
         <InlineScript html={opaleThemeScript({ storageKey: THEME_STORAGE_KEY, defaultTheme })} />
+        {/* Taille du texte et animations (panneau Réglages), posées avant la première peinture. */}
+        <InlineScript html={preferencesScript()} />
       </head>
       <body className="opale-root flex min-h-full flex-col">
         <ThemeProvider defaultTheme={defaultTheme}>

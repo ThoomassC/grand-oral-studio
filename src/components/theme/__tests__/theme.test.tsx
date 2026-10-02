@@ -2,7 +2,6 @@ import { opaleThemeScript } from "@thomascaron/opale-ui";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AppearanceSettings } from "@/components/theme/AppearanceSettings";
 import { parseExplicitTheme, THEME_STORAGE_KEY, themeCookie, type ThemePreference } from "@/components/theme/theme";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -43,7 +42,6 @@ function renderTheme(defaultTheme: ThemePreference = "system") {
   return render(
     <ThemeProvider defaultTheme={defaultTheme}>
       <ThemeToggle />
-      <AppearanceSettings />
     </ThemeProvider>,
   );
 }
@@ -104,19 +102,5 @@ describe("ThemeToggle", () => {
   });
 });
 
-describe("bouton de l'en-tête et page Paramètres", () => {
-  it("devrait rester synchronisés, et « Système » efface le cookie", async () => {
-    const user = userEvent.setup();
-    renderTheme();
-    expect(screen.getByRole("radio", { name: "Système" })).toBeChecked();
-
-    await user.click(screen.getByRole("button", { name: "Mode sombre" }));
-    expect(screen.getByRole("radio", { name: "Sombre" })).toBeChecked();
-
-    await user.click(screen.getByRole("radio", { name: "Système" }));
-    expect(screen.getByRole("radio", { name: "Système" })).toBeChecked();
-    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("system");
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    await waitFor(() => expect(document.cookie).not.toContain("theme=dark"));
-  });
-});
+// La synchronisation avec le choix Clair / Sombre / Système du panneau Réglages
+// est testée avec le panneau (components/preferences/__tests__/SiteSettings.test.tsx).

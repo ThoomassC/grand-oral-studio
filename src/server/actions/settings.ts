@@ -9,11 +9,11 @@ import type { ActionResult } from "./result";
 import { runAction, type ActionContext } from "./run";
 
 /**
- * Clé API Anthropic de l'utilisateur connecté (page /parametres). La clé en
+ * Clé API Anthropic de l'utilisateur connecté (page /configuration-ia). La clé en
  * clair n'est jamais renvoyée : seulement ses 4 derniers caractères.
  */
 
-const SETTINGS_PATH = "/parametres";
+const SETTINGS_PATH = "/configuration-ia";
 
 const deps = (ctx: ActionContext): service.AiSettingsDeps => ({
   env: process.env,

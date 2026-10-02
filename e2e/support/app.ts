@@ -39,9 +39,9 @@ const ENGINE_RADIO: Record<EngineChoice, string> = {
   ollama: "Modèle local (Ollama)",
 };
 
-/** Choisit et enregistre le moteur dans Paramètres. `claude` = moteur démo (AI_PROVIDER=mock). */
+/** Choisit et enregistre le moteur dans la Configuration IA. `claude` = moteur démo (AI_PROVIDER=mock). */
 export async function setEngine(page: Page, engine: EngineChoice, ollamaModel?: string): Promise<void> {
-  await page.goto("/parametres");
+  await page.goto("/configuration-ia");
   await page.getByRole("radio", { name: ENGINE_RADIO[engine] }).check();
   if (engine === "ollama" && ollamaModel) await page.getByLabel("Modèle Ollama").selectOption(ollamaModel);
   await page.getByRole("button", { name: "Enregistrer le moteur" }).click();

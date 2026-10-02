@@ -6,7 +6,7 @@ import { useGuardedNavigation } from "./useGuardedNavigation";
 
 const ITEMS = [
   { href: "/projets", label: "Projets" },
-  { href: "/parametres", label: "Paramètres" },
+  { href: "/configuration-ia", label: "Configuration IA" },
 ] as const;
 
 /**

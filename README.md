@@ -30,7 +30,7 @@ Sans aucune clé, le moteur gratuit (sans IA) rédige des trames à compléter :
 
 ## Moteurs de rédaction
 
-Chaque utilisateur choisit son moteur dans **Paramètres** :
+Chaque utilisateur choisit son moteur dans la **Configuration IA** :
 
 | Moteur | Coût | Qualité | Prérequis |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Chaque utilisateur choisit son moteur dans **Paramètres** :
 | **Claude** | crédits Anthropic de l'utilisateur (ou du serveur) | contenu rédigé | une clé API (voir « Clé API ») |
 | **Ollama** | calcul local | dépend du modèle ; lent | Ollama sur le serveur |
 
-Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Si le moteur choisi n'est plus disponible (clé supprimée, Ollama arrêté), la génération échoue avec un message qui renvoie vers Paramètres : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du thème** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
+Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Si le moteur choisi n'est plus disponible (clé supprimée, Ollama arrêté), la génération échoue avec un message qui renvoie vers la Configuration IA : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du thème** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
 
 Chaque deck garde la trace du moteur qui l'a produit (`engine` : `claude`, `ollama`, `free`, `mock`, ou `null` pour les decks antérieurs).
 
@@ -58,12 +58,12 @@ Limites : délai `AI_OLLAMA_TIMEOUT_MS` pour un deck (défaut 10 min) et `AI_OLL
 
 ## Clé API
 
-Chaque utilisateur peut enregistrer **sa** clé API Anthropic dans **Paramètres** (`/parametres`). Ses générations (squelettes, reconnaissance du thème, deck final) l'utilisent alors. Ordre de résolution :
+Chaque utilisateur peut enregistrer **sa** clé API Anthropic dans la **Configuration IA** (`/configuration-ia`). Ses générations (squelettes, reconnaissance du thème, deck final) l'utilisent alors. Ordre de résolution :
 
 1. la clé de l'utilisateur ;
 2. la clé du serveur `ANTHROPIC_API_KEY` (sauf `AI_PROVIDER=mock`) ;
 3. le mode simulé, hors production uniquement ;
-4. sinon : « Ajoutez votre clé API Anthropic dans Paramètres pour lancer une génération. »
+4. sinon : « Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération. »
 
 Prérequis serveur : la clé maître de chiffrement, à générer une fois puis à ajouter au `.env` (redémarrer ensuite `npm run dev`) :
 

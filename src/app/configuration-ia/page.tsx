@@ -2,16 +2,15 @@ import type { Metadata } from "next";
 import { ApiKeySettings, type ApiKeyStatus } from "@/components/settings/ApiKeySettings";
 import { EngineSettings, type EngineStatus } from "@/components/settings/EngineSettings";
 import { SettingsToc } from "@/components/settings/SettingsToc";
-import { AppearanceSettings } from "@/components/theme/AppearanceSettings";
 import { formatDateTime } from "@/components/ui/format";
 import { getAiSettings } from "@/server/queries";
 import { requireUser } from "@/server/session";
 
-export const metadata: Metadata = { title: "Paramètres" };
+export const metadata: Metadata = { title: "Configuration IA" };
 
 const CONSOLE_URL = "https://console.anthropic.com/settings/keys";
 
-export default async function SettingsPage() {
+export default async function AiConfigurationPage() {
   const user = await requireUser();
   const settings = await getAiSettings(user.id);
 
@@ -51,9 +50,10 @@ export default async function SettingsPage() {
       <div className="min-w-0 flex-1 px-4 py-8 sm:px-6 sm:py-10 md:px-10">
         <div className="mx-auto w-full max-w-3xl">
           <p className="eyebrow">Compte</p>
-          <h1 className="mt-2 text-3xl sm:text-4xl">Paramètres</h1>
+          <h1 className="mt-2 text-3xl sm:text-4xl">Configuration IA</h1>
           <p className="mt-2 text-muted">
-            Le moteur qui rédige vos diaporamas, votre clé d&apos;accès à Claude et l&apos;apparence de l&apos;application.
+            Le moteur qui rédige vos diaporamas et votre clé d&apos;accès à Claude. Thème, taille du texte et animations
+            se règlent dans Réglages, depuis l&apos;en-tête.
           </p>
 
           <div className="mt-8 flex flex-col gap-6">
@@ -101,19 +101,6 @@ export default async function SettingsPage() {
                     derniers caractères restent visibles. Pour en changer, saisissez-en une nouvelle.
                   </li>
                 </ul>
-              </div>
-            </section>
-
-            <section aria-labelledby="apparence" className="scroll-mt-6 opale-card opale-card--e1 block p-5 sm:p-6">
-              <h2 id="apparence" tabIndex={-1} className="text-2xl focus:outline-none">
-                Apparence
-              </h2>
-              <p className="mt-1 text-muted">
-                Le bouton soleil / lune de l&apos;en-tête bascule entre clair et sombre ; « Système » suit le réglage de
-                votre appareil.
-              </p>
-              <div className="mt-5">
-                <AppearanceSettings />
               </div>
             </section>
           </div>

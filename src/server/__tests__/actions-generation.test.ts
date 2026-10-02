@@ -85,13 +85,13 @@ describe("choix du moteur et de la facturation", () => {
     expect(service.generateSkeleton.mock.calls[0]![2]).toMatchObject({ mode: "free" });
   });
 
-  it("devrait renvoyer le message Paramètres quand le moteur choisi est indisponible (pas de bascule)", async () => {
+  it("devrait renvoyer le message Configuration IA quand le moteur choisi est indisponible (pas de bascule)", async () => {
     const { AiKeyRequiredError } = await import("@/server/errors");
     getEngineForUser.mockRejectedValueOnce(new AiKeyRequiredError());
     const result = await actions.generateSkeleton("theme-1");
     expect(result).toEqual({
       ok: false,
-      error: "Ajoutez votre clé API Anthropic dans Paramètres pour lancer une génération.",
+      error: "Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.",
     });
     expect(service.generateSkeleton).not.toHaveBeenCalled();
   });

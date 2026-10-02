@@ -1,6 +1,6 @@
 /**
  * Préférence de thème, partagée entre le serveur (lecture du cookie dans le
- * layout racine) et le client (bouton de l'en-tête, page Paramètres).
+ * layout racine) et le client (bouton de l'en-tête, panneau Réglages).
  *
  * Le mécanisme est celui d'Opale (`opaleThemeScript` + `useOpaleTheme`) :
  * la préférence (« light », « dark » ou « system ») est mémorisée dans
