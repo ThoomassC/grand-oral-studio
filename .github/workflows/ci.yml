@@ -131,7 +131,7 @@ jobs:
     name: e2e
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45 # ~20 min observées sur un runner standard (5 min en local)
     services:
       postgres:
         image: postgres:15
@@ -196,11 +196,29 @@ jobs:
           done
           echo "serveur injoignable après 120 s"; cat next-dev.log; exit 1
 
+      - name: Précompiler les routes principales
+        # `next dev` compile chaque route à sa première visite (6 s et plus sur un runner) :
+        # le premier test qui la touche dépasserait ses délais d'attente. Le compte de
+        # préchauffage (e2e-…@example.test) est supprimé par le globalSetup de la suite.
+        run: |
+          set -euo pipefail
+          for path in / /connexion /inscription; do
+            curl -s -o /dev/null -w "%{http_code} $path\n" "http://localhost:3000$path"
+          done
+          jar="$(mktemp)"
+          curl -s -o /dev/null -w "%{http_code} sign-up\n" -c "$jar" \
+            -H "Content-Type: application/json" -H "Origin: http://localhost:3000" \
+            -d "{\"email\":\"e2e-warmup-$RANDOM@example.test\",\"password\":\"Prechauffage-CI-2026\",\"name\":\"Préchauffage CI\"}" \
+            http://localhost:3000/api/auth/sign-up/email
+          for path in /projets /configuration-ia /profil; do
+            curl -s -o /dev/null -b "$jar" -w "%{http_code} $path\n" "http://localhost:3000$path"
+          done
+
       - name: Tests E2E
         run: npx playwright test
 
       - name: Rapport Playwright
-        if: failure()
+        if: failure() || cancelled() # cancelled() : aussi en cas de dépassement du timeout
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report

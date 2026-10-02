@@ -1,6 +1,6 @@
 import { test, expect, BASE_URL } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, dialog, generateFinalDeck, generateMissingSkeletons, importThemeList, setEngine, type EngineChoice } from "./support/app";
+import { createProject, dialog, generateFinalDeck, generateMissingSkeletons, importThemeList, openDayJourney, setEngine, type EngineChoice } from "./support/app";
 import type { Page } from "@playwright/test";
 
 test.afterAll(async () => {
@@ -14,7 +14,7 @@ async function setup(page: Page, engine: EngineChoice, name: string, skeletons =
   const id = await createProject(page, name);
   await importThemeList(page, id);
   if (skeletons) await generateMissingSkeletons(page, id);
-  await page.goto(`/projets/${id}/jour-j`);
+  await openDayJourney(page, id);
   return id;
 }
 

@@ -12,6 +12,28 @@ export async function createProject(page: Page, name: string, description = ""):
   return projectIdFromUrl(page.url());
 }
 
+/**
+ * Attend que React ait pris la main sur l'élément (hydratation terminée) :
+ * avant, une saisie peut être perdue. Le parcours Jour J, par exemple, remonte
+ * son formulaire une fois côté client pour restaurer le brouillon ; sur une
+ * machine lente (CI, `next dev` à froid), Playwright a le temps de remplir le
+ * champ rendu par le serveur, que ce remontage efface.
+ */
+export async function waitForHydration(locator: Locator): Promise<void> {
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$"))), {
+      message: "hydratation React de l'élément",
+      timeout: 30_000,
+    })
+    .toBe(true);
+}
+
+/** Ouvre le Jour J d'un projet, formulaire hydraté (cf. waitForHydration). */
+export async function openDayJourney(page: Page, programId: string): Promise<void> {
+  await page.goto(`/projets/${programId}/jour-j`);
+  await waitForHydration(page.getByRole("main").getByLabel("Problématique tirée au sort"));
+}
+
 export function projectIdFromUrl(url: string): string {
   const m = /\/projets\/([a-z0-9]+)/.exec(url);
   if (!m?.[1]) throw new Error(`URL de projet inattendue : ${url}`);
@@ -56,7 +78,7 @@ export async function generateMissingSkeletons(page: Page, programId: string, ti
 
 /** Parcours Jour J avec thème indiqué → génère et attend la page du deck. Renvoie l'id du deck. */
 export async function generateFinalDeck(page: Page, programId: string, problem: string, themeName: string): Promise<string> {
-  await page.goto(`/projets/${programId}/jour-j`);
+  await openDayJourney(page, programId);
   // Portée <main> : juste après une navigation, le streaming peut laisser une copie masquée hors de <main>.
   const main = page.getByRole("main");
   await main.getByLabel("Problématique tirée au sort").fill(problem);
