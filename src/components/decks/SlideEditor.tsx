@@ -10,6 +10,7 @@ import { errorProps, firstError, validateWith, type FieldErrors } from "@/compon
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } from "@/components/ui/focus";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { isToComplete } from "./EngineBadge";
 
@@ -70,7 +71,6 @@ export function SlideEditor({
     bullets: `${baseId}-bullets`,
     notes: `${baseId}-notes`,
     add: `${baseId}-add`,
-    keep: `${baseId}-keep`,
     bullet: (key: string) => `${baseId}-bullet-${key}`,
   };
 
@@ -78,10 +78,14 @@ export function SlideEditor({
     if (pending) return;
     if (dirty) {
       setConfirmDiscard(true);
-      focusLater([ids.keep]);
       return;
     }
     onCancel();
+  }
+
+  function keepEditing() {
+    setConfirmDiscard(false);
+    focusLater([ids.title]);
   }
 
   function addBullet() {
@@ -147,10 +151,10 @@ export function SlideEditor({
       onSubmit={save}
       className="flex flex-col gap-4"
       onKeyDown={(e) => {
-        if (e.key === "Escape") {
+        // Échap dans la confirmation (portail, mais même arbre React) : la modale s'en charge.
+        if (e.key === "Escape" && !confirmDiscard) {
           e.preventDefault();
-          if (confirmDiscard) setConfirmDiscard(false);
-          else requestCancel();
+          requestCancel();
         }
       }}
     >
@@ -289,29 +293,15 @@ export function SlideEditor({
         ) : null}
       </LiveRegion>
 
-      {confirmDiscard ? (
-        <div role="alertdialog" aria-labelledby={`${baseId}-discard`} className="rounded-lg border border-warning/60 bg-warning-soft p-3">
-          <p id={`${baseId}-discard`} className="text-sm font-medium">
-            Abandonner vos modifications de la diapo {index + 1} ?
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" size="small" className="danger-outline" onClick={onCancel}>
-              Abandonner
-            </Button>
-            <Button
-              id={ids.keep}
-              type="button"
-              variant="ghost" size="small"
-              onClick={() => {
-                setConfirmDiscard(false);
-                focusLater([ids.title]);
-              }}
-            >
-              Continuer l&apos;édition
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmModal
+        open={confirmDiscard}
+        title="Abandonner vos modifications ?"
+        description={`Les modifications de la diapo ${index + 1} seront perdues.`}
+        cancelLabel="Continuer l'édition"
+        confirmLabel="Abandonner"
+        onCancel={keepEditing}
+        onConfirm={onCancel}
+      />
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" aria-disabled={pending || undefined}>

@@ -221,6 +221,7 @@ export function SkeletonBoard({
             <ConfirmAction
               triggerId={REGEN_ALL_ID}
               triggerLabel="Régénérer tous les squelettes"
+              title="Régénérer tous les squelettes ?"
               triggerVariant="ghost"
               size="medium"
               triggerDisabled={anyRunning}
@@ -342,6 +343,7 @@ export function SkeletonBoard({
                       }
                       triggerVariant="text"
                       triggerDisabled={busy}
+                      title="Régénérer le squelette ?"
                       question={`Remplacer le squelette de « ${theme.name} », y compris vos modifications ?`}
                       confirmLabel="Remplacer le squelette"
                       pendingLabel="Lancement…"

@@ -10,7 +10,6 @@ import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ThemeForm } from "./ThemeForm";
 import { ThemeImport } from "./ThemeImport";
-import { QuickStartImports } from "./QuickStartImports";
 
 export interface ThemeItem {
   id: string;
@@ -62,7 +61,9 @@ function ArrowIcon({ dir }: { dir: "up" | "down" }) {
 export function ThemeManager({ programId, themes }: { programId: string; themes: ThemeItem[] }) {
   const [optimisticThemes, setOptimisticThemes] = useOptimistic(themes);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"none" | "add" | "import">(themes.length === 0 ? "add" : "none");
+  // Le bloc « Importer votre sujet », au-dessus, est la voie principale : la
+  // saisie manuelle et l'import de liste restent à un clic, en secondaire.
+  const [panel, setPanel] = useState<"none" | "add" | "import">("none");
   const [announce, setAnnounce] = useState("");
   const [reorderError, setReorderError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -123,26 +124,20 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
   return (
     <div className="flex flex-col gap-6">
-      <QuickStartImports
-        programId={programId}
-        importOpen={panel === "import"}
-        importPanelId="panel-import-themes"
-        onImportList={() => openPanel("import")}
-      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
             Thèmes
           </h2>
           <p className="text-sm text-muted">
-            L&apos;ordre des thèmes est celui de votre projet. Les mots-clés aident l&apos;IA à reconnaître le
+            Saisissez-les à la main ou collez une liste si vous n&apos;importez pas votre sujet. L&apos;ordre des thèmes est celui de votre projet. Les mots-clés aident l&apos;IA à reconnaître le
             thème d&apos;une problématique.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             id={IDS.addButton}
-            variant={panel === "add" ? "ghost" : "primary"}
+            variant={panel === "add" ? "ghost" : "secondary"}
             aria-expanded={panel === "add"}
             aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
             onClick={() => openPanel("add")}
@@ -203,7 +198,8 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
         <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
           <p className="font-display text-lg font-semibold">Aucun thème</p>
           <p className="mt-1 text-muted">
-            Ajoutez les thèmes de votre projet un par un, ou importez-les en une fois depuis une liste.
+            Importez votre sujet ci-dessus, ou ajoutez les thèmes un par un (« Ajouter un thème ») ou en une fois
+            depuis une liste (« Importer une liste »).
           </p>
         </div>
       ) : (
@@ -298,6 +294,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                       <ConfirmAction
                         triggerLabel="Supprimer"
                         triggerAccessibleLabel={`Supprimer ${theme.name}`}
+                        title="Supprimer le thème ?"
                         question={question}
                         confirmLabel={confirm}
                         onConfirm={async () => {

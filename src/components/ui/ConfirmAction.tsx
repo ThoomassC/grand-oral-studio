@@ -3,7 +3,7 @@
 import { Button, Input, type ButtonVariant } from "@thomascaron/opale-ui";
 import { DANGER_OUTLINE } from "./ButtonLink";
 import { useId, useRef, useState, useTransition } from "react";
-import { ButtonLabel } from "./ButtonLabel";
+import { ConfirmModal } from "./ConfirmModal";
 import { LiveRegion } from "./LiveRegion";
 
 interface ConfirmActionProps {
@@ -11,6 +11,8 @@ interface ConfirmActionProps {
   triggerLabel: string;
   /** Nom accessible complet du déclencheur (ex. « Supprimer le thème Énergie »). */
   triggerAccessibleLabel?: string;
+  /** Titre de la modale, qui la nomme (ex. « Supprimer le projet ? »). Défaut : « <triggerLabel> ? ». */
+  title?: string;
   /** Question affichée dans la confirmation. */
   question: string;
   confirmLabel: string;
@@ -26,7 +28,7 @@ interface ConfirmActionProps {
   onDone?: () => void;
   /** Rôle visuel du déclencheur (`Button` d'Opale) ; `danger-outline` : contour de danger (défaut). */
   triggerVariant?: ButtonVariant | "danger-outline";
-  /** Taille du déclencheur et des boutons de confirmation. Défaut : `small`. */
+  /** Taille du déclencheur. Défaut : `small`. */
   size?: "small" | "medium";
   /** Désactive le déclencheur (autre action en cours). */
   triggerDisabled?: boolean;
@@ -34,15 +36,18 @@ interface ConfirmActionProps {
 }
 
 /**
- * Confirmation en ligne d'une action destructive (pas de `confirm()` natif) :
- * le déclencheur laisse place à une question et deux boutons ; le focus va sur
- * « Annuler » (choix sûr par défaut), ou sur le champ de recopie, et revient
- * au déclencheur si on annule. Pendant l'action, les boutons restent
- * focalisables (`aria-disabled`) pour ne pas perdre le focus.
+ * Confirmation d'une action destructive dans une `Modal` d'Opale (pas de
+ * `confirm()` natif) : le déclencheur ouvre la modale ; le focus va sur
+ * « Annuler » (choix sûr par défaut), ou sur le champ de recopie ; Échap, le
+ * voile et la croix annulent, sauf pendant l'action. En annulant, le focus
+ * revient au déclencheur ; après succès, `onDone` le place (l'élément visé a
+ * pu disparaître). Pendant l'action, les boutons restent focalisables
+ * (`aria-disabled`) pour ne pas perdre le focus.
  */
 export function ConfirmAction({
   triggerLabel,
   triggerAccessibleLabel,
+  title,
   question,
   confirmLabel,
   pendingLabel = "Suppression…",
@@ -59,15 +64,22 @@ export function ConfirmAction({
   const [typed, setTyped] = useState("");
   const [pending, startTransition] = useTransition();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const questionId = useId();
-  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const baseId = useId();
+  const inputId = `${baseId}-input`;
+  const errorId = `${baseId}-error`;
   const matches = !requireText || typed.trim() === requireText.trim();
 
-  function cancel() {
-    if (pending) return;
+  function reset() {
     setOpen(false);
     setError(null);
     setTyped("");
+  }
+
+  function cancel() {
+    if (pending) return;
+    reset();
+    // Après le démontage : la modale rend le focus à l'élément actif à son ouverture.
     window.setTimeout(() => triggerRef.current?.focus(), 0);
   }
 
@@ -75,6 +87,7 @@ export function ConfirmAction({
     if (pending) return;
     if (!matches) {
       setError(`Recopiez exactement « ${requireText} » pour confirmer.`);
+      inputRef.current?.focus();
       return;
     }
     setError(null);
@@ -89,14 +102,13 @@ export function ConfirmAction({
         setError(message);
         return;
       }
-      setOpen(false);
-      setTyped("");
+      reset();
       onDone?.();
     });
   }
 
-  if (!open) {
-    return (
+  return (
+    <>
       <Button
         ref={triggerRef}
         id={triggerId}
@@ -104,6 +116,7 @@ export function ConfirmAction({
         size={size}
         className={triggerVariant === "danger-outline" ? DANGER_OUTLINE : undefined}
         aria-label={triggerAccessibleLabel}
+        aria-haspopup="dialog"
         aria-disabled={triggerDisabled || undefined}
         onClick={() => {
           if (!triggerDisabled) setOpen(true);
@@ -111,59 +124,48 @@ export function ConfirmAction({
       >
         {triggerLabel}
       </Button>
-    );
-  }
-
-  return (
-    <div
-      role="group"
-      aria-labelledby={questionId}
-      className="flex w-full flex-col gap-3 rounded-lg border border-danger/40 bg-danger-soft p-4 sm:w-auto sm:max-w-md"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          cancel();
-        }
-      }}
-    >
-      <p id={questionId} className="text-sm font-medium">
-        {question}
-      </p>
-      {requireText ? (
-        <Input
-            id={inputId}
-            label={`Recopiez « ${requireText} » pour confirmer`}
-            size="small"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                confirm();
-              }
-            }}
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-          />
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="danger" size={size} onClick={confirm} aria-disabled={pending || !matches || undefined}>
-          <ButtonLabel idle={confirmLabel} busy={pendingLabel} isBusy={pending} />
-        </Button>
-        <Button
-          variant="ghost"
-          size={size}
-          onClick={cancel}
-          aria-disabled={pending || undefined}
-          autoFocus={!requireText}
-        >
-          Annuler
-        </Button>
-      </div>
-      <LiveRegion role="alert">
-        {error ? <p className="text-sm font-medium text-danger">{error}</p> : null}
-      </LiveRegion>
-    </div>
+      <ConfirmModal
+        open={open}
+        title={title ?? `${triggerLabel} ?`}
+        description={question}
+        confirmLabel={confirmLabel}
+        pendingLabel={pendingLabel}
+        pending={pending}
+        confirmBlocked={!matches}
+        confirmDescribedBy={error ? errorId : undefined}
+        initialFocusRef={requireText ? inputRef : undefined}
+        onConfirm={confirm}
+        onCancel={cancel}
+      >
+        <div className="flex flex-col gap-4">
+          {requireText ? (
+            <Input
+              ref={inputRef}
+              id={inputId}
+              label={`Recopiez « ${requireText} » pour confirmer`}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirm();
+                }
+              }}
+              aria-describedby={error ? errorId : undefined}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          ) : null}
+          <LiveRegion role="alert">
+            {error ? (
+              <p id={errorId} className="text-sm font-medium text-danger">
+                <span aria-hidden="true">Erreur : </span>
+                {error}
+              </p>
+            ) : null}
+          </LiveRegion>
+        </div>
+      </ConfirmModal>
+    </>
   );
 }

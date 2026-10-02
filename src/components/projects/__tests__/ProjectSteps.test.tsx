@@ -76,7 +76,7 @@ describe("ProjectSteps", () => {
     const user = userEvent.setup();
     renderDirty();
     await user.click(within(nav()).getByRole("link", { name: /Squelettes/ }));
-    expect(screen.getByRole("alertdialog")).toHaveTextContent("Vos modifications ne sont pas enregistrées");
+    expect(screen.getByRole("dialog", { name: "Quitter sans enregistrer ?" })).toHaveTextContent("Vos modifications ne sont pas enregistrées");
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
     expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
   });
@@ -85,7 +85,7 @@ describe("ProjectSteps", () => {
     const user = userEvent.setup();
     renderDirty();
     await user.click(within(nav()).getByRole("link", { name: /Préparer/ }));
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Quitter sans enregistrer ?" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -97,13 +97,13 @@ describe("ProjectSteps", () => {
     const stay = screen.getByRole("button", { name: "Rester sur la page" });
     await waitFor(() => expect(stay).toHaveFocus());
     await user.click(stay);
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(link).toHaveFocus();
 
     await user.click(link);
     await waitFor(() => expect(screen.getByRole("button", { name: "Rester sur la page" })).toHaveFocus());
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(link).toHaveFocus();
   });
 
@@ -112,8 +112,11 @@ describe("ProjectSteps", () => {
     const user = userEvent.setup();
     renderDirty(<StepNav programId="p1" prepare={makePrepare({ themes: true })} steps={STEPS} />);
     await user.click(within(nav()).getByRole("link", { name: /Jour J/ }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    // La modale rend le reste de la page inerte : on reste, puis on suit un autre lien.
+    await user.click(screen.getByRole("button", { name: "Rester sur la page" }));
     await user.click(screen.getByRole("link", { name: /Étape suivante/ }));
-    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
     expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
   });

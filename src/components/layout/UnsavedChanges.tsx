@@ -1,18 +1,17 @@
 "use client";
 
-import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 /** Une navigation retenue : sa destination et l'élément qui l'a demandée (pour lui rendre le focus). */
 type PendingNavigation = { href: string; trigger: HTMLElement | null };
@@ -77,63 +76,39 @@ export function useUnsavedChanges(dirty: boolean): void {
 
 /**
  * La confirmation unique « modifications non enregistrées », posée une fois
- * dans le layout du projet. À l'ouverture, le focus va sur « Rester sur la
- * page » ; en restant (bouton ou Échap), il revient au lien cliqué.
+ * dans le layout du projet, dans une `Modal` d'Opale (`ConfirmModal`). À
+ * l'ouverture, le focus va sur « Rester sur la page » ; en restant (bouton,
+ * Échap, voile ou croix), il revient au lien cliqué.
  */
 export function UnsavedChangesBanner() {
   const state = useUnsavedState();
   const router = useRouter();
-  const warningId = useId();
   const pending = state?.pending ?? null;
-  if (!state || !pending) return null;
+  if (!state) return null;
 
   function stay() {
-    state?.release();
     const trigger = pending?.trigger;
-    if (trigger?.isConnected) trigger.focus();
+    state?.release();
+    // Après le démontage de la modale, qui rend d'abord le focus à l'élément actif à son ouverture.
+    window.setTimeout(() => {
+      if (trigger?.isConnected) trigger.focus();
+    }, 0);
   }
 
   return (
-    <div
-      role="alertdialog"
-      aria-labelledby={warningId}
-      className="my-3 flex flex-col gap-2 rounded-lg border border-warning/60 bg-warning-soft p-3 sm:flex-row sm:items-center sm:justify-between"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") stay();
+    <ConfirmModal
+      open={pending !== null}
+      title="Quitter sans enregistrer ?"
+      description="Vos modifications ne sont pas enregistrées. Quitter cette page les abandonne."
+      cancelLabel="Rester sur la page"
+      confirmLabel="Quitter sans enregistrer"
+      onCancel={stay}
+      onConfirm={() => {
+        if (!pending) return;
+        state.setDirty(false);
+        state.release();
+        router.push(pending.href);
       }}
-    >
-      <p id={warningId} className="text-sm font-medium">
-        Vos modifications ne sont pas enregistrées. Quitter cette page les abandonne.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {/* Nouvelle destination = nouvelle confirmation : `key` remonte le bouton, qui reprend le focus. */}
-        <StayButton key={pending.href} onClick={stay} />
-        <Button
-          variant="ghost"
-          size="small"
-          className="danger-outline"
-          onClick={() => {
-            state.setDirty(false);
-            state.release();
-            router.push(pending.href);
-          }}
-        >
-          Quitter sans enregistrer
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function StayButton({ onClick }: { onClick: () => void }) {
-  const ref = useRef<HTMLButtonElement>(null);
-  // Synchronisation avec le DOM : le focus va à la confirmation dès qu'elle paraît.
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  return (
-    <Button ref={ref} variant="ghost" size="small" onClick={onClick}>
-      Rester sur la page
-    </Button>
+    />
   );
 }

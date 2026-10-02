@@ -43,10 +43,11 @@ export function ProgramActions({
 
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
-      <div className="flex flex-wrap items-start gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <Button
           type="button"
-          variant="text" size="small"
+          variant="ghost"
+          size="small"
           onClick={duplicate}
           aria-disabled={pending || undefined}
           aria-label={pending ? `Duplication de ${programName} en cours` : `Dupliquer le projet ${programName}`}
@@ -56,6 +57,7 @@ export function ProgramActions({
         <ConfirmAction
           triggerLabel="Supprimer"
           triggerAccessibleLabel={`Supprimer le projet ${programName}`}
+          title="Supprimer le projet ?"
           question={`Supprimer « ${programName} », ses thèmes, squelettes et decks ? Cette action est définitive.`}
           confirmLabel="Supprimer définitivement"
           requireText={programName}

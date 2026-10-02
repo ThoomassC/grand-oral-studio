@@ -37,7 +37,7 @@ export default async function ProgramsPage() {
                 const neighbour = programs[i + 1] ?? programs[i - 1];
                 return (
                   <li key={p.id} className="opale-card opale-card--e1 flex flex-col gap-4 p-5 pt-7 sm:flex-row sm:items-start sm:justify-between sm:p-6 sm:pt-8">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-xl">
                         <Link
                           id={`programme-${p.id}`}
@@ -49,11 +49,11 @@ export default async function ProgramsPage() {
                       </h3>
                       {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 whitespace-nowrap">
                           <dt className="text-muted">Thèmes :</dt>
                           <dd className="num font-bold">{p.themeCount}</dd>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 whitespace-nowrap">
                           <dt className="text-muted">Modifié le</dt>
                           <dd>{formatDate(p.updatedAt)}</dd>
                         </div>

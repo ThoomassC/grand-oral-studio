@@ -42,7 +42,7 @@ describe("ProjectBreadcrumb", () => {
       </UnsavedChangesProvider>,
     );
     await user.click(screen.getByRole("link", { name: "Projets" }));
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Quitter sans enregistrer ?" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
     expect(push).toHaveBeenCalledWith("/projets");

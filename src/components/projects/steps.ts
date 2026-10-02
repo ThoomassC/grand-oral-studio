@@ -90,9 +90,14 @@ export function blockedMessage(blockedBy: StepId): string {
   }
 }
 
-/** Ancres des zones d'import de Préparer (charte depuis une présentation, gabarit depuis un prompt). */
-export const IMPORT_ANCHORS = { brand: "import-presentation", template: "import-prompt" } as const;
+/**
+ * Ancres des zones d'import de Préparer : « Importer votre sujet » (thèmes et
+ * charte, depuis un fichier ou un prompt) sur la page Thèmes, et le gabarit
+ * depuis un prompt sur la page Gabarit.
+ */
+export const IMPORT_ANCHORS = { subject: "importer-votre-sujet", template: "import-prompt" } as const;
+const IMPORT_PAGES: Record<keyof typeof IMPORT_ANCHORS, PageId> = { subject: "themes", template: "template" };
 
 export function importHref(programId: string, id: keyof typeof IMPORT_ANCHORS): string {
-  return `${pageHref(programId, id)}#${IMPORT_ANCHORS[id]}`;
+  return `${pageHref(programId, IMPORT_PAGES[id])}#${IMPORT_ANCHORS[id]}`;
 }
