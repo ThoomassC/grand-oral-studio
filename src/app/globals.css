@@ -135,6 +135,19 @@
 
 @layer components {
   /*
+   * Corps de la Modal d'Opale : `overflow-y: auto` découpe aussi les débordements
+   * horizontaux et le bas, si bien que l'anneau de focus (tracé hors du champ)
+   * était rogné. On réserve sa place, compensée par une marge négative pour
+   * garder l'alignement du contenu. (À corriger aussi dans Opale.)
+   */
+  .opale-modal__body {
+    --app-focus-room: calc(var(--opale-focus-ring-width, 3px) + var(--opale-focus-ring-offset, 2px) + 1px);
+    margin-inline: calc(-1 * var(--app-focus-room));
+    padding-inline: var(--app-focus-room);
+    padding-block: var(--app-focus-room);
+  }
+
+  /*
    * Contrôles de l'en-tête : la boîte encadrée de l'en-tête d'Opale
    * (`HeaderThemeToggle`, déclencheur de `LanguageSelector`, non exportés par
    * le paquet — repris de header-controls/HeaderControls.module.css avec les
