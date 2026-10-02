@@ -615,16 +615,12 @@
     justify-content: space-between;
     gap: var(--opale-space-xs);
   }
-  /*
-   * Sous 768 px : le pli n'a pas cours (voir SettingsToc), d'où l'en-tête masqué ;
-   * le rail a la hauteur de son contenu, la barre d'Opale n'a rien à faire défiler.
-   */
+  /* Sous 768 px : le pli n'a pas cours (voir SettingsToc), d'où l'en-tête masqué. */
   @media (max-width: 767px) {
     .settings-rail {
       padding: var(--opale-space-md) 1rem 0;
     }
-    .settings-toc__header,
-    .settings-rail .opale-sidebar__scrollbar {
+    .settings-toc__header {
       display: none;
     }
   }
@@ -636,17 +632,7 @@
       align-self: flex-start;
       height: 100dvh;
     }
-    /*
-     * Le cadre d'Opale (poignée, format mobile) puis son emplacement de rail et
-     * le rail lui-même prennent toute la hauteur.
-     */
-    .settings-rail > .opale-sidebar__frame {
-      height: 100%;
-    }
-    .settings-rail .opale-sidebar__rail-slot {
-      flex: 1 1 auto;
-      min-height: 0;
-    }
+    /* Le cadre d'Opale (poignée, format mobile) s'étire seul ; le rail le remplit. */
     .settings-rail .settings-toc__root {
       height: 100%;
     }
