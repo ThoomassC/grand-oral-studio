@@ -2,15 +2,19 @@
  * Place le focus sur le premier élément trouvé parmi `ids`, une fois le DOM
  * mis à jour (le rendu consécutif à une Server Action peut arriver après la
  * résolution de la promesse) : nouvelles tentatives pendant ~1,5 s.
+ *
+ * Le document est capturé à l'appel : les tentatives peuvent survivre au
+ * composant (et, en test, à l'environnement jsdom) sans lire un global disparu.
  */
 export function focusLater(ids: (string | null | undefined)[], options: { select?: boolean } = {}): void {
   if (typeof window === "undefined") return;
+  const doc = window.document;
   let attempts = 0;
   const tryFocus = () => {
     attempts += 1;
     for (const id of ids) {
       if (!id) continue;
-      const el = document.getElementById(id);
+      const el = doc.getElementById(id);
       if (el && !el.hasAttribute("hidden") && el.getClientRects().length > 0) {
         el.focus();
         if (options.select && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) el.select();
