@@ -89,3 +89,10 @@ export function blockedMessage(blockedBy: StepId): string {
       return "Passez d'abord le Jour J";
   }
 }
+
+/** Ancres des zones d'import de Préparer (charte depuis une présentation, gabarit depuis un prompt). */
+export const IMPORT_ANCHORS = { brand: "import-presentation", template: "import-prompt" } as const;
+
+export function importHref(programId: string, id: keyof typeof IMPORT_ANCHORS): string {
+  return `${pageHref(programId, id)}#${IMPORT_ANCHORS[id]}`;
+}

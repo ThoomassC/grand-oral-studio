@@ -2,7 +2,7 @@
 
 import { SelectInput, TextInput } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useImperativeHandle, useRef, useState, useTransition, type Ref } from "react";
 import { BrandSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import { updateBrand } from "@/server/actions/programs";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
@@ -70,14 +70,26 @@ function contrastWarnings(colors: Brand["colors"]): string[] {
   return out;
 }
 
+/** Pilotage de l'éditeur depuis l'import (« Appliquer à la charte »). */
+export interface BrandEditorHandle {
+  /**
+   * Remplit le formulaire avec une charte importée, SANS l'enregistrer : le
+   * formulaire devient « modifié » (garde de navigation) et le focus va au
+   * titre de l'éditeur. Sans logo importé, le logo en cours est conservé.
+   */
+  applyImport(imported: Brand): void;
+}
+
 export function BrandEditor({
   programId,
   initialBrand,
   format,
+  ref,
 }: {
   programId: string;
   initialBrand: Brand;
   format: PromptTemplate["format"];
+  ref?: Ref<BrandEditorHandle>;
 }) {
   const [saved, setSaved] = useState<Brand>(initialBrand);
   const [brand, setBrand] = useState<Brand>(initialBrand);
@@ -87,6 +99,7 @@ export function BrandEditor({
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const baseId = useId();
 
   const dirty = JSON.stringify(brand) !== JSON.stringify(saved);
@@ -98,6 +111,17 @@ export function BrandEditor({
     setBrand(next);
     setStatus(IDLE);
   }
+
+  useImperativeHandle(ref, () => ({
+    applyImport(imported) {
+      setBrand((b) => ({ ...imported, logoDataUrl: imported.logoDataUrl ?? b.logoDataUrl }));
+      setFieldErrors({});
+      setLogoError(null);
+      setStatus({ kind: "success", message: "Charte importée dans le formulaire : vérifiez puis enregistrez." });
+      // Après le rendu : l'aperçu d'import, au-dessus, disparaît dans le même lot et décalerait la page.
+      window.setTimeout(() => headingRef.current?.focus(), 0);
+    },
+  }));
 
   async function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
     setLogoError(null);
@@ -174,7 +198,9 @@ export function BrandEditor({
 
       <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
-          <h2 className="text-2xl">Charte graphique</h2>
+          <h2 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
+            Charte graphique
+          </h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
         </div>
 

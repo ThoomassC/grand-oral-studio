@@ -10,6 +10,7 @@ import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ThemeForm } from "./ThemeForm";
 import { ThemeImport } from "./ThemeImport";
+import { QuickStartImports } from "./QuickStartImports";
 
 export interface ThemeItem {
   id: string;
@@ -122,6 +123,12 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
   return (
     <div className="flex flex-col gap-6">
+      <QuickStartImports
+        programId={programId}
+        importOpen={panel === "import"}
+        importPanelId="panel-import-themes"
+        onImportList={() => openPanel("import")}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
