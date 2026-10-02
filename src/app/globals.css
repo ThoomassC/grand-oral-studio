@@ -135,6 +135,19 @@
 
 @layer components {
   /*
+   * Corps de la Modal d'Opale : `overflow-y: auto` découpe aussi les débordements
+   * horizontaux et le bas, si bien que l'anneau de focus (tracé hors du champ)
+   * était rogné. On réserve sa place, compensée par une marge négative pour
+   * garder l'alignement du contenu. (À corriger aussi dans Opale.)
+   */
+  .opale-modal__body {
+    --app-focus-room: calc(var(--opale-focus-ring-width, 3px) + var(--opale-focus-ring-offset, 2px) + 1px);
+    margin-inline: calc(-1 * var(--app-focus-room));
+    padding-inline: var(--app-focus-room);
+    padding-block: var(--app-focus-room);
+  }
+
+  /*
    * Contrôles de l'en-tête : la boîte encadrée de l'en-tête d'Opale
    * (`HeaderThemeToggle`, déclencheur de `LanguageSelector`, non exportés par
    * le paquet — repris de header-controls/HeaderControls.module.css avec les
@@ -590,23 +603,26 @@
   }
 
   /*
-   * Sommaire des Paramètres (Sidebar d'Opale), sur le modèle du rail gauche de
-   * la vitrine d'Opale : collé au bord gauche, fond de page, filet à droite,
-   * sans carte. L'en-tête n'étant pas collant, le rail se colle en haut de la
-   * fenêtre (`top: 0`) et mesure `100dvh` : sous l'en-tête en haut de page,
-   * pleine fenêtre dès que l'en-tête est sorti de l'écran. Défilement interne
-   * si son contenu dépasse. Plié, il se réduit à sa colonne d'icônes (largeur
-   * animée par Opale, coupée si prefers-reduced-motion) et le contenu reprend
-   * la place.
+   * Sommaire des Paramètres : le Sidebar d'Opale tel quel (rail sur le fond de
+   * page, filet, parties, barre de défilement et poignée d'Opale). On ne fait
+   * que le placer : sous 768 px en haut de page ; au-delà, collé au bord gauche
+   * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
+   * barre de défilement d'Opale exige une hauteur.
    */
-  .settings-rail {
-    padding: var(--opale-space-lg) var(--opale-space-md) 0;
+  .settings-toc__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--opale-space-xs);
   }
-  .settings-rail .settings-toc {
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+  /* Sous 768 px : le pli n'a pas cours (voir SettingsToc), d'où l'en-tête masqué. */
+  @media (max-width: 767px) {
+    .settings-rail {
+      padding: var(--opale-space-md) 1rem 0;
+    }
+    .settings-toc__header {
+      display: none;
+    }
   }
   @media (min-width: 768px) {
     .settings-rail {
@@ -615,31 +631,10 @@
       flex: none;
       align-self: flex-start;
       height: 100dvh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding: 0;
-      border-right: 1px solid var(--opale-divider);
-      background: var(--opale-background);
     }
-    .settings-rail .settings-toc {
-      min-height: 100%;
-    }
-  }
-  /* Sous 768 px : en haut, pleine largeur déplié, en ligne (bascule + icônes) replié. */
-  @media (max-width: 767px) {
-    .settings-toc {
-      width: 100%;
-      max-width: 100%;
-    }
-    .settings-toc[data-collapsed] {
-      flex-direction: row;
-      align-items: center;
-      width: auto;
-      gap: var(--opale-space-xs);
-    }
-    .settings-toc[data-collapsed] .opale-sidebar__items {
-      flex-direction: row;
-      gap: var(--opale-space-xs);
+    /* Le cadre d'Opale (poignée, format mobile) s'étire seul ; le rail le remplit. */
+    .settings-rail .settings-toc__root {
+      height: 100%;
     }
   }
 
