@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  Icon,
-  Sidebar,
-  SidebarGroup,
-  SidebarHeader,
-  SidebarItem,
-  SidebarItems,
-  SidebarToggle,
-  type OpaleIconName,
-} from "@thomascaron/opale-ui";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Icon, Sidebar, SidebarGroup, SidebarItem, SidebarItems, type OpaleIconName } from "@thomascaron/opale-ui";
+import { useEffect, useRef, useState } from "react";
 import { prefersReducedMotion } from "@/components/preferences/store";
 
 /** Les parties de la page Configuration IA : `id` = celui du titre (h2) de la section. */
@@ -27,52 +18,12 @@ const TOC_GROUPS = [...new Set(TOC_SECTIONS.map((s) => s.group))].map((title) =>
 
 const LABELS = {
   items: "Sommaire de la configuration IA",
-  expand: "Déplier le sommaire",
-  collapse: "Replier le sommaire",
   scroll: "Défilement du sommaire",
   scrollStart: "Début du sommaire",
   resize: "Largeur du sommaire",
   menu: "Sommaire",
   shortcuts: "Parties de la configuration IA",
 };
-const STORAGE_KEY = "grand-oral-studio:sommaire-replie";
-const CHANGE_EVENT = "grand-oral-studio:sommaire-change";
-
-/* État plié mémorisé : localStorage (try/catch), lu comme un magasin externe. */
-function readCollapsed(): boolean {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-function writeCollapsed(collapsed: boolean): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
-  } catch {
-    // Stockage indisponible : l'état vit le temps de la page.
-  }
-  window.dispatchEvent(new Event(CHANGE_EVENT));
-}
-function subscribeCollapsed(onChange: () => void): () => void {
-  window.addEventListener(CHANGE_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(CHANGE_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-/* Le pli est un réglage du rail latéral (≥ 768 px) : en haut de page, le sommaire reste déplié. */
-const WIDE_QUERY = "(min-width: 768px)";
-function readWide(): boolean {
-  return window.matchMedia?.(WIDE_QUERY).matches ?? true;
-}
-function subscribeWide(onChange: () => void): () => void {
-  const query = window.matchMedia?.(WIDE_QUERY);
-  query?.addEventListener("change", onChange);
-  return () => query?.removeEventListener("change", onChange);
-}
 
 function atBottom(): boolean {
   const root = document.documentElement;
@@ -86,17 +37,14 @@ function sectionOf(id: string): HTMLElement | null {
 /**
  * Sommaire de la page Configuration IA : le `Sidebar` d'Opale, comme le
  * sommaire de sa documentation (parties repliables, barre de défilement
- * d'Opale, poignée de largeur, format mobile sous 30 rem), pliable
- * (`SidebarToggle` : `aria-expanded` + `aria-controls`), entrées-liens vers
- * les sections. L'entrée active (`aria-current`, posé par Opale) suit la
+ * d'Opale, poignée de largeur, format mobile sous 30 rem), sans titre ni
+ * bouton de pli (la poignée suffit à régler la place), entrées-liens vers les
+ * sections. L'entrée active (`aria-current`, posé par Opale) suit la
  * section visible ; un clic fait défiler jusqu'à la section (sans animation si
  * l'utilisateur limite les mouvements, sur son appareil ou dans Réglages),
  * place le focus sur son titre et inscrit le fragment dans l'URL.
  */
 export function SettingsToc() {
-  const storedCollapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
-  const wide = useSyncExternalStore(subscribeWide, readWide, () => true);
-  const collapsed = storedCollapsed && wide;
   const [active, setActive] = useState<string>(TOC_SECTIONS[0]!.id);
   // Pendant un défilement lancé par un clic, l'observateur ne doit pas reprendre la main.
   const lockUntil = useRef(0);
@@ -150,9 +98,6 @@ export function SettingsToc() {
 
   return (
     <Sidebar
-      collapsible
-      collapsed={collapsed}
-      onCollapsedChange={writeCollapsed}
       value={active}
       onNavigate={(item) => goTo(item.id)}
       labels={LABELS}
@@ -162,10 +107,6 @@ export function SettingsToc() {
       className="settings-toc"
       rootClassName="settings-toc__root"
     >
-      <SidebarHeader className="settings-toc__header">
-        {collapsed ? null : <p className="eyebrow">Sommaire</p>}
-        <SidebarToggle />
-      </SidebarHeader>
       <SidebarItems>
         {TOC_GROUPS.map((g) => (
           <SidebarGroup key={g.title} title={g.title}>

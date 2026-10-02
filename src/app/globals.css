@@ -634,19 +634,9 @@
    * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
    * barre de défilement d'Opale exige une hauteur.
    */
-  .settings-toc__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--opale-space-xs);
-  }
-  /* Sous 768 px : le pli n'a pas cours (voir SettingsToc), d'où l'en-tête masqué. */
   @media (max-width: 767px) {
     .settings-rail {
       padding: var(--opale-space-md) 1rem 0;
-    }
-    .settings-toc__header {
-      display: none;
     }
   }
   @media (min-width: 768px) {
