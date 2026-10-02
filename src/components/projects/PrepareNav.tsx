@@ -22,7 +22,7 @@ function stateOf(item: PrepareItem): { text: string; tone: BadgeTone } {
  */
 export function PrepareNav({ programId, items }: { programId: string; items: PrepareItem[] }) {
   const pathname = usePathname();
-  const { onLinkClick, dialog } = useGuardedNavigation();
+  const { onLinkClick } = useGuardedNavigation();
   const current = prepareItemOfPath(programId, pathname);
   if (!current) return null;
   const themesDone = items.find((i) => i.id === "themes")?.status === "done";
@@ -31,8 +31,9 @@ export function PrepareNav({ programId, items }: { programId: string; items: Pre
   return (
     <div className="mb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Préparer : thèmes, charte et gabarit" className="min-w-0 max-w-full overflow-x-auto">
-          <ul className="flex items-center gap-2">
+        <nav aria-label="Préparer : thèmes, charte et gabarit" className="min-w-0 max-w-full">
+          {/* À la ligne plutôt qu'un défilement interne peu visible à 320 px. */}
+          <ul className="flex flex-wrap items-center gap-2">
             {PREPARE_ITEMS.map((meta) => {
               const item = items.find((i) => i.id === meta.id);
               const href = pageHref(programId, meta.id);
@@ -44,9 +45,7 @@ export function PrepareNav({ programId, items }: { programId: string; items: Pre
                     href={href}
                     aria-current={isCurrent ? "page" : undefined}
                     className={`${TAB_LINK_CLASS} gap-2`}
-                    onClick={(e) => {
-                      if (!isCurrent) onLinkClick(e, href);
-                    }}
+                    onClick={(e) => onLinkClick(e, href)}
                   >
                     {meta.label}
                     {state ? (
@@ -73,7 +72,6 @@ export function PrepareNav({ programId, items }: { programId: string; items: Pre
           </Link>
         ) : null}
       </div>
-      {dialog}
     </div>
   );
 }

@@ -369,16 +369,19 @@
 
   /*
    * Fil d'étapes d'un projet (components/layout/ProjectSteps.tsx). Numéro dans
-   * une pastille (coche quand l'étape est faite, cadenas + texte quand elle est
-   * bloquée), libellé, résumé ; étapes reliées par un trait. Courante : lavis
-   * et pastille au primaire ; faite : pastille au vert de succès. Jamais la
-   * couleur seule : coche, cadenas, graisse et texte masqué disent l'état.
+   * une pastille (coche quand l'étape est faite, cadenas quand elle est
+   * bloquée, à toutes les largeurs), libellé, résumé ; étapes reliées par un
+   * trait. Courante : lavis et pastille au primaire ; faite : pastille cerclée
+   * et coche au vert « sur surface » (contraste ≥ 3:1 dans les deux thèmes).
+   * Jamais la couleur seule : coche, cadenas, graisse et texte masqué disent
+   * l'état.
    */
   .project-steps {
     /* Contient les textes `sr-only` (absolus) : sinon ils débordent de la page. */
     position: relative;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--opale-space-md);
     scrollbar-width: thin;
   }
   .project-steps__list {
@@ -403,7 +406,7 @@
     background: var(--opale-field-border);
   }
   .project-steps__connector[data-done] {
-    background: var(--opale-success);
+    background: var(--opale-success-on-surface);
   }
   .project-step {
     position: relative;
@@ -462,12 +465,12 @@
     stroke-width: 2.5;
   }
   .project-step[data-state="done"] .project-step__dot {
-    border-color: var(--opale-success);
-    background: var(--opale-success);
-    color: var(--opale-on-fill);
+    border-color: var(--opale-success-on-surface);
+    color: var(--opale-success-on-surface);
   }
   .project-step[data-state="blocked"] .project-step__dot {
     border-style: dashed;
+    color: var(--opale-warning-on-surface);
   }
   .project-step[aria-current="step"] {
     background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
@@ -503,6 +506,22 @@
   }
   .project-step__summary--blocked {
     color: var(--opale-warning-on-surface);
+  }
+
+  /* Cadenas de « Étape suivante » bloquée (StepNav) : à la taille du texte du bouton. */
+  .step-nav__lock {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .step-nav__lock svg {
+    width: 100%;
+    height: 100%;
   }
 
   /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */

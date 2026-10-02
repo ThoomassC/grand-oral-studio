@@ -1,14 +1,16 @@
 "use client";
 
+import { Icon } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { PrepareItem, ProjectStep } from "@/domain/progress";
+import type { PrepareItem, ProjectStep, StepId } from "@/domain/progress";
 import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
 import { Notice } from "@/components/ui/Notice";
 import { PAGE_ORDER, PREPARE_ITEMS, blockedMessage, decksHref, exactPageOfPath, pageHref, stepHref, stepMeta, stepOfPath } from "./steps";
 
 const BUTTON = "opale-button no-underline";
 const isPrepare = (id: string) => PREPARE_ITEMS.some((p) => p.id === id);
+const asStep = (id: string): StepId | null => (id === "skeletons" || id === "day" ? id : null);
 
 /**
  * Barre de bas de page du parcours : Thèmes → Charte → Gabarit → Squelettes →
@@ -16,17 +18,21 @@ const isPrepare = (id: string) => PREPARE_ITEMS.some((p) => p.id === id);
  * « Voir les diaporamas ». Dans Préparer, dès qu'il y a un thème, « Passer aux
  * squelettes » permet de sauter la suite. Rendue seulement sur la page exacte
  * d'une étape (pas sur un squelette ouvert, ni les Decks).
+ *
+ * Les liens annoncent leur vraie destination (des squelettes, l'étape
+ * précédente est le Gabarit), et l'étape suivante dit si elle est bloquée :
+ * cadenas visible, raison lue, et le lien perd l'emphase du bouton principal.
  */
-export function StepNav({ programId, prepare }: { programId: string; prepare: PrepareItem[] }) {
+export function StepNav({ programId, prepare, steps }: { programId: string; prepare: PrepareItem[]; steps: ProjectStep[] }) {
   const pathname = usePathname();
-  const { onLinkClick, dialog } = useGuardedNavigation();
+  const { onLinkClick } = useGuardedNavigation();
   const id = exactPageOfPath(programId, pathname);
   if (!id) return null;
   const i = PAGE_ORDER.findIndex((p) => p.id === id);
   const prev = PAGE_ORDER[i - 1];
   const next = PAGE_ORDER[i + 1];
-  // En sortant de Préparer, l'étape précédente se nomme « Préparer ».
-  const prevLabel = prev && isPrepare(prev.id) && !isPrepare(id) ? stepMeta("prepare").label : prev?.label;
+  const nextStepId = next ? asStep(next.id) : null;
+  const nextBlockedBy = steps.find((s) => s.id === nextStepId && s.status !== "done")?.blockedBy ?? null;
   const nextHref = next ? pageHref(programId, next.id) : decksHref(programId);
   const themesDone = prepare.find((p) => p.id === "themes")?.status === "done";
   const skip = isPrepare(id) && themesDone && next?.id !== "skeletons";
@@ -42,7 +48,7 @@ export function StepNav({ programId, prepare }: { programId: string; prepare: Pr
             onClick={(e) => onLinkClick(e, pageHref(programId, prev.id))}
           >
             <span>
-              <span aria-hidden="true">← </span>Étape précédente<span className="sr-only"> : {prevLabel}</span>
+              <span aria-hidden="true">← </span>Étape précédente<span className="sr-only"> : {prev.label}</span>
             </span>
           </Link>
         ) : (
@@ -56,11 +62,17 @@ export function StepNav({ programId, prepare }: { programId: string; prepare: Pr
               </span>
             </Link>
           ) : null}
-          <Link href={nextHref} className={`${BUTTON} opale-button--primary`} onClick={(e) => onLinkClick(e, nextHref)}>
-            <span>
+          <Link
+            href={nextHref}
+            className={`${BUTTON} ${nextBlockedBy ? "opale-button--ghost" : "opale-button--primary"}`}
+            onClick={(e) => onLinkClick(e, nextHref)}
+          >
+            <span className="inline-flex items-center gap-1.5">
               {next ? (
                 <>
+                  {nextBlockedBy ? <Icon name="lock" aria-hidden="true" className="step-nav__lock" /> : null}
                   Étape suivante : {next.label}
+                  {nextBlockedBy ? <span className="sr-only"> — bloquée : {blockedMessage(nextBlockedBy)}</span> : null}
                   <span aria-hidden="true"> →</span>
                 </>
               ) : (
@@ -72,7 +84,6 @@ export function StepNav({ programId, prepare }: { programId: string; prepare: Pr
           </Link>
         </div>
       </div>
-      {dialog}
     </nav>
   );
 }

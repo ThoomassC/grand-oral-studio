@@ -1,14 +1,16 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makeSteps } from "./fixtures";
+import { makePrepare, makeSteps } from "./fixtures";
 
 let pathname = "/projets/p1/charte";
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push }) }));
 
 const { ProjectSteps } = await import("@/components/layout/ProjectSteps");
-const { UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
+const { UnsavedChangesBanner, UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
+const { StepNav } = await import("@/components/projects/StepNav");
 
 afterEach(() => {
   cleanup();
@@ -17,6 +19,23 @@ afterEach(() => {
 });
 
 const STEPS = makeSteps(["prepare"], { day: "skeletons" });
+
+function Dirty() {
+  useUnsavedChanges(true);
+  return null;
+}
+
+/** Le fil d'étapes dans un projet dont l'éditeur ouvert a des modifications non enregistrées. */
+function renderDirty(extra?: ReactNode) {
+  return render(
+    <UnsavedChangesProvider>
+      <Dirty />
+      <ProjectSteps programId="p1" steps={STEPS} deckCount={0} />
+      <UnsavedChangesBanner />
+      {extra}
+    </UnsavedChangesProvider>,
+  );
+}
 
 function nav() {
   return screen.getByRole("navigation", { name: "Étapes du projet" });
@@ -54,20 +73,62 @@ describe("ProjectSteps", () => {
   });
 
   it("devrait demander confirmation avant de quitter une page aux modifications non enregistrées", async () => {
-    function Dirty() {
-      useUnsavedChanges(true);
-      return null;
-    }
     const user = userEvent.setup();
-    render(
-      <UnsavedChangesProvider>
-        <Dirty />
-        <ProjectSteps programId="p1" steps={STEPS} deckCount={0} />
-      </UnsavedChangesProvider>,
-    );
+    renderDirty();
     await user.click(within(nav()).getByRole("link", { name: /Squelettes/ }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent("Vos modifications ne sont pas enregistrées");
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
     expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
+  });
+
+  it("devrait garder « Préparer » depuis la charte : l'étape est courante, mais c'est une autre page", async () => {
+    const user = userEvent.setup();
+    renderDirty();
+    await user.click(within(nav()).getByRole("link", { name: /Préparer/ }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("devrait rendre le focus au lien cliqué quand on reste sur la page (bouton ou Échap)", async () => {
+    const user = userEvent.setup();
+    renderDirty();
+    const link = within(nav()).getByRole("link", { name: /Squelettes/ });
+    await user.click(link);
+    const stay = screen.getByRole("button", { name: "Rester sur la page" });
+    await waitFor(() => expect(stay).toHaveFocus());
+    await user.click(stay);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(link).toHaveFocus();
+
+    await user.click(link);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Rester sur la page" })).toHaveFocus());
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(link).toHaveFocus();
+  });
+
+  it("ne devrait afficher qu'une confirmation, quel que soit le lien cliqué", async () => {
+    pathname = "/projets/p1/gabarit";
+    const user = userEvent.setup();
+    renderDirty(<StepNav programId="p1" prepare={makePrepare({ themes: true })} steps={STEPS} />);
+    await user.click(within(nav()).getByRole("link", { name: /Jour J/ }));
+    await user.click(screen.getByRole("link", { name: /Étape suivante/ }));
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
+    expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
+  });
+
+  it("devrait dire une étape bloquée sans infobulle, et séparer libellé et résumé", () => {
+    render(<ProjectSteps programId="p1" steps={STEPS} deckCount={0} />);
+    const day = within(nav()).getByRole("link", { name: /Jour J/ });
+    expect(day).not.toHaveAttribute("title");
+    expect(day.querySelector(".project-step__dot .opale-icon")).not.toBeNull();
+    expect(within(nav()).getByRole("link", { name: /^Étape 1 :\s?Préparer,\s?résumé prepare\s?— faite$/ })).toBeInTheDocument();
+  });
+
+  it("devrait placer les Decks dans une navigation nommée", () => {
+    render(<ProjectSteps programId="p1" steps={STEPS} deckCount={1} />);
+    const decks = screen.getByRole("navigation", { name: "Diaporamas du projet" });
+    expect(within(decks).getByRole("link", { name: /Decks.*1 diaporama$/ })).toHaveAttribute("href", "/projets/p1/decks");
   });
 });

@@ -22,7 +22,7 @@ export function ProjectProgressSummary({
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
       <p className="flex items-center gap-2 text-sm">
-        <span role="img" aria-label={`${doneCount} étapes faites sur ${total}`} className="flex gap-1">
+        <span role="img" aria-label={`${doneCount} ${doneCount > 1 ? "étapes faites" : "étape faite"} sur ${total}`} className="flex gap-1">
           {Array.from({ length: total }, (_, i) => (
             <span
               key={i}

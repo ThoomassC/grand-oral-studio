@@ -1,12 +1,16 @@
 import { Meter } from "@/components/ui/Meter";
 import { ProjectSteps } from "@/components/layout/ProjectSteps";
-import { UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
-import { ProjectBreadcrumb } from "@/components/projects/ProjectBreadcrumb";
+import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { PrepareNav } from "@/components/projects/PrepareNav";
 import { StepBlockedNotice, StepNav } from "@/components/projects/StepNav";
 import { loadProgram } from "../_lib/load";
 
-export default async function ProgramLayout({ children, params }: LayoutProps<"/projets/[id]">) {
+/**
+ * En-tête commun des pages d'un projet : fil d'Ariane (slot `@crumbs`, qui
+ * connaît le deck ouvert), titre, avancement, fil d'étapes ; puis la
+ * confirmation unique « modifications non enregistrées » et la page.
+ */
+export default async function ProgramLayout({ children, crumbs, params }: LayoutProps<"/projets/[id]">) {
   const { id } = await params;
   const program = await loadProgram(id);
   const { steps, prepare, doneCount, total } = program.progress;
@@ -18,7 +22,7 @@ export default async function ProgramLayout({ children, params }: LayoutProps<"/
       <div className="flex flex-1 flex-col">
         <div className="border-b border-border bg-surface">
           <div className="mx-auto w-full max-w-6xl px-4 pt-3 pb-3 sm:px-6 sm:pt-4">
-            <ProjectBreadcrumb programId={program.id} programName={program.name} />
+            {crumbs}
             <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <h1 className="line-clamp-2 min-w-0 text-2xl break-words sm:text-3xl" title={program.name}>
                 {program.name}
@@ -37,10 +41,11 @@ export default async function ProgramLayout({ children, params }: LayoutProps<"/
           </div>
         </div>
         <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
+          <UnsavedChangesBanner />
           <StepBlockedNotice programId={program.id} steps={steps} />
           <PrepareNav programId={program.id} items={prepare} />
           {children}
-          <StepNav programId={program.id} prepare={prepare} />
+          <StepNav programId={program.id} prepare={prepare} steps={steps} />
         </div>
       </div>
     </UnsavedChangesProvider>
