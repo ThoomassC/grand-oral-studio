@@ -125,11 +125,31 @@ function parseLanguage(text: string): "fr" | "en" | null {
   return null;
 }
 
+const LIST_HEADER = /^\s*(?:sections?|plan|structure)\s*[:：]?\s*$/i;
+const INLINE_KEYWORD =
+  /(?<=[.;!?])\s+(?=(?:dur[ée]e|duration|format|langue|language|ton|tone|sections?|plan|structure|contraintes?|constraints?)\s*[:：])/giu;
+const INLINE_MARKER = /(^|\s)(\d{1,2})[.)]\s+(?=\p{L})/gu;
+
+/**
+ * Prompt collé sur une seule ligne (« Sections : 1. Intro (1 diapo) 2. … Ton : … ») :
+ * remet une consigne par ligne. Un numéro n'ouvre une ligne que s'il prolonge la
+ * suite 1, 2, 3… : « 1 h 30. » ou « 16:9. » ne sont pas coupés.
+ */
+function splitInlineInstructions(text: string): string {
+  const withKeywords = text.replace(INLINE_KEYWORD, "\n");
+  let expected = 1;
+  return withKeywords.replace(INLINE_MARKER, (match: string, lead: string, num: string) => {
+    if (Number(num) !== expected) return match;
+    expected += 1;
+    return `${lead ? "\n" : ""}${num}. `;
+  });
+}
+
 /** « Analyse : forces et faiblesses (3 diapos) » → titre, consigne, diapos. */
 function parseItem(raw: string): DraftSection {
   const slidesMatch = SLIDES_PATTERN.exec(raw);
   const slides = slidesMatch ? Number(slidesMatch[1]) : 1;
-  const rest = (slidesMatch ? raw.replace(slidesMatch[0], " ") : raw).replace(/[\s:—–-]+$/, "").trim();
+  const rest = (slidesMatch ? raw.replace(slidesMatch[0], " ") : raw).replace(/[\s:—–.;-]+$/, "").trim();
   const split = /\s*(?:[:：]|\s[—–-])\s+/.exec(rest);
   const title = split ? rest.slice(0, split.index) : rest;
   const guidance = split ? rest.slice(split.index + split[0].length) : "";
@@ -139,7 +159,7 @@ function parseItem(raw: string): DraftSection {
 export function parseTemplateText(text: string, base: PromptTemplate): TemplateImport {
   const found: string[] = [];
   const patch: Partial<PromptTemplate> = {};
-  const lines = stripControlChars(text).split(/\r?\n/);
+  const lines = splitInlineInstructions(stripControlChars(text)).split(/\r?\n/);
   const consumed = new Set<number>();
 
   const duration = parseDuration(text);
@@ -160,10 +180,10 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
   lines.forEach((line, i) => {
     const tone = /^\s*(?:[-*•]\s*)?(?:ton|tone)\s*[:：]\s*(.+)$/i.exec(line);
     if (tone?.[1]) {
-      patch.tone = clean(tone[1], BOUNDS.tone);
+      patch.tone = clean(tone[1].replace(/[\s.;]+$/, ""), BOUNDS.tone);
       if (!found.includes("Ton")) found.push("Ton");
     }
-    if (METADATA_LINE.test(line)) consumed.add(i);
+    if (METADATA_LINE.test(line) || LIST_HEADER.test(line)) consumed.add(i);
   });
 
   // Sections : titres Markdown (au moins 2), sinon liste numérotée, sinon puces.

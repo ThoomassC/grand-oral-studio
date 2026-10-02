@@ -144,3 +144,30 @@ describe("normalizeTemplateDraft (sortie IA permissive)", () => {
     expect(found).toEqual([]);
   });
 });
+
+describe("parseTemplateText — prompt collé sur une seule ligne", () => {
+  const oneLine =
+    "Oral de 20 minutes en 16:9. Sections : 1. Introduction (1 diapo) 2. Problématique (1 diapo) 3. Développement en deux parties (4 diapos) 4. Conclusion (1 diapo). Ton : professionnel.";
+
+  it("devrait reconnaître les sections numérotées et le ton comme si chaque consigne était sur sa ligne", () => {
+    const { template, found } = parseTemplateText(oneLine, defaultTemplate());
+    expect(template.sections.map((s) => [s.title, s.slides])).toEqual([
+      ["Introduction", 1],
+      ["Problématique", 1],
+      ["Développement en deux parties", 4],
+      ["Conclusion", 1],
+    ]);
+    expect(template.tone).toBe("professionnel");
+    expect(template.durationMinutes).toBe(20);
+    expect(template.format).toBe("16:9");
+    expect(found).toEqual(expect.arrayContaining(["Ton"]));
+    expect(found.some((f) => /4 sections/.test(f))).toBe(true);
+  });
+
+  it("ne devrait pas couper un format ou une durée comme « 16:9. » ou « 1 h 30. »", () => {
+    const { template } = parseTemplateText("Format 16:9. Durée 1 h 30. Sections : 1. Intro 2. Conclusion", defaultTemplate());
+    expect(template.format).toBe("16:9");
+    expect(template.durationMinutes).toBe(90);
+    expect(template.sections.map((s) => s.title)).toEqual(["Intro", "Conclusion"]);
+  });
+});
