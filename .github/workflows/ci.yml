@@ -70,6 +70,10 @@ jobs:
       - name: Build
         env:
           BETTER_AUTH_URL: http://localhost:3000
+          # src/lib/auth.ts instancie le client Prisma au chargement du module : une URL
+          # syntaxiquement valide suffit (aucune connexion n'est ouverte au build, et
+          # aucune base n'écoute sur ce runner — une requête au build échouerait ici).
+          DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build_placeholder
         run: npm run build
 
   integration:
