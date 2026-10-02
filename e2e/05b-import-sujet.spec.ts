@@ -64,14 +64,28 @@ test.describe("5. Préparer — importer votre sujet depuis un fichier", () => {
     await expect(subject(page).getByRole("region", { name: "Charte proposée" })).toHaveCount(0);
   });
 
-  test("devrait refuser un .pptm (macros)", async ({ page, account }) => {
-    void account;
-    await createProject(page, "Fichier pptm");
-    await uploadSubjectFile(page, FILES.pptm);
-    // Refusé dès le navigateur par la zone de dépôt (extension hors `accept`), avant tout envoi.
-    await expect(subject(page).getByRole("alert").filter({ hasText: "Type de fichier non pris en charge" })).toBeVisible();
-    await expect(subject(page).getByRole("region", { name: "Charte proposée" })).toHaveCount(0);
-  });
+  for (const [label, file] of [
+    [".pptm", FILES.pptm],
+    [".potm", FILES.potm],
+  ] as const) {
+    test(`devrait refuser un ${label} (macros) avec le message dédié, sans envoi`, async ({ page, account }) => {
+      void account;
+      await createProject(page, `Fichier ${label}`);
+      const uploads: string[] = [];
+      page.on("request", (req) => {
+        if (req.method() === "POST" && req.postData()?.includes("vbaProject")) uploads.push(req.url());
+      });
+      await uploadSubjectFile(page, file);
+      // Refusé dès le navigateur, avec sa raison (et non le message générique « type non pris en charge »).
+      const alert = subject(page).getByRole("alert").filter({ hasText: "Import impossible" });
+      await expect(alert).toContainText(
+        "Les fichiers avec macros (.pptm, .potm) sont refusés : enregistrez la présentation en .pptx.",
+      );
+      await expect(subject(page).getByText("Type de fichier non pris en charge")).toHaveCount(0);
+      await expect(subject(page).getByRole("region", { name: "Charte proposée" })).toHaveCount(0);
+      expect(uploads, "le fichier à macros a été envoyé au serveur").toEqual([]);
+    });
+  }
 
   test("devrait demander le moteur Claude pour une image avec le moteur Gratuit", async ({ page, account }) => {
     void account;

@@ -149,6 +149,17 @@ describe("Bloc « Importer votre sujet » (onglet Thèmes)", () => {
       expect(alert.closest("[role=alert]")).not.toBeNull();
       expect(screen.queryByRole("heading", { name: "Charte proposée" })).not.toBeInTheDocument();
     });
+    it.each(["sujet.pptm", "modele.POTM"])("devrait refuser %s (macros) avec le message dédié, sans appeler le serveur", async (name) => {
+      const user = userEvent.setup();
+      renderBlock();
+      await user.upload(screen.getByLabelText(/Déposez votre présentation/), new File(["PK"], name));
+      const alert = await screen.findByText(
+        /Les fichiers avec macros \(\.pptm, \.potm\) sont refusés : enregistrez la présentation en \.pptx\./,
+      );
+      expect(alert.closest("[role=alert]")).not.toBeNull();
+      expect(screen.queryByText(/Type de fichier non pris en charge/)).not.toBeInTheDocument();
+      expect(analyzeFile).not.toHaveBeenCalled();
+    });
   });
 
   describe("depuis un prompt", () => {

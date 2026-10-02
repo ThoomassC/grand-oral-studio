@@ -22,6 +22,7 @@ export const FILES = {
   pptx: path.join(GENERATED_DIR, "charte-e2e.pptx"),
   fakePptx: path.join(GENERATED_DIR, "faux.pptx"),
   pptm: path.join(GENERATED_DIR, "macro.pptm"),
+  potm: path.join(GENERATED_DIR, "macro.potm"),
   promptTxt: path.join(GENERATED_DIR, "gabarit.txt"),
   png: path.join(GENERATED_DIR, "image.png"),
 };
@@ -78,6 +79,7 @@ export async function generateFixtures(): Promise<void> {
   fs.mkdirSync(GENERATED_DIR, { recursive: true });
   fs.writeFileSync(FILES.pptx, await buildPptx(false));
   fs.writeFileSync(FILES.pptm, await buildPptx(true));
+  fs.writeFileSync(FILES.potm, await buildPptx(true));
   fs.writeFileSync(FILES.fakePptx, "Ceci est un simple fichier texte renommé en .pptx.\n");
   fs.writeFileSync(FILES.promptTxt, `${TEMPLATE_PROMPT}\n`);
   fs.writeFileSync(FILES.png, PNG_1PX);
