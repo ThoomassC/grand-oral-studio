@@ -220,18 +220,6 @@
   .site-settings__block:first-child {
     border-top: 0;
   }
-  /*
-   * Toggle d'Opale (3.0.3) dans un conteneur qui défile : sa case native, en
-   * absolu, se positionne hors de la zone défilante si la rangée ne l'est pas ;
-   * le focus clavier restait alors hors de vue. Le rail ne se comprime pas non
-   * plus face à un long libellé (la pastille en sortait). À corriger dans Opale.
-   */
-  .site-settings .opale-toggle-row {
-    position: relative;
-  }
-  .site-settings .opale-toggle-track {
-    flex-shrink: 0;
-  }
 
   /* Bouton à libellé et chevron (menu du compte) : `.languageTrigger` d'Opale. */
   .header-control--menu {
