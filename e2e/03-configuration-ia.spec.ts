@@ -1,4 +1,4 @@
-import { test, expect, BASE_URL } from "./support/fixtures";
+import { test, expect, BASE_URL, OLLAMA_CONFIGURED, OLLAMA_SKIP_REASON } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
 import type { Page } from "@playwright/test";
 
@@ -56,7 +56,13 @@ test.describe("3. Configuration IA — moteur", () => {
     await expect(page.getByRole("radio", { name: "Gratuit (sans IA)" })).toBeEnabled();
     // Sans clé mais AI_PROVIDER=mock : Claude est servi par le mock, donc disponible.
     await expect(page.getByRole("radio", { name: "Claude (Anthropic)" })).toBeEnabled();
-    await expect(page.getByRole("radio", { name: "Modèle local (Ollama)" })).toBeEnabled();
+    const ollama = page.getByRole("radio", { name: "Modèle local (Ollama)" });
+    if (OLLAMA_CONFIGURED) {
+      await expect(ollama).toBeEnabled();
+    } else {
+      await expect(ollama).toBeDisabled();
+      await expect(page.getByText("Indisponible : Ollama n'est pas configuré sur ce serveur")).toBeVisible();
+    }
   });
 
   test("devrait enregistrer le moteur Gratuit et le garder après rechargement", async ({ page, account }) => {
@@ -72,6 +78,7 @@ test.describe("3. Configuration IA — moteur", () => {
 
   test(`devrait proposer le modèle ${OLLAMA_MODEL} et enregistrer Ollama`, async ({ page, account }) => {
     void account;
+    test.skip(!OLLAMA_CONFIGURED, OLLAMA_SKIP_REASON);
     await page.goto("/configuration-ia");
     await page.getByRole("radio", { name: "Modèle local (Ollama)" }).check();
     const select = page.getByLabel("Modèle Ollama");

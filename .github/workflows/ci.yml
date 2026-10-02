@@ -1,0 +1,203 @@
+# Intégration continue.
+#  - verify / integration : à chaque PR et push vers develop ou main (checks requis),
+#    et sur déclenchement manuel ;
+#  - e2e (Playwright, ~5 min) : la nuit et sur déclenchement manuel seulement.
+#
+# Aucun secret GitHub n'est requis (la CI passe sur un fork) : les clés nécessaires
+# au démarrage sont FACTICES, générées à chaque run et jetées avec la machine.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22" # ni .nvmrc ni engines dans package.json
+  NEXT_TELEMETRY_DISABLED: "1"
+  AI_PROVIDER: mock
+
+jobs:
+  verify:
+    name: verify
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installer les dépendances (postinstall → prisma generate)
+        run: npm ci
+
+      - name: Clés factices du build
+        # next build charge src/lib/auth.ts en mode production : un secret ≥ 32 caractères est exigé.
+        run: |
+          secret="$(openssl rand -base64 32)"
+          echo "::add-mask::$secret"
+          echo "BETTER_AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Typage
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests unitaires
+        run: npm test
+
+      - name: Build
+        env:
+          BETTER_AUTH_URL: http://localhost:3000
+        run: npm run build
+
+  integration:
+    name: integration
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15 # version de la base locale de référence (PostgreSQL 15)
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # base jetable du runner, injoignable hors du job
+          POSTGRES_DB: grand_oral_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d grand_oral_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grand_oral_test
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installer les dépendances (postinstall → prisma generate)
+        run: npm ci
+
+      - name: Clés factices
+        run: |
+          auth="$(openssl rand -base64 32)"
+          enc="$(openssl rand -base64 32)"
+          echo "::add-mask::$auth"
+          echo "::add-mask::$enc"
+          {
+            echo "BETTER_AUTH_SECRET=$auth"
+            echo "SETTINGS_ENCRYPTION_KEY=$enc"
+            echo "SETTINGS_ENCRYPTION_KEY_VERSION=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Migrations (base de test)
+        run: npm run db:test:migrate
+
+      - name: Tests d'intégration
+        run: npm run test:int
+
+  e2e:
+    name: e2e
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grand_oral_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d grand_oral_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grand_oral_e2e
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grand_oral_e2e
+      E2E_BASE_URL: http://localhost:3000
+      BETTER_AUTH_URL: http://localhost:3000
+      # Identifiants Google factices : le bouton « Continuer avec Google » est actif, aucun
+      # parcours OAuth n'est exécuté par la suite.
+      GOOGLE_CLIENT_ID: ci-placeholder.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: ci-placeholder
+      # OLLAMA_BASE_URL volontairement absente : les tests Ollama sont sautés.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installer les dépendances (postinstall → prisma generate)
+        run: npm ci
+
+      - name: Navigateur Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Clés factices
+        run: |
+          auth="$(openssl rand -base64 32)"
+          enc="$(openssl rand -base64 32)"
+          echo "::add-mask::$auth"
+          echo "::add-mask::$enc"
+          {
+            echo "BETTER_AUTH_SECRET=$auth"
+            echo "SETTINGS_ENCRYPTION_KEY=$enc"
+            echo "SETTINGS_ENCRYPTION_KEY_VERSION=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Migrations
+        run: npm run db:deploy
+
+      - name: Démarrer le serveur de dev
+        # La suite vise `next dev` (CSP de dev, pas d'upgrade-insecure-requests sur http://localhost).
+        run: |
+          nohup npm run dev > next-dev.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null http://localhost:3000/; then echo "serveur prêt"; exit 0; fi
+            sleep 2
+          done
+          echo "serveur injoignable après 120 s"; cat next-dev.log; exit 1
+
+      - name: Tests E2E
+        run: npx playwright test
+
+      - name: Rapport Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            next-dev.log
+          retention-days: 14
+          if-no-files-found: ignore

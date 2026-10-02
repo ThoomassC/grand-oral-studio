@@ -1,4 +1,4 @@
-import { test, expect } from "./support/fixtures";
+import { test, expect, OLLAMA_CONFIGURED, OLLAMA_SKIP_REASON } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
 import { createProject, importThemeList, setEngine } from "./support/app";
 
@@ -16,6 +16,8 @@ const MODEL = "qwen2.5:14b";
 const SIX_MINUTES = 6 * 60_000;
 
 test.describe("6. Squelettes — Ollama réel", () => {
+  test.skip(!OLLAMA_CONFIGURED, OLLAMA_SKIP_REASON);
+
   test(`devrait générer un squelette avec ${MODEL} conforme au gabarit par défaut`, async ({ page, account }) => {
     void account;
     test.setTimeout(SIX_MINUTES + 60_000);
