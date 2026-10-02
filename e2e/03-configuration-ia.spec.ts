@@ -37,16 +37,14 @@ test.describe("3. Configuration IA — sommaire", () => {
     await expect(heading).toBeInViewport();
   });
 
-  test("devrait replier puis déplier le sommaire et garder l'état après rechargement", async ({ page, account }) => {
+  test("ne devrait proposer ni titre « Sommaire » ni bouton de pli dans le rail", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");
-    await page.getByRole("button", { name: "Replier le sommaire" }).click();
-    const unfold = page.getByRole("button", { name: "Déplier le sommaire" });
-    await expect(unfold).toHaveAttribute("aria-expanded", "false");
-    await page.reload();
-    await expect(page.getByRole("button", { name: "Déplier le sommaire" })).toBeVisible();
-    await page.getByRole("button", { name: "Déplier le sommaire" }).click();
-    await expect(page.getByRole("button", { name: "Replier le sommaire" })).toHaveAttribute("aria-expanded", "true");
+    const toc = page.getByRole("navigation", { name: "Sommaire de la configuration IA" });
+    await expect(toc.getByRole("link", { name: "Moteur de rédaction" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /(Replier|Déplier) le sommaire/ })).toHaveCount(0);
+    // Le bouton « Sommaire » du format mobile d'Opale existe (masqué) : seul le titre est visé.
+    await expect(page.getByRole("main").locator(".settings-rail p", { hasText: /^Sommaire$/ })).toHaveCount(0);
   });
 });
 

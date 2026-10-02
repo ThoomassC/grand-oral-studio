@@ -88,26 +88,12 @@ describe("SettingsToc", () => {
     expect(screen.queryByRole("link", { name: /Apparence/ })).not.toBeInTheDocument();
   });
 
-  it("devrait se replier et se déplier, et mémoriser l'état", async () => {
-    const user = userEvent.setup();
-    render(<SettingsToc />);
-    const toggle = screen.getByRole("button", { name: "Replier le sommaire" });
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(toggle).toHaveAttribute("aria-controls");
-    await user.click(toggle);
-    const expand = screen.getByRole("button", { name: "Déplier le sommaire" });
-    expect(expand).toHaveAttribute("aria-expanded", "false");
-    expect(window.localStorage.getItem("grand-oral-studio:sommaire-replie")).toBe("1");
-    await user.click(expand);
-    expect(window.localStorage.getItem("grand-oral-studio:sommaire-replie")).toBe("0");
-  });
-
-  it("devrait rester déplié sur écran étroit, même replié auparavant sur grand écran", () => {
+  it("ne devrait proposer ni titre « Sommaire » ni bouton de pli, même avec un ancien état replié mémorisé", () => {
     window.localStorage.setItem("grand-oral-studio:sommaire-replie", "1");
-    wide = false;
     render(<SettingsToc />);
-    expect(screen.getByRole("link", { name: /Clé API Anthropic/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Déplier le sommaire" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Sommaire", { selector: "p" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(Replier|Déplier) le sommaire/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Moteur de rédaction/ })).toBeVisible();
   });
 
   it("devrait suivre la partie visible au défilement", () => {
