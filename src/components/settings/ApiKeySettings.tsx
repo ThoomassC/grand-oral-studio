@@ -3,6 +3,7 @@
 import { Badge, type BadgeTone, Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useId, useRef, useState, useTransition } from "react";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { SaveApiKeyInputSchema } from "@/domain/api-key";
 import { deleteAnthropicApiKey, saveAnthropicApiKey, testAnthropicApiKey } from "@/server/actions/settings";
 import { PasswordInput } from "@/components/auth/PasswordInput";
@@ -64,6 +65,9 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
   const [testing, startTest] = useTransition();
   const [testStatus, setTestStatus] = useState<FormStatusState>(IDLE);
   const [announce, setAnnounce] = useState("");
+  // Une clé saisie mais pas enregistrée serait perdue en quittant la page.
+  const [keyTyped, setKeyTyped] = useState(false);
+  useUnsavedChanges(keyTyped);
 
   const [state, submit, saving] = useActionState<SaveState, FormData>(async (_prev, formData) => {
     const input = { apiKey: String(formData.get("apiKey") ?? "") };
@@ -142,6 +146,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
         ref={formRef}
         noValidate
         className="flex flex-col gap-4"
+        onReset={() => setKeyTyped(false)}
         onSubmit={(e) => {
           e.preventDefault();
           if (busy) return;
@@ -161,6 +166,7 @@ export function ApiKeySettings({ status }: { status: ApiKeyStatus }) {
             data-lpignore="true"
             placeholder="sk-ant-…"
             maxLength={256}
+            onChange={(e) => setKeyTyped(e.target.value !== "")}
             {...errorProps(state.fieldErrors, "apiKey", `${ids.key}-err`, ids.hint)}
           />
           <p id={ids.hint} className="opale-field__helper">

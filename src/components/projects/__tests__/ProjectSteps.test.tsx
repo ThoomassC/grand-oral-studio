@@ -6,15 +6,19 @@ import { makePrepare, makeSteps } from "./fixtures";
 
 let pathname = "/projets/p1/charte";
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push }) }));
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push, replace }) }));
 
 const { ProjectSteps } = await import("@/components/layout/ProjectSteps");
 const { UnsavedChangesBanner, UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
 const { StepNav } = await import("@/components/projects/StepNav");
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Le démontage retire la sentinelle d'historique de la garde (`history.back()`, asynchrone).
+  await new Promise((resolve) => setTimeout(resolve, 20));
   push.mockReset();
+  replace.mockReset();
   pathname = "/projets/p1/charte";
 });
 
@@ -78,7 +82,9 @@ describe("ProjectSteps", () => {
     await user.click(within(nav()).getByRole("link", { name: /Squelettes/ }));
     expect(screen.getByRole("dialog", { name: "Quitter sans enregistrer ?" })).toHaveTextContent("Vos modifications ne sont pas enregistrées");
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
-    expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
+    // La destination remplace la sentinelle d'historique de la garde : pas d'entrée en double.
+    expect(replace).toHaveBeenCalledWith("/projets/p1/squelettes");
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("devrait garder « Préparer » depuis la charte : l'étape est courante, mais c'est une autre page", async () => {
@@ -118,7 +124,9 @@ describe("ProjectSteps", () => {
     await user.click(screen.getByRole("link", { name: /Étape suivante/ }));
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
-    expect(push).toHaveBeenCalledWith("/projets/p1/squelettes");
+    // La destination remplace la sentinelle d'historique de la garde : pas d'entrée en double.
+    expect(replace).toHaveBeenCalledWith("/projets/p1/squelettes");
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("devrait dire une étape bloquée sans infobulle, et séparer libellé et résumé", () => {

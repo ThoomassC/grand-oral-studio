@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useGuardedNavigation } from "./useGuardedNavigation";
 
 const ITEMS = [
   { href: "/projets", label: "Projets" },
@@ -21,9 +22,11 @@ export const TAB_LINK_CLASS = "app-tab";
  * aussi chaque projet, sous /projets/…). Le style ne repose pas que sur la
  * couleur : lavis et graisse. Opale n'a pas d'onglets-liens
  * horizontaux (`Tabs` est un tablist ARIA, `Navbar` une colonne).
+ * Garde « modifications non enregistrées » sur chaque lien vers une autre page.
  */
 export function MainNav({ className = "" }: { className?: string }) {
   const pathname = usePathname();
+  const { onLinkClick } = useGuardedNavigation();
   return (
     <nav aria-label="Navigation principale" className={className}>
       <ul className="flex items-center gap-2">
@@ -31,7 +34,12 @@ export function MainNav({ className = "" }: { className?: string }) {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <li key={item.href}>
-              <Link href={item.href} aria-current={active ? "page" : undefined} className={TAB_LINK_CLASS}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={TAB_LINK_CLASS}
+                onClick={(e) => onLinkClick(e, item.href)}
+              >
                 {item.label}
               </Link>
             </li>

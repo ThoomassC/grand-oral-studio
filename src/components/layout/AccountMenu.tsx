@@ -8,9 +8,10 @@ import {
   DropdownMenuTrigger,
   Icon,
 } from "@thomascaron/opale-ui";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { useSignOut } from "@/components/auth/useSignOut";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { useGuardedNavigation } from "./useGuardedNavigation";
 
 /**
  * Menu du compte (`DropdownMenu` d'Opale, motif APG « menu button » :
@@ -23,16 +24,22 @@ import { LiveRegion } from "@/components/ui/LiveRegion";
  * `.header-menu` dans globals.css.
  *
  * Opale n'a pas d'élément de menu-lien : « Informations du profil » navigue
- * par le routeur à l'activation.
+ * par le routeur à l'activation. Les deux actions quittent la page : elles
+ * passent par la garde « modifications non enregistrées » (le focus revient
+ * au bouton du menu si l'on reste). La déconnexion garde le menu ouvert
+ * (« Déconnexion… ») ; retenue, elle le ferme pour laisser place à la
+ * confirmation.
  */
 export function AccountMenu({ name, email }: { name: string; email: string }) {
-  const router = useRouter();
   const { pending, failed, signOut } = useSignOut();
+  const { go, runOrHold } = useGuardedNavigation();
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="flex items-center gap-2">
-      <DropdownMenu>
-        <DropdownMenuTrigger aria-label={`Compte : ${email}`} className="header-control header-control--menu">
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger ref={triggerRef} aria-label={`Compte : ${email}`} className="header-control header-control--menu">
           <span aria-hidden="true" className="inline-flex">
             <Icon name="user" />
           </span>
@@ -53,7 +60,7 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
               </span>
             }
           >
-            <DropdownMenuItem className="header-menu__item" value="profil" onSelect={() => router.push("/profil")}>
+            <DropdownMenuItem className="header-menu__item" value="profil" onSelect={() => go("/profil", triggerRef.current)}>
               Informations du profil
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -61,7 +68,9 @@ export function AccountMenu({ name, email }: { name: string; email: string }) {
               value="deconnexion"
               closeOnSelect={false}
               disabled={pending}
-              onSelect={signOut}
+              onSelect={() => {
+                if (runOrHold(signOut, triggerRef.current)) setOpen(false);
+              }}
             >
               {pending ? "Déconnexion…" : "Se déconnecter"}
             </DropdownMenuItem>

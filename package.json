@@ -17,7 +17,8 @@
     "db:studio": "prisma studio",
     "db:test:migrate": "PRISMA_DB=test prisma migrate deploy",
     "postinstall": "prisma generate",
-    "test:int": "VITEST_INTEGRATION=1 vitest run --project integration"
+    "test:int": "VITEST_INTEGRATION=1 vitest run --project integration",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -35,6 +36,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

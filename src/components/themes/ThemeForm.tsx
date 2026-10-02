@@ -10,6 +10,7 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { KeywordInput } from "./KeywordInput";
 
 interface ThemeFormProps {
@@ -59,6 +60,13 @@ export function ThemeForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [pending, startTransition] = useTransition();
+  /** Dernière saisie enregistrée (ou l'état initial) : la référence des modifications non enregistrées. */
+  const [baseline, setBaseline] = useState<ThemeInput>(initial);
+  const dirty =
+    name !== baseline.name ||
+    description !== baseline.description ||
+    JSON.stringify(keywords) !== JSON.stringify(baseline.keywords);
+  useUnsavedChanges(dirty);
 
   const keywordError = firstError(fieldErrors, "keywords") ?? keywordItemError(fieldErrors);
 
@@ -74,6 +82,7 @@ export function ThemeForm({
       return;
     }
     setFieldErrors({});
+    const submitted: ThemeInput = { name, description, keywords };
     startTransition(async () => {
       let result: ActionResult<unknown>;
       try {
@@ -90,6 +99,7 @@ export function ThemeForm({
         return;
       }
       if (successMessage) setStatus({ kind: "success", message: successMessage });
+      if (!resetOnSuccess) setBaseline(submitted);
       if (resetOnSuccess) {
         setName("");
         setDescription("");

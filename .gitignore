@@ -43,3 +43,8 @@ next-env.d.ts
 
 # Config locale Claude Code
 /.claude
+
+# Playwright (E2E)
+/test-results
+/playwright-report
+/e2e/.generated

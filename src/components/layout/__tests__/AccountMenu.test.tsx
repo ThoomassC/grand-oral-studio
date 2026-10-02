@@ -3,17 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
+const replace = vi.fn();
 const refresh = vi.fn();
 const signOut = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/charte", useRouter: () => ({ push, replace, refresh }) }));
 vi.mock("@/lib/auth-client", () => ({ signOut: (...args: unknown[]) => signOut(...args) }));
 
 const { AccountMenu } = await import("@/components/layout/AccountMenu");
+const { UnsavedChangesBanner, UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
 
 const USER = { name: "Alice Martin", email: "alice@example.test" };
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Le démontage retire la sentinelle d'historique de la garde (`history.back()`, asynchrone).
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  replace.mockReset();
   push.mockReset();
   refresh.mockReset();
   signOut.mockReset();
@@ -88,5 +93,67 @@ describe("AccountMenu", () => {
     await user.click(screen.getByRole("menuitem", { name: "Se déconnecter" }));
     expect(await screen.findByText("La déconnexion a échoué. Réessayez.")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  describe("garde « modifications non enregistrées »", () => {
+    function Dirty() {
+      useUnsavedChanges(true);
+      return null;
+    }
+
+    function renderDirty() {
+      return render(
+        <UnsavedChangesProvider>
+          <Dirty />
+          <AccountMenu {...USER} />
+          <UnsavedChangesBanner />
+        </UnsavedChangesProvider>,
+      );
+    }
+
+    const modal = () => screen.queryByRole("dialog", { name: "Quitter sans enregistrer ?" });
+
+    it("devrait demander confirmation avant « Informations du profil », et rendre le focus au bouton en restant", async () => {
+      const user = userEvent.setup();
+      renderDirty();
+      await user.click(trigger());
+      await user.click(screen.getByRole("menuitem", { name: "Informations du profil" }));
+      expect(modal()).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Rester sur la page" }));
+      expect(modal()).not.toBeInTheDocument();
+      await waitFor(() => expect(trigger()).toHaveFocus());
+
+      await user.click(trigger());
+      await user.click(screen.getByRole("menuitem", { name: "Informations du profil" }));
+      await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
+      expect(replace).toHaveBeenCalledWith("/profil");
+    });
+
+    it("devrait demander confirmation avant « Se déconnecter », fermer le menu, puis se déconnecter en confirmant", async () => {
+      signOut.mockResolvedValue({ error: null });
+      const user = userEvent.setup();
+      renderDirty();
+      await user.click(trigger());
+      await user.click(screen.getByRole("menuitem", { name: "Se déconnecter" }));
+      expect(modal()).toBeInTheDocument();
+      expect(signOut).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+
+      await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
+      expect(signOut).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    });
+
+    it("ne devrait pas se déconnecter en restant sur la page", async () => {
+      const user = userEvent.setup();
+      renderDirty();
+      await user.click(trigger());
+      await user.click(screen.getByRole("menuitem", { name: "Se déconnecter" }));
+      await user.click(screen.getByRole("button", { name: "Rester sur la page" }));
+      expect(signOut).not.toHaveBeenCalled();
+      await waitFor(() => expect(trigger()).toHaveFocus());
+    });
   });
 });

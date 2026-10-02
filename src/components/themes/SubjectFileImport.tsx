@@ -28,7 +28,16 @@ type Phase =
   | { kind: "applied"; file: FileInfo };
 
 const MB = 1024 * 1024;
-const ACCEPT = ".pptx,.potx,.thmx,.pdf,.png,.jpg,.jpeg";
+/**
+ * Les extensions à macros sont acceptées par la zone de dépôt pour être
+ * refusées ici, avec leur raison : hors `accept`, la zone ne dirait qu'un
+ * « type non pris en charge ». Le serveur les refuse aussi.
+ */
+const MACRO_EXTENSIONS = [".pptm", ".potm", ".ppsm", ".ppam"];
+const ACCEPT = [".pptx", ".potx", ".thmx", ".pdf", ".png", ".jpg", ".jpeg", ...MACRO_EXTENSIONS].join(",");
+const MACRO_REJECTED = "Les fichiers avec macros (.pptm, .potm) sont refusés : enregistrez la présentation en .pptx.";
+
+const hasMacros = (fileName: string) => MACRO_EXTENSIONS.some((ext) => fileName.trim().toLowerCase().endsWith(ext));
 
 const SOURCE_TEXT: Record<BrandImportData["source"], string> = {
   office: "Lue dans le fichier Office, sans IA.",
@@ -75,6 +84,10 @@ export function SubjectFileImport({
     if (!file) return;
     const info: FileInfo = { name: file.name, size: file.size };
     const request = ++requestRef.current;
+    if (hasMacros(file.name)) {
+      setPhase({ kind: "error", file: info, message: MACRO_REJECTED });
+      return;
+    }
     setPhase({ kind: "analyzing", file: info });
     startTransition(async () => {
       const formData = new FormData();
@@ -130,7 +143,7 @@ export function SubjectFileImport({
           <strong>PDF ou image</strong> (export Canva en PDF, .png, .jpg) : moteur Claude, à choisir dans les
           Paramètres (compte comme un appel IA).
         </li>
-        <li className="text-muted">20 Mo au plus (PDF 10 Mo, image 5 Mo). Les fichiers à macros (.pptm) sont refusés.</li>
+        <li className="text-muted">20 Mo au plus (PDF 10 Mo, image 5 Mo). Les fichiers avec macros (.pptm, .potm) sont refusés.</li>
       </ul>
 
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start">
