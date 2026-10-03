@@ -3,12 +3,14 @@
  * mis à jour (le rendu consécutif à une Server Action peut arriver après la
  * résolution de la promesse) : nouvelles tentatives pendant ~1,5 s.
  *
- * Le document est capturé à l'appel : les tentatives peuvent survivre au
- * composant (et, en test, à l'environnement jsdom) sans lire un global disparu.
+ * `window` et le document sont capturés à l'appel : les tentatives peuvent
+ * survivre au composant (et, en test, à l'environnement jsdom) sans lire un
+ * global disparu.
  */
 export function focusLater(ids: (string | null | undefined)[], options: { select?: boolean } = {}): void {
   if (typeof window === "undefined") return;
-  const doc = window.document;
+  const win = window;
+  const doc = win.document;
   let attempts = 0;
   const tryFocus = () => {
     attempts += 1;
@@ -17,13 +19,13 @@ export function focusLater(ids: (string | null | undefined)[], options: { select
       const el = doc.getElementById(id);
       if (el && !el.hasAttribute("hidden") && el.getClientRects().length > 0) {
         el.focus();
-        if (options.select && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) el.select();
+        if (options.select && (el instanceof win.HTMLInputElement || el instanceof win.HTMLTextAreaElement)) el.select();
         return;
       }
     }
-    if (attempts < 20) window.setTimeout(tryFocus, 80);
+    if (attempts < 20) win.setTimeout(tryFocus, 80);
   };
-  window.setTimeout(tryFocus, 0);
+  win.setTimeout(tryFocus, 0);
 }
 
 /**
@@ -32,14 +34,16 @@ export function focusLater(ids: (string | null | undefined)[], options: { select
  */
 export function focusFirstInvalid(form: HTMLElement | null): void {
   if (!form) return;
+  const win = form.ownerDocument.defaultView;
+  if (!win) return;
   let attempts = 0;
   const tryFocus = () => {
     attempts += 1;
     const el = form.querySelector<HTMLElement>('[aria-invalid="true"]');
     if (el) el.focus();
-    else if (attempts < 6) window.setTimeout(tryFocus, 60);
+    else if (attempts < 6) win.setTimeout(tryFocus, 60);
   };
-  window.setTimeout(tryFocus, 0);
+  win.setTimeout(tryFocus, 0);
 }
 
 /** « 1 champ à corriger », « 3 champs à corriger ». */
