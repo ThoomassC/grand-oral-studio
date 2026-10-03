@@ -2,7 +2,7 @@ import pg from "pg";
 
 /** Base de développement utilisée par le serveur `npm run dev` (jamais une base de prod). */
 export const E2E_DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? "postgresql://thomascaron@localhost:5432/grand_oral_dev";
+  process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL ?? "postgresql://localhost:5432/grand_oral_dev";
 
 export const E2E_EMAIL_LIKE = "e2e-%@example.test";
 

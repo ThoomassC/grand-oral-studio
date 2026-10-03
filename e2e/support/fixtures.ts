@@ -6,6 +6,15 @@ import { resetAuthRateLimit } from "./db";
 export const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 export const PASSWORD = "MotDePasse-E2E-2026";
 
+/**
+ * Ollama configuré pour le serveur testé (OLLAMA_BASE_URL, lue du .env par
+ * playwright.config.ts comme par `next dev`). Absente (CI) : les tests qui exigent
+ * un vrai modèle local sont sautés, et l'on vérifie à la place que le moteur est
+ * présenté comme indisponible.
+ */
+export const OLLAMA_CONFIGURED = Boolean(process.env.OLLAMA_BASE_URL?.trim());
+export const OLLAMA_SKIP_REASON = "OLLAMA_BASE_URL absente : pas de modèle local à interroger.";
+
 export interface TestUser {
   name: string;
   email: string;
