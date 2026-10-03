@@ -92,10 +92,72 @@ describe("buildFinalDeckPrompt", () => {
     },
   );
 
+  it("devrait raccourcir ou retirer les notes du squelette sur demande (contexte borné d'un modèle local)", () => {
+    const skeleton = makeConformingDeck();
+    const long = "Une note rédigée assez longue pour être raccourcie. ".repeat(20).trim();
+    skeleton.slides = skeleton.slides.map((s) => ({ ...s, notes: long }));
+    const full = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM).user;
+    const short = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonNotesMax: 30 }).user;
+    const none = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonNotesMax: 0 }).user;
+    expect(short.length).toBeLessThan(full.length);
+    expect(short).toContain("Une note rédigée assez longue…");
+    expect(none).not.toContain("Une note rédigée");
+    // La structure du squelette reste transmise.
+    for (const slide of skeleton.slides) expect(none).toContain(slide.title);
+  });
+
   it("devrait demander des notes d'orateur calées sur la durée de l'oral", () => {
     const text = fullText(buildFinalDeckPrompt(program, theme, null, PROBLEM));
     expect(text).toMatch(/notes/i);
     expect(text).toMatch(/\b20\s*min/);
+  });
+
+  it.each(makeConformingDeck().slides.map((s) => ({ notes: s.notes })))(
+    "devrait transmettre les notes d'orateur du squelette « $notes »",
+    ({ notes }) => {
+      expect(buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM).user).toContain(notes);
+    },
+  );
+
+  it("devrait exiger des notes rédigées à dire, minutées, sur chaque diapo — pas des consignes", () => {
+    const { system } = buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM);
+    expect(system).toMatch(/au moins (deux|2|trois|3) phrases/i);
+    expect(system).toMatch(/jamais une consigne/i);
+    expect(system).toMatch(/« Présentez/);
+    expect(system).toMatch(/couverture comprise/i);
+  });
+
+  it("devrait interdire d'inventer un chiffre et imposer la source ou « [source à trouver] »", () => {
+    for (const pair of [buildFinalDeckPrompt(program, theme, null, PROBLEM), buildSkeletonPrompt(program, theme)]) {
+      expect(pair.system).toMatch(/N'invente aucun chiffre/);
+      expect(pair.system).toContain("[source à trouver]");
+      expect(pair.system).toMatch(/Source : /);
+    }
+  });
+
+  it("devrait interdire d'inventer des informations personnelles et imposer des marqueurs « [à compléter : …] »", () => {
+    const { system } = buildFinalDeckPrompt(program, theme, null, PROBLEM);
+    expect(system).toMatch(/informations? personnelles?/i);
+    expect(system).toContain("[à compléter :");
+  });
+
+  it("devrait appliquer les contraintes du gabarit et ajouter « Objection probable » quand elles le demandent", () => {
+    const withObjection = makeProgram({
+      template: makeTemplate({ constraints: "Dans les notes de chaque diapo chiffrée, ajoute une ligne « Objection probable : … »." }),
+    });
+    const asked = buildFinalDeckPrompt(withObjection, theme, null, PROBLEM);
+    expect(asked.user).toMatch(/Objection probable :/);
+    expect(asked.system).toMatch(/contraintes du gabarit/i);
+    const plain = buildFinalDeckPrompt(program, theme, null, PROBLEM);
+    expect(fullText(plain)).not.toMatch(/Objection probable/);
+  });
+
+  it("devrait aussi le dire en anglais pour un gabarit anglais", () => {
+    const en = makeProgram({ template: makeTemplate({ language: "en" }) });
+    const { system } = buildFinalDeckPrompt(en, theme, null, PROBLEM);
+    expect(system).toMatch(/Never invent a figure/);
+    expect(system).toContain("[source needed]");
+    expect(system).toContain("[to complete:");
   });
 
   it("devrait produire un prompt utilisable quand aucun squelette n'est fourni", () => {

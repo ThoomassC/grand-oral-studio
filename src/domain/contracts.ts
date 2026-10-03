@@ -46,7 +46,13 @@ export type DomainFns = {
   /** src/domain/prompts.ts */
   buildSkeletonPrompt(ctx: ProgramContext, theme: ThemeRef): PromptPair;
   /** src/domain/prompts.ts */
-  buildFinalDeckPrompt(ctx: ProgramContext, theme: ThemeRef, skeleton: DeckSpec | null, problem: string): PromptPair;
+  buildFinalDeckPrompt(
+    ctx: ProgramContext,
+    theme: ThemeRef,
+    skeleton: DeckSpec | null,
+    problem: string,
+    options?: { skeletonNotesMax?: number },
+  ): PromptPair;
   /** src/domain/prompts.ts */
   buildClassificationPrompt(ctx: ProgramContext, problem: string): PromptPair;
   /** src/domain/classification.ts — filtre les ids inconnus, dédoublonne, borne [0,1], trie, garde 3. */

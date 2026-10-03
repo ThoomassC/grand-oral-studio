@@ -30,7 +30,7 @@ function outcome(overrides: Partial<ClassificationOutcome>): ClassificationOutco
 async function recognize(result: ClassificationOutcome) {
   classify.mockResolvedValue({ ok: true, data: result });
   const user = userEvent.setup();
-  render(<DayJourney programId="p1" themes={THEMES} recentDeck={null} writer={{ label: "Gratuit (trame à compléter)", outlineOnly: true }} />);
+  render(<DayJourney programId="p1" themes={THEMES} recentDeck={null} writer={{ label: "Gratuit (trame à compléter)", outlineOnly: true, waitHint: "Cela prend quelques secondes." }} />);
   await user.type(screen.getByLabelText("Problématique tirée au sort"), "Comment les PME peuvent-elles financer leur transition ?");
   await user.click(screen.getByRole("button", { name: "Reconnaître le thème" }));
   await screen.findByText("Thème retenu pour le diaporama");

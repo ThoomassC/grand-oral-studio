@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DayJourney, type DayTheme, type RecentDeck } from "@/components/day/DayJourney";
 import { Duration, PREP_MINUTES, PrepDial } from "@/components/day/PrepClock";
+import { generationWaitHint } from "@/components/day/wait-hint";
 import { getAiSettings, listFinalDecks, NotFoundError, type AiSettingsView, type FinalDeckSummary } from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
@@ -66,7 +67,11 @@ export default async function DayPage({ params }: PageProps<"/projets/[id]/jour-
         </p>
       </div>
       <DayJourney programId={program.id} themes={themes} recentDeck={mostRecent(decks, requestTime)}
-        writer={{ label: writerLabel(settings.engine), outlineOnly: settings.engine.effective === "free" }}
+        writer={{
+          label: writerLabel(settings.engine),
+          outlineOnly: settings.engine.effective === "free",
+          waitHint: generationWaitHint(settings.engine.effective),
+        }}
       />
     </div>
   );

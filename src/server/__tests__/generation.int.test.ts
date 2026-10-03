@@ -277,6 +277,31 @@ describe("generateFinalDeck", () => {
     expect(deck.spec.slides.some((s) => s.bullets.includes("Puce venue du squelette"))).toBe(true);
   });
 
+  it("devrait enregistrer le deck en complétant les notes trop courtes depuis le squelette, bornées et signalées", async () => {
+    const { a, programId, numerique } = await setup();
+    const skeleton = makeConformingDeck();
+    // Notes du squelette à la borne : avec le minutage du deck, la concaténation dépasserait LIMITS.notes.
+    const long = "Une phrase rédigée qui développe longuement le propos. ".repeat(60).slice(0, 3000);
+    skeleton.slides = skeleton.slides.map((s) => ({ ...s, notes: long }));
+    await decks.upsertSkeleton(a.id, numerique, skeleton);
+    const ai = providerWith({
+      generateDeck: async () => {
+        const deck = makeConformingDeck();
+        // L'IA omet une diapo de part1 et rend des notes réduites à un minutage.
+        deck.slides = deck.slides.filter((_, i) => i !== 3).map((s) => ({ ...s, notes: "[0:30–2:00 environ, prendre son temps]" }));
+        return deck;
+      },
+    });
+
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    const { spec } = await decks.getDeck(a.id, result.deckId);
+    expect(spec.slides.every((s) => s.notes.length <= 3000)).toBe(true);
+    expect(spec.slides.find((s) => s.sectionId === "part1")!.notes).toBe("[0:30–2:00 environ, prendre son temps]");
+    expect(result.warnings.some((w) => /reprises du squelette, à adapter/.test(w))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("part1") && /non complétée/.test(w))).toBe(true);
+  });
+
   it("devrait fonctionner sans squelette", async () => {
     const { a, programId, ville } = await setup();
     const result = await gen.generateFinalDeck(a.id, { programId, themeId: ville, problem: PROBLEM }, deps());

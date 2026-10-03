@@ -287,3 +287,33 @@ describe("lecture du gabarit", () => {
     expect(twoColumnLabels({ title: "Comparison", guidance: "" }, "en")).toEqual(["First option", "Second option"]);
   });
 });
+
+describe("deck gratuit — couverture et intercalaires", () => {
+  const theme: ThemeRef = { id: "g", name: "Green IT", description: "", keywords: [] };
+  const problem = "Le Green IT peut-il réellement réduire l'empreinte environnementale du numérique ?";
+
+  it("ne devrait pas répéter le thème dans le sous-titre quand le projet porte déjà son nom", () => {
+    const ctx = makeProgram({ name: "Green IT — Gratuit" });
+    const deck = buildFreeFinalDeck(ctx, theme, null, problem);
+    expect(deck.slides[0]!.subtitle).toBe("Green IT — Gratuit");
+  });
+
+  it("devrait garder thème et projet quand ils diffèrent", () => {
+    const deck = buildFreeFinalDeck(makeProgram({ name: "Grand oral 2026" }), theme, null, problem);
+    expect(deck.slides[0]!.subtitle).toBe("Green IT — Grand oral 2026");
+  });
+
+  it("devrait rendre une section « Intercalaire » d'une diapo en diapo de section", () => {
+    const template = makeTemplate({
+      sections: [
+        { id: "intro", title: "Introduction", guidance: "", slides: 1 },
+        { id: "inter-1", title: "Intercalaire Partie I", guidance: "Titre de partie + les diapos qu'elle contient", slides: 1 },
+        { id: "p1", title: "Partie I — l'état des lieux", guidance: "Le constat mesuré", slides: 2 },
+        { id: "conclusion", title: "Conclusion", guidance: "", slides: 1 },
+      ],
+    });
+    const deck = buildFreeSkeleton(makeProgram({ template }), theme);
+    expectValid(deck, template);
+    expect(deck.slides[2]!.layout).toBe("section");
+  });
+});

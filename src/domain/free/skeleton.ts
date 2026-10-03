@@ -220,16 +220,22 @@ interface PlannedSlide {
   columns: readonly [string, string] | null;
 }
 
+/** Section d'une diapo qui ne fait que séparer deux parties (« Intercalaire Partie I », « Transition »). */
+function isDivider(section: Pick<Section, "title">): boolean {
+  return /^(intercalaire|transition|separateur|divider|section break)\b/.test(flat(section.title));
+}
+
 function planSlides(template: PromptTemplate): PlannedSlide[] {
   const planned: PlannedSlide[] = [];
   for (const section of template.sections) {
     const kind = sectionKind(section);
     const columns = twoColumnLabels(section, template.language);
+    const divider = kind === "part" && isDivider(section);
     for (let index = 0; index < section.slides; index++) {
       const last = index === section.slides - 1;
       let layout: SlideLayout = "content";
       if (kind === "conclusion" && last) layout = "conclusion";
-      else if (kind === "part" && section.slides >= 2 && index === 0) layout = "section";
+      else if (kind === "part" && index === 0 && (divider || section.slides >= 2)) layout = "section";
       else if (kind === "part" && columns && last) layout = "two-columns";
       planned.push({ section, kind, index, layout, columns: layout === "two-columns" ? columns : null });
     }
@@ -264,6 +270,16 @@ function planGroups(template: PromptTemplate): string[] {
   return out;
 }
 
+/** « Thème — Projet », sans répéter le thème quand le nom du projet le contient déjà (« Green IT — Gratuit »). */
+function coverSubtitle(themeName: string, programName: string): string {
+  const theme = clean(themeName);
+  const program = clean(programName);
+  if (!program) return theme;
+  // Comparaison par mots entiers : le thème « IT » n'est pas contenu dans « Audit ».
+  if (!theme || ` ${flat(program)} `.includes(` ${flat(theme)} `)) return program;
+  return `${theme} — ${program}`;
+}
+
 interface BuildInput {
   ctx: ProgramContext;
   theme: ThemeRef;
@@ -295,7 +311,7 @@ function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
     layout: "title",
     sectionId: COVER_SECTION_ID,
     title: bounded(problem || theme.name, LIMITS.slideTitle),
-    subtitle: bounded(problem ? `${theme.name} — ${ctx.name}` : t.subtitleSkeleton(ctx.name), LIMITS.slideSubtitle),
+    subtitle: bounded(problem ? coverSubtitle(theme.name, ctx.name) : t.subtitleSkeleton(ctx.name), LIMITS.slideSubtitle),
     bullets: [],
     notes: `[0:00–${mmss(coverSeconds)}] ${t.notesCover(clean(theme.name), template.durationMinutes, problem !== null)}`,
   };
