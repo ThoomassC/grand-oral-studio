@@ -19,7 +19,7 @@ import type { AiProvider, DeckHints } from "./types";
 
 /**
  * Fournisseur Ollama (modèle local) — API HTTP d'Ollama :
- *   POST {base}/api/chat  { model, messages, stream: false, format: <JSON schema>, options }
+ *   POST {base}/api/chat  { model, messages, stream, format: <JSON schema>, options }
  *   GET  {base}/api/tags  → { models: [{ name, … }] }
  *
  * L'URL de base est fixée par le serveur (OLLAMA_BASE_URL), jamais par
@@ -28,6 +28,11 @@ import type { AiProvider, DeckHints } from "./types";
  * local est lent ; budgets distincts pour un deck (AI_OLLAMA_TIMEOUT_MS, 10 min)
  * et une classification (AI_OLLAMA_CLASSIFY_TIMEOUT_MS, 45 s). Concurrence
  * bornée par processus (AI_OLLAMA_MAX_CONCURRENCY, 2), réponse bornée à 2 Mo.
+ *
+ * Un deck est demandé EN FLUX (NDJSON) : sans flux, Ollama n'envoie les en-têtes
+ * qu'à la fin, et le fetch de Node abandonne au bout de 5 min (délai d'en-têtes
+ * d'undici), bien avant le budget de 10 min. En flux, les en-têtes arrivent au
+ * premier jeton ; le texte assemblé reste borné à 2 Mo.
  */
 
 const DEFAULT_TIMEOUT_MS = 600_000;
@@ -47,8 +52,8 @@ const MAX_DECK_NUM_CTX = 32_768;
 const CHARS_PER_TOKEN = 3;
 const OUTPUT_TOKENS_PER_SLIDE = 400;
 
-/** Longueurs successives des notes du squelette transmises quand le prompt déborde (0 = omises). */
-const SKELETON_NOTES_STEPS = [300, 120, 0] as const;
+/** Longueurs successives des pistes de la trame du squelette quand le prompt déborde (0 = titres seuls). */
+const SKELETON_DETAIL_STEPS = [120, 60, 0] as const;
 
 export interface DeckContext {
   /** num_ctx à demander : besoin estimé arrondi au Ki, entre le défaut et le plafond. */
@@ -61,7 +66,7 @@ export interface DeckContext {
 
 /**
  * Contexte d'une génération de deck : prompt + sortie attendue. Sans
- * agrandissement, un deck de 31 diapos dont le prompt transmet les notes du
+ * agrandissement, un deck de 31 diapos dont le prompt transmet la trame du
  * squelette dépasse 16 k ; au-delà du plafond, `fits` est faux.
  */
 export function deckContext(prompt: PromptPair, template: PromptTemplate | undefined, max: number = MAX_DECK_NUM_CTX): DeckContext {
@@ -79,20 +84,20 @@ export function deckNumCtx(prompt: PromptPair, template: PromptTemplate | undefi
 const log = createLogger({ component: "ai.ollama" });
 
 /**
- * Prompt de deck ajusté au plafond de contexte : s'il déborde, les notes du
- * squelette (le moins important : l'IA les réécrit de toute façon) sont
- * raccourcies par paliers, puis omises. Journalise sans aucune donnée
+ * Prompt de deck ajusté au plafond de contexte : s'il déborde, les pistes de la
+ * trame du squelette (le moins important : l'IA réécrit tout de toute façon)
+ * sont raccourcies par paliers, puis omises. Journalise sans aucune donnée
  * utilisateur (tailles seulement).
  */
 function fitDeckPrompt(prompt: PromptPair, hints: DeckHints | undefined, max: number = MAX_DECK_NUM_CTX) {
   const initial = deckContext(prompt, hints?.template, max);
   if (initial.fits) return { prompt, context: initial };
   if (hints?.compactPrompt) {
-    for (const skeletonNotesMax of SKELETON_NOTES_STEPS) {
-      const candidate = hints.compactPrompt(skeletonNotesMax);
+    for (const skeletonDetailMax of SKELETON_DETAIL_STEPS) {
+      const candidate = hints.compactPrompt(skeletonDetailMax);
       const context = deckContext(candidate, hints.template, max);
       if (context.fits) {
-        log.warn("ollama.context_reduced", { neededTokens: initial.neededTokens, maxCtx: max, skeletonNotesMax, reducedTokens: context.neededTokens });
+        log.warn("ollama.context_reduced", { neededTokens: initial.neededTokens, maxCtx: max, skeletonDetailMax, reducedTokens: context.neededTokens });
         return { prompt: candidate, context };
       }
     }
@@ -121,6 +126,96 @@ const ChatResponseSchema = z.object({
   eval_count: z.number().optional(),
   prompt_eval_count: z.number().optional(),
 });
+
+/** Un morceau du flux NDJSON : du texte, ou le morceau final (done), ou une erreur. */
+const ChatChunkSchema = z.object({
+  message: z.object({ content: z.string() }).optional(),
+  done: z.boolean().optional(),
+  done_reason: z.string().optional(),
+  eval_count: z.number().optional(),
+  prompt_eval_count: z.number().optional(),
+  error: z.string().optional(),
+});
+
+/** Volume brut maximal lu d'un flux (chaque jeton est enveloppé dans ~150 octets de JSON). */
+const MAX_STREAM_BYTES = 32 * MAX_RESPONSE_BYTES;
+
+export class StreamErrorChunk extends Error {
+  constructor(readonly detail: string) {
+    super("erreur signalée dans le flux");
+    this.name = "StreamErrorChunk";
+  }
+}
+
+export class StreamParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StreamParseError";
+  }
+}
+
+/**
+ * Lit une réponse NDJSON d'Ollama et assemble le texte. Lève
+ * ResponseTooLargeError au-delà de `maxContentBytes` de texte (ou d'une ligne
+ * aussi longue), StreamErrorChunk sur une ligne `{ error }`, StreamParseError
+ * sur une ligne illisible ou un flux sans morceau final.
+ */
+export async function readChatStream(
+  response: Response,
+  maxContentBytes = MAX_RESPONSE_BYTES,
+): Promise<z.infer<typeof ChatResponseSchema>> {
+  if (!response.body) throw new StreamParseError("flux vide");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let raw = 0;
+  /** Morceau final (done) ; dans un objet, car affecté par la fonction de lecture d'une ligne. */
+  const state: { final: z.infer<typeof ChatChunkSchema> | null } = { final: null };
+  const abort = async (error: Error): Promise<never> => {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  };
+  const handle = async (line: string) => {
+    if (!line.trim()) return;
+    let parsed: z.infer<typeof ChatChunkSchema>;
+    try {
+      const result = ChatChunkSchema.safeParse(JSON.parse(line));
+      if (!result.success) return abort(new StreamParseError("morceau inattendu"));
+      parsed = result.data;
+    } catch {
+      return abort(new StreamParseError("morceau non JSON"));
+    }
+    if (parsed.error !== undefined) return abort(new StreamErrorChunk(parsed.error.slice(0, 200)));
+    content += parsed.message?.content ?? "";
+    if (content.length > maxContentBytes) return abort(new ResponseTooLargeError());
+    if (parsed.done) state.final = parsed;
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    raw += value.byteLength;
+    if (raw > MAX_STREAM_BYTES) await abort(new ResponseTooLargeError());
+    buffer += decoder.decode(value, { stream: true });
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      await handle(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+      newline = buffer.indexOf("\n");
+    }
+    if (buffer.length > maxContentBytes) await abort(new ResponseTooLargeError());
+  }
+  await handle(buffer + decoder.decode());
+  const last = state.final;
+  if (!last) throw new StreamParseError("flux interrompu avant le morceau final");
+  return {
+    message: { content },
+    done: true,
+    done_reason: last.done_reason,
+    eval_count: last.eval_count,
+    prompt_eval_count: last.prompt_eval_count,
+  };
+}
 
 const ErrorBodySchema = z.object({ error: z.string() });
 
@@ -216,7 +311,15 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     });
   }
 
-  async function send(operation: string, prompt: PromptPair, format: unknown, maxTokens: number, timeoutMs: number, numCtx: number) {
+  async function send(
+    operation: string,
+    prompt: PromptPair,
+    format: unknown,
+    maxTokens: number,
+    timeoutMs: number,
+    numCtx: number,
+    stream: boolean,
+  ) {
     const started = Date.now();
     const signal = AbortSignal.timeout(timeoutMs);
     let response: Response;
@@ -226,7 +329,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model,
-          stream: false,
+          stream,
           format,
           messages: [
             { role: "system", content: prompt.system },
@@ -239,6 +342,28 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     } catch (error) {
       if (isTimeout(error, signal)) throw timedOut(operation, timeoutMs, error);
       throw notReachable(baseUrl, production, error);
+    }
+
+    if (stream && response.ok) {
+      let streamed: z.infer<typeof ChatResponseSchema>;
+      try {
+        streamed = await readChatStream(response);
+      } catch (error) {
+        if (error instanceof ResponseTooLargeError) {
+          throw new AiInvalidOutputError(`${operation}: réponse Ollama trop volumineuse`, { cause: error });
+        }
+        if (error instanceof StreamParseError) throw new AiInvalidOutputError(`${operation}: flux Ollama illisible`, { cause: error });
+        if (error instanceof StreamErrorChunk) {
+          log.error("ollama.stream_error", { operation, message: error.detail });
+          throw new AiUnavailableError(`${operation}: erreur Ollama en cours de génération`, {
+            cause: error,
+            userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre moteur dans la Configuration IA.",
+          });
+        }
+        if (isTimeout(error, signal)) throw timedOut(operation, timeoutMs, error);
+        throw new AiUnavailableError(`${operation}: lecture de la réponse interrompue`, { cause: error });
+      }
+      return finish(operation, streamed, started);
     }
 
     let text: string;
@@ -279,17 +404,21 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     }
     const parsed = ChatResponseSchema.safeParse(body);
     if (!parsed.success) throw new AiInvalidOutputError(`${operation}: réponse Ollama inattendue`, { cause: parsed.error });
+    return finish(operation, parsed.data, started);
+  }
+
+  function finish(operation: string, data: z.infer<typeof ChatResponseSchema>, started: number): string {
     log.info("ai.call", {
       operation,
       engine: "ollama",
       model,
-      doneReason: parsed.data.done_reason,
-      inputTokens: parsed.data.prompt_eval_count,
-      outputTokens: parsed.data.eval_count,
+      doneReason: data.done_reason,
+      inputTokens: data.prompt_eval_count,
+      outputTokens: data.eval_count,
       durationMs: Date.now() - started,
     });
-    if (parsed.data.done_reason === "length") throw new AiInvalidOutputError(`${operation}: réponse tronquée (num_predict)`);
-    return parsed.data.message.content;
+    if (data.done_reason === "length") throw new AiInvalidOutputError(`${operation}: réponse tronquée (num_predict)`);
+    return data.message.content;
   }
 
   async function chat(
@@ -299,9 +428,10 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     maxTokens: number,
     timeoutMs: number,
     numCtx: number = fixedNumCtx ?? DEFAULT_NUM_CTX,
+    stream = false,
   ) {
     try {
-      return await semaphore.run(() => send(operation, prompt, format, maxTokens, timeoutMs, numCtx), queueWaitMs);
+      return await semaphore.run(() => send(operation, prompt, format, maxTokens, timeoutMs, numCtx, stream), queueWaitMs);
     } catch (error) {
       if (error instanceof SemaphoreTimeoutError) {
         log.warn("ollama.busy", { operation, active: semaphore.active, waiting: semaphore.waiting });
@@ -321,7 +451,8 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     async generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
       const fitted = fitDeckPrompt(prompt, hints, fixedNumCtx);
       const numCtx = fixedNumCtx ?? fitted.context.numCtx;
-      const text = await chat("generateDeck", fitted.prompt, DECK_SCHEMA, deckMaxTokens(hints?.template), deckTimeoutMs, numCtx);
+      // En flux : un deck de 31 diapos dépasse souvent 5 min (délai d'en-têtes du fetch de Node).
+      const text = await chat("generateDeck", fitted.prompt, DECK_SCHEMA, deckMaxTokens(hints?.template), deckTimeoutMs, numCtx, true);
       const raw = parseStructured("generateDeck", text, RawDeckSpecSchema);
       return strict("generateDeck", DeckSpecSchema, normalizeDeckSpec(raw));
     },

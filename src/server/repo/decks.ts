@@ -251,16 +251,24 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   const row = await db().deck.findFirst({
     where: { id: deckId, program: ownedProgram(userId) },
     include: {
-      theme: { select: { name: true } },
+      theme: {
+        select: {
+          name: true,
+          // Au plus un squelette par thème (index unique partiel) : lu pour la relecture d'un deck final.
+          decks: { where: { kind: "SKELETON" }, select: { id: true, spec: true }, take: 1 },
+        },
+      },
       program: { select: { id: true, name: true, brand: true, template: true } },
     },
   });
   if (!row) throw new NotFoundError("deck");
   const view: DeckView = toDeckView(row);
+  const skeleton = view.kind === "FINAL" ? row.theme.decks[0] : undefined;
   return {
     ...view,
     updatedAt: view.updatedAt.toISOString(),
     themeName: row.theme.name,
+    skeletonSpec: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
     program: {
       id: row.program.id,
       name: row.program.name,

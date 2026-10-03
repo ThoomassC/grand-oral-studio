@@ -8,6 +8,11 @@ describe("generationWaitHint — temps d'attente annoncé selon le moteur", () =
     expect(hint).toMatch(/10 minutes/);
   });
 
+  it("devrait prévenir qu'une seconde tentative peut doubler l'attente (contrôle qualité du deck)", () => {
+    expect(generationWaitHint("ollama")).toMatch(/seconde tentative/);
+    expect(generationWaitHint("claude")).toMatch(/seconde tentative/);
+  });
+
   it.each([
     ["claude", /1 à 3 minutes/],
     ["free", /quelques secondes/],

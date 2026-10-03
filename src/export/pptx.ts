@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import PptxGenJS from "pptxgenjs";
 import { isSafeFont, type SafeFont } from "@/domain/fonts";
 import { stripControlChars, type Brand, type DeckSpec, type PromptTemplate, type Slide } from "@/domain/schemas";
@@ -49,6 +50,59 @@ const hex = (color: string): string => {
 };
 
 const safeText = (value: string): string => stripControlChars(value);
+
+/** Valeur d'attribut XML : caractères de contrôle retirés, & < > " ' échappés. */
+function xmlAttr(value: string): string {
+  return stripControlChars(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+const THEME_PATH = "ppt/theme/theme1.xml";
+const CLR_SCHEME = /<a:clrScheme\b[^>]*>[\s\S]*?<\/a:clrScheme>/;
+
+/**
+ * Jeu de couleurs du thème PowerPoint aux couleurs de la charte : la palette de
+ * PowerPoint (nouvelles formes, graphiques, SmartArt) suit la charte au lieu
+ * des couleurs d'Office. dk1/lt1 = texte/fond, dk2 = primaire, accents 1-3 =
+ * primaire, accent, secondaire ; accents 4-6 gardent ceux d'Office (aucune
+ * couleur de charte à leur donner).
+ */
+export function brandColorScheme(brand: Brand): string {
+  const c = brand.colors;
+  const slot = (name: string, color: string) => `<a:${name}><a:srgbClr val="${hex(color)}"/></a:${name}>`;
+  return (
+    `<a:clrScheme name="${xmlAttr(brand.name)}">` +
+    slot("dk1", c.text) +
+    slot("lt1", c.background) +
+    slot("dk2", c.primary) +
+    slot("lt2", c.background) +
+    slot("accent1", c.primary) +
+    slot("accent2", c.accent) +
+    slot("accent3", c.secondary) +
+    `<a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6>` +
+    slot("hlink", c.primary) +
+    slot("folHlink", c.secondary) +
+    `</a:clrScheme>`
+  );
+}
+
+/** Remplace le jeu de couleurs d'un theme1.xml (inchangé s'il n'en a pas). */
+export function applyBrandColorScheme(themeXml: string, brand: Brand): string {
+  return themeXml.replace(CLR_SCHEME, () => brandColorScheme(brand));
+}
+
+/** pptxgenjs n'expose que les polices du thème : les couleurs sont écrites après coup dans l'archive. */
+async function withBrandTheme(pptx: Buffer, brand: Brand): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(pptx);
+  const theme = zip.file(THEME_PATH);
+  if (!theme) return pptx;
+  zip.file(THEME_PATH, applyBrandColorScheme(await theme.async("string"), brand));
+  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+}
 const safeFont = (value: string): SafeFont => (isSafeFont(value) ? value : "Arial");
 
 // ---------------------------------------------------------------------------
@@ -338,8 +392,10 @@ export async function deckToPptx(deck: DeckSpec, brand: Brand, template: PromptT
   }
 
   const out = await pptx.write({ outputType: "nodebuffer" });
-  if (Buffer.isBuffer(out)) return out;
-  if (out instanceof Uint8Array) return Buffer.from(out);
-  if (out instanceof ArrayBuffer) return Buffer.from(new Uint8Array(out));
-  throw new Error("pptxgenjs n'a pas produit de tampon binaire.");
+  let buffer: Buffer;
+  if (Buffer.isBuffer(out)) buffer = out;
+  else if (out instanceof Uint8Array) buffer = Buffer.from(out);
+  else if (out instanceof ArrayBuffer) buffer = Buffer.from(new Uint8Array(out));
+  else throw new Error("pptxgenjs n'a pas produit de tampon binaire.");
+  return withBrandTheme(buffer, brand);
 }

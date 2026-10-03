@@ -22,11 +22,13 @@ export interface SkeletonThemeItem {
     slideCount: number;
     updatedAtLabel: string;
     cover: SlidePreviewData;
+    /** Le squelette ne suit plus le gabarit actuel (raison affichable) ; null s'il est à jour. */
+    staleReason: string | null;
   } | null;
 }
 
 type RunState = { kind: "running" } | { kind: "error"; message: string } | { kind: "done"; warnings: string[] };
-type Display = "running" | "error" | "ready" | "todo";
+type Display = "running" | "error" | "ready" | "stale" | "todo";
 type BatchMode = "missing" | "all";
 
 const NETWORK_ERROR = "La connexion a été interrompue. Relancez la génération.";
@@ -35,6 +37,7 @@ const STATUS_LABEL: Record<Display, string> = {
   running: "En cours",
   error: "Erreur",
   ready: "Généré",
+  stale: "À régénérer",
   todo: "À générer",
 };
 
@@ -42,6 +45,7 @@ const STATUS_TONE: Record<Display, BadgeTone> = {
   running: "info",
   error: "error",
   ready: "success",
+  stale: "warning",
   todo: "neutral",
 };
 
@@ -55,6 +59,7 @@ function StatusIcon({ kind }: { kind: Display }) {
         </svg>
       );
     case "error":
+    case "stale":
       return (
         <svg {...common} className="h-3.5 w-3.5">
           <path d="M8 3.5v5.5M8 12v.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -110,7 +115,10 @@ export function SkeletonBoard({
     const run = runs[theme.id];
     if (run?.kind === "running") return "running";
     if (run?.kind === "error") return "error";
-    return theme.skeleton ? "ready" : "todo";
+    if (!theme.skeleton) return "todo";
+    // Régénéré à l'instant : à jour, même avant le rafraîchissement de la page.
+    if (run?.kind === "done") return "ready";
+    return theme.skeleton.staleReason ? "stale" : "ready";
   }
 
   function runBatch(mode: BatchMode) {
@@ -311,6 +319,9 @@ export function SkeletonBoard({
                     <span className="num font-semibold text-text">{theme.skeleton.slideCount} diapos</span> ·{" "}
                     {theme.skeleton.updatedAtLabel}
                   </p>
+                ) : null}
+                {display === "stale" && theme.skeleton?.staleReason ? (
+                  <p className="text-sm text-warning">{theme.skeleton.staleReason}</p>
                 ) : null}
                 {run?.kind === "error" ? <p className="text-sm font-medium text-danger">{run.message}</p> : null}
                 {run?.kind === "done" && run.warnings.length > 0 ? (

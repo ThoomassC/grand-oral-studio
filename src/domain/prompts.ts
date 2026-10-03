@@ -1,4 +1,5 @@
 import type { ProgramContext, PromptPair, ThemeRef } from "./contracts";
+import { sectionKind } from "./free/skeleton";
 import type { DeckSpec, PromptTemplate } from "./schemas";
 import { totalSlides } from "./slides";
 
@@ -66,7 +67,11 @@ const T = {
       "couverture, un intercalaire ou une transition. Commence par un minutage indicatif entre crochets (ex. [2:30–4:00]) ; " +
       "les minutages se suivent et couvrent la durée totale de l'oral. Une note n'est jamais une consigne (« Présentez… », " +
       "« Expliquez… », « Objectif de la diapo… ») : écris les phrases qui seront dites. Une phrase de plus de douze mots va " +
-      "dans les notes, pas sur la diapo. Si un squelette est fourni, pars de ses notes et adapte-les à la problématique.",
+      "dans les notes, pas sur la diapo. Si une trame de squelette est fournie, ne recopie jamais ses notes ni ses puces : " +
+      "rédige chaque note pour la problématique.",
+    coverRule:
+      "Couverture : le titre est le titre du sujet (le thème ou une formule qui l'annonce), jamais le nom du programme ; " +
+      "le sous-titre est la problématique, s'il y en a une.",
     facts:
       "Faits et chiffres : N'invente aucun chiffre, statistique, date précise, citation ni étude. N'écris un chiffre que si tu " +
       "connais sa source vérifiable (auteur ou institution, titre, année) ; mets alors cette source en dernière puce de la diapo, " +
@@ -85,11 +90,15 @@ const T = {
     skeleton:
       "Mission : produire un SQUELETTE générique du thème, réutilisable quelle que soit la problématique posée le jour de l'oral. " +
       "Pour chaque section, propose des angles d'attaque, les notions clés à maîtriser, des exemples types et des repères " +
-      "(dates, ordres de grandeur, auteurs) à vérifier. Ne formule aucune problématique précise.",
+      "(dates, ordres de grandeur, auteurs) à vérifier. Ne formule aucune problématique précise : la problématique sera " +
+      "tirée le jour de l'oral. Dans la section consacrée à la problématique, n'écris aucune question : mets la puce " +
+      "« [problématique tirée le jour J] » puis des pistes pour l'énoncer et en montrer l'enjeu.",
     final:
       "Mission : produire le deck FINAL qui répond à la problématique fournie. Plan argumenté et progressif, chaque partie " +
-      "appuyée sur des exemples concrets ; la conclusion répond explicitement à la problématique puis propose une ouverture. " +
-      "Si un squelette est fourni, reprends sa structure et ses meilleurs éléments, et adapte-les à la problématique.",
+      "appuyée sur des exemples concrets ; la conclusion répond explicitement à la problématique fournie (pas à une autre " +
+      "question) puis propose une ouverture. La diapo de la section problématique énonce cette problématique, mot pour mot. " +
+      "Si une trame de squelette est fournie, elle ne donne que des titres et des intentions : réécris tout le contenu pour " +
+      "la problématique et respecte le nombre de diapos du gabarit, même quand la trame en compte moins.",
     classifyRole:
       "Tu es un coach d'oral de soutenance de niveau bac+5. Tu identifies à quel thème d'un programme se rattache une problématique.",
     classifyJson:
@@ -113,7 +122,19 @@ const T = {
     guidance: "consigne",
     timing: "minutage",
     sections: "Sections, dans l'ordre",
-    skeletonHeader: "Squelette existant du thème (à reprendre et adapter ; ses notes d'orateur sont à réécrire pour la problématique)",
+    skeletonHeader:
+      "Trame du squelette du thème : titres et intentions à RÉÉCRIRE pour la problématique. Ne recopie ni ses puces ni ses " +
+      "formulations ; conserve chaque « [source à trouver] » tant que tu n'as pas de source réelle",
+    countsHeader: (total: number) => `Nombre de diapos exigé par section (total ${total}, couverture comprise)`,
+    planHeader: "Plan diapo par diapo (une entrée = une diapo, dans cet ordre)",
+    coverLabel: "Couverture",
+    required: (n: number) => (n > 1 ? `${n} diapos exigées` : `${n} diapo exigée`),
+    skeletonHas: (n: number) => (n === 0 ? "absente du squelette" : `le squelette n'en a que ${n}`),
+    skeletonMore: (n: number) => `le squelette en a ${n}`,
+    ideas: "pistes",
+    sourcesToFind: "Données à sourcer signalées par le squelette",
+    otherSlides: "Diapos du squelette hors gabarit (à ignorer ou fondre ailleurs)",
+    retryHeader: "Corrections exigées",
     objection:
       "Exigence du gabarit : dans les notes de chaque diapo qui porte un chiffre, ajoute une dernière ligne « Objection probable : … » " +
       "suivie de la réponse à donner au jury.",
@@ -145,7 +166,10 @@ const T = {
       "transition. Start with an indicative timing in brackets (e.g. [2:30–4:00]); timings follow each other and cover the " +
       "whole duration of the talk. A note is never an instruction (\"Present…\", \"Explain…\", \"Goal of the slide…\"): write " +
       "the sentences that will be said. A sentence longer than twelve words goes in the notes, not on the slide. If a skeleton " +
-      "is provided, start from its notes and adapt them to the question.",
+      "outline is provided, never copy its notes or bullets: write every note for the question.",
+    coverRule:
+      "Cover: the title is the subject title (the theme, or a phrase announcing it), never the programme name; the " +
+      "subtitle is the question, if there is one.",
     facts:
       "Facts and figures: Never invent a figure, statistic, precise date, quotation or study. Only write a figure if you know " +
       "its verifiable source (author or institution, title, year); then put that source as the last bullet of the slide, as " +
@@ -164,11 +188,13 @@ const T = {
     skeleton:
       "Task: produce a generic SKELETON for the theme, reusable whatever question is asked on the day of the oral. For each " +
       "section, suggest angles of attack, key notions, typical examples and reference points (dates, orders of magnitude, " +
-      "authors) to check. Do not state any specific question.",
+      "authors) to check. Do not state any specific question: it will be drawn on the day of the oral. In the section devoted " +
+      "to the question, write no question at all: put the bullet \"[question drawn on the day]\" then hints on how to state it.",
     final:
       "Task: produce the FINAL deck answering the provided question. A progressive, argued plan, each part backed by concrete " +
-      "examples; the conclusion explicitly answers the question, then opens up. If a skeleton is provided, reuse its structure " +
-      "and best elements and adapt them to the question.",
+      "examples; the conclusion explicitly answers the question provided (not another one), then opens up. The slide of the " +
+      "question section states that question word for word. If a skeleton outline is provided, it only gives titles and " +
+      "intentions: rewrite all the content for the question and follow the template's slide counts, even where the outline has fewer.",
     classifyRole:
       "You are a coach for master's-level oral defenses. You identify which theme of a programme a question belongs to.",
     classifyJson:
@@ -192,7 +218,19 @@ const T = {
     guidance: "guidance",
     timing: "timing",
     sections: "Sections, in order",
-    skeletonHeader: "Existing skeleton for the theme (reuse and adapt; rewrite its speaker notes for the question)",
+    skeletonHeader:
+      "Skeleton outline for the theme: titles and intentions to REWRITE for the question. Do not copy its bullets or wording; " +
+      "keep every \"[source needed]\" until you have a real source",
+    countsHeader: (total: number) => `Required number of slides per section (total ${total}, cover included)`,
+    planHeader: "Slide-by-slide plan (one entry = one slide, in this order)",
+    coverLabel: "Cover",
+    required: (n: number) => (n > 1 ? `${n} slides required` : `${n} slide required`),
+    skeletonHas: (n: number) => (n === 0 ? "missing from the skeleton" : `the skeleton only has ${n}`),
+    skeletonMore: (n: number) => `the skeleton has ${n}`,
+    ideas: "ideas",
+    sourcesToFind: "Data to source flagged by the skeleton",
+    otherSlides: "Skeleton slides outside the template (ignore or merge elsewhere)",
+    retryHeader: "Required corrections",
     objection:
       "Template requirement: in the notes of every slide that carries a figure, add a last line \"Likely objection: …\" followed " +
       "by the answer to give the jury.",
@@ -218,6 +256,7 @@ function deckSystem(lang: Lang, mission: "skeleton" | "final"): string {
     t.json,
     t.structure,
     t.layouts,
+    t.coverRule,
     t.bullets,
     t.notes,
     t.facts,
@@ -274,22 +313,66 @@ function themeLines(theme: ThemeRef, lang: Lang): string {
   ].join("\n");
 }
 
-/** Notes d'un squelette transmises au deck final : bornées pour ne pas saturer le contexte d'un modèle local. */
-const SKELETON_NOTES_MAX = 600;
+/** Pistes (puces) de chaque diapo du squelette transmises au deck final : bornées pour un modèle local. */
+const SKELETON_DETAIL_MAX = 240;
+const SOURCE_MARKER = /\[\s*(?:source à trouver|source needed)/i;
 
-/** `notesMax` : longueur maximale de chaque note transmise ; 0 = notes omises (la structure reste). */
-function skeletonLines(skeleton: DeckSpec, lang: Lang, notesMax = SKELETON_NOTES_MAX): string {
+/** « Section — N diapos », puis le plan diapo par diapo : ce qu'un modèle local respecte le mieux. */
+function slideCountLines(template: PromptTemplate, lang: Lang): string {
   const t = T[lang];
-  const lines = [`${inline(skeleton.title)}${skeleton.subtitle ? ` — ${inline(skeleton.subtitle)}` : ""}`];
-  skeleton.slides.forEach((slide, i) => {
-    lines.push(`${i + 1}. [${inline(slide.sectionId)} / ${slide.layout}] ${inline(slide.title)}`);
-    for (const bullet of slide.bullets) lines.push(`   - ${inline(bullet)}`);
-    const notes = notesMax > 0 ? inline(slide.notes) : "";
-    if (notes) {
-      const bounded = notes.length > notesMax ? `${notes.slice(0, notesMax).trimEnd()}…` : notes;
-      lines.push(`   ${t.notesLabel} : ${bounded}`);
+  const counts = [`${t.countsHeader(totalSlides(template))} :`];
+  for (const section of template.sections) counts.push(`- ${inline(section.title)} — ${t.slidesWord(section.slides)}`);
+  const plan = [`${t.planHeader} :`, `1. ${t.coverLabel} (sectionId : cover)`];
+  let n = 1;
+  for (const section of template.sections) {
+    for (let k = 1; k <= section.slides; k += 1) {
+      n += 1;
+      const rank = section.slides > 1 ? ` ${k}/${section.slides}` : "";
+      plan.push(`${n}. ${inline(section.title)}${rank} (sectionId : ${inline(section.id)})`);
     }
-  });
+  }
+  return [...counts, "", ...plan].join("\n");
+}
+
+/**
+ * Le squelette comme TRAME : par section du gabarit, le nombre de diapos exigé
+ * (et l'écart avec le squelette), puis les titres et pistes de ses diapos. Les
+ * notes d'orateur ne sont jamais transmises (un modèle local les recopie), ni
+ * les pistes des sections problématique et conclusion : rédigées avant que la
+ * question soit connue, elles répondent à une autre question (cas réel).
+ * `detailMax` borne les pistes de chaque diapo ; 0 = titres seuls.
+ */
+function skeletonOutline(skeleton: DeckSpec, template: PromptTemplate, lang: Lang, detailMax = SKELETON_DETAIL_MAX): string {
+  const t = T[lang];
+  const lines: string[] = [];
+  const sources: string[] = [];
+  const known = new Set(template.sections.map((s) => s.id));
+  const slideLine = (title: string, bullets: readonly string[], withIdeas = true) => {
+    const ideas = bullets.filter((b) => !SOURCE_MARKER.test(b)).map(inline).join(" ; ");
+    const bounded =
+      withIdeas && detailMax > 0 && ideas ? (ideas.length > detailMax ? `${ideas.slice(0, detailMax).trimEnd()}…` : ideas) : "";
+    return `  - « ${inline(title)} »${bounded ? ` — ${t.ideas} : ${bounded}` : ""}`;
+  };
+  for (const slide of skeleton.slides) for (const b of slide.bullets) if (SOURCE_MARKER.test(b)) sources.push(inline(b));
+
+  for (const section of template.sections) {
+    const slides = skeleton.slides.filter((s) => s.sectionId === section.id);
+    const gap =
+      slides.length < section.slides ? ` (${t.skeletonHas(slides.length)})` : slides.length > section.slides ? ` (${t.skeletonMore(slides.length)})` : "";
+    lines.push(`${inline(section.title)} — ${t.required(section.slides)}${gap}`);
+    const kind = sectionKind(section);
+    const withIdeas = kind !== "conclusion" && kind !== "problem";
+    for (const slide of slides) lines.push(slideLine(slide.title, slide.bullets, withIdeas));
+  }
+  const others = skeleton.slides.filter((s) => s.sectionId !== "cover" && !known.has(s.sectionId));
+  if (others.length > 0) {
+    lines.push(`${t.otherSlides} :`);
+    for (const slide of others) lines.push(slideLine(slide.title, slide.bullets));
+  }
+  if (sources.length > 0) {
+    lines.push(`${t.sourcesToFind} :`);
+    for (const source of [...new Set(sources)]) lines.push(`  - ${source}`);
+  }
   return lines.join("\n");
 }
 
@@ -320,7 +403,7 @@ export function buildFinalDeckPrompt(
   theme: ThemeRef,
   skeleton: DeckSpec | null,
   problem: string,
-  options: { skeletonNotesMax?: number } = {},
+  options: { skeletonDetailMax?: number } = {},
 ): PromptPair {
   const lang = ctx.template.language;
   const t = T[lang];
@@ -330,10 +413,25 @@ export function buildFinalDeckPrompt(
     block("programme", programLines(ctx, lang)),
     block("theme", themeLines(theme, lang)),
     block("gabarit", templateLines(ctx.template, lang)),
+    block("plan", slideCountLines(ctx.template, lang)),
     ...(wantsObjection(ctx.template) ? [t.objection] : []),
-    skeleton ? `${t.skeletonHeader} :\n${block("squelette", skeletonLines(skeleton, lang, Math.max(0, Math.min(SKELETON_NOTES_MAX, options.skeletonNotesMax ?? SKELETON_NOTES_MAX))))}` : t.noSkeleton,
+    skeleton
+      ? `${t.skeletonHeader} :\n${block(
+          "squelette",
+          skeletonOutline(skeleton, ctx.template, lang, Math.max(0, Math.min(SKELETON_DETAIL_MAX, options.skeletonDetailMax ?? SKELETON_DETAIL_MAX))),
+        )}`
+      : t.noSkeleton,
   ].join("\n\n");
   return { system: deckSystem(lang, "final"), user };
+}
+
+/**
+ * Nouvelle tentative d'un deck : le même prompt, suivi des corrections exigées
+ * (texte produit par le code, données citées déjà neutralisées). Le system ne
+ * change pas.
+ */
+export function withRetryFeedback(prompt: PromptPair, feedback: string, lang: Lang = "fr"): PromptPair {
+  return { system: prompt.system, user: `${prompt.user}\n\n${T[lang].retryHeader} :\n${neutralize(feedback)}` };
 }
 
 export function buildClassificationPrompt(ctx: ProgramContext, problem: string): PromptPair {

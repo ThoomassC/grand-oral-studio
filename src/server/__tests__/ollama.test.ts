@@ -80,15 +80,15 @@ describe("deckContext — estimation du contexte et dépassement du plafond", ()
 
 describe("createOllamaProvider — prompt trop long pour le contexte", () => {
   const huge: PromptPair = { system: "règles", user: `début ${"u".repeat(110_000)}` };
-  const compact = (max: number): PromptPair => ({ system: "règles", user: max >= 300 ? "u".repeat(100_000) : `notes ${max}` });
+  const compact = (max: number): PromptPair => ({ system: "règles", user: max >= 120 ? "u".repeat(100_000) : `notes ${max}` });
 
-  it("devrait raccourcir les notes du squelette pour tenir dans le plafond et le journaliser sans données utilisateur", async () => {
+  it("devrait raccourcir les pistes de la trame du squelette pour tenir dans le plafond et le journaliser sans données utilisateur", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
       await ai.generateDeck(huge, { ...HINTS, compactPrompt: compact });
       const messages = calls[0]!.body?.messages as { content: string }[];
-      expect(messages[1]!.content).toBe("notes 120");
+      expect(messages[1]!.content).toBe("notes 60");
       expect((calls[0]!.body?.options as { num_ctx: number }).num_ctx).toBeLessThanOrEqual(32_768);
       const logged = warn.mock.calls.map((args) => String(args[0])).join("\n");
       expect(logged).toContain("ollama.context_reduced");
@@ -114,7 +114,7 @@ describe("createOllamaProvider — prompt trop long pour le contexte", () => {
 });
 
 describe("createOllamaProvider — generateDeck", () => {
-  it("devrait appeler POST /api/chat sans streaming, avec un schéma JSON et renvoyer un deck validé", async () => {
+  it("devrait appeler POST /api/chat en flux (en-têtes reçus dès le premier jeton), avec un schéma JSON, et renvoyer un deck validé", async () => {
     const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
     expect(await ai.generateDeck(PROMPT, HINTS)).toEqual(makeConformingDeck());
     expect(ai.engine).toBe("ollama");
@@ -124,7 +124,7 @@ describe("createOllamaProvider — generateDeck", () => {
     expect(call.method).toBe("POST");
     expect(call.body).toMatchObject({
       model: "mistral",
-      stream: false,
+      stream: true,
       messages: [
         { role: "system", content: "sys" },
         { role: "user", content: "usr" },
@@ -134,6 +134,37 @@ describe("createOllamaProvider — generateDeck", () => {
     const options = call.body?.options as { temperature: number };
     expect(options.temperature).toBeGreaterThan(0);
     expect(options.temperature).toBeLessThanOrEqual(0.7);
+  });
+
+  it("devrait assembler un deck reçu en morceaux NDJSON, même coupés au milieu d'une ligne", async () => {
+    const content = JSON.stringify(makeConformingDeck());
+    const third = Math.ceil(content.length / 3);
+    const lines = [0, 1, 2].map((i) =>
+      JSON.stringify({ message: { role: "assistant", content: content.slice(i * third, (i + 1) * third) }, done: false }),
+    );
+    lines.push(JSON.stringify({ message: { role: "assistant", content: "" }, done: true, done_reason: "stop", eval_count: 42 }));
+    const raw = new TextEncoder().encode(`${lines.join("\n")}\n`);
+    const cut = [0, 37, Math.floor(raw.length / 2), raw.length - 5, raw.length];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 1; i < cut.length; i += 1) controller.enqueue(raw.slice(cut[i - 1], cut[i]));
+        controller.close();
+      },
+    });
+    const { ai } = provider(() => new Response(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } }));
+    expect(await ai.generateDeck(PROMPT, HINTS)).toEqual(makeConformingDeck());
+  });
+
+  it("devrait lever AiUnavailableError quand Ollama signale une erreur au milieu du flux", async () => {
+    const body = `${JSON.stringify({ message: { content: "{\"title\"" }, done: false })}\n${JSON.stringify({ error: "llama runner process has terminated" })}\n`;
+    const { ai } = provider(() => new Response(body, { status: 200, headers: { "content-type": "application/x-ndjson" } }));
+    await expect(ai.generateDeck(PROMPT, HINTS)).rejects.toBeInstanceOf(AiUnavailableError);
+  });
+
+  it("devrait lever AiInvalidOutputError quand le flux s'arrête avant la fin (aucun morceau final)", async () => {
+    const body = `${JSON.stringify({ message: { content: JSON.stringify(makeConformingDeck()) }, done: false })}\n`;
+    const { ai } = provider(() => new Response(body, { status: 200, headers: { "content-type": "application/x-ndjson" } }));
+    await expect(ai.generateDeck(PROMPT, HINTS)).rejects.toBeInstanceOf(AiInvalidOutputError);
   });
 
   it("devrait lever AiInvalidOutputError quand le JSON est invalide", async () => {
@@ -275,11 +306,28 @@ describe("createOllamaProvider — correctifs de revue", () => {
 
   // S5 : taille de réponse bornée.
   it("devrait refuser une réponse annoncée au-delà de 2 Mo (content-length)", async () => {
-    const body = JSON.stringify({ message: { role: "assistant", content: JSON.stringify(makeConformingDeck()) }, done: true, done_reason: "stop" });
+    const body = JSON.stringify({ message: { role: "assistant", content: "{}" }, done: true, done_reason: "stop" });
     const { ai } = provider(
       () => new Response(body, { status: 200, headers: { "content-type": "application/json", "content-length": String(3 * 1024 * 1024) } }),
     );
+    // Réponse non diffusée (reconnaissance) : la taille annoncée suffit à la refuser.
+    await expect(ai.classify(PROMPT)).rejects.toBeInstanceOf(AiInvalidOutputError);
+  });
+
+  it("devrait refuser un deck diffusé dont le texte assemblé dépasse 2 Mo", async () => {
+    const piece = JSON.stringify({ message: { content: "x".repeat(200 * 1024) }, done: false });
+    let sent = 0;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        if (sent > 40) controller.close();
+        else controller.enqueue(encoder.encode(`${piece}\n`));
+      },
+    });
+    const { ai } = provider(() => new Response(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } }));
     await expect(ai.generateDeck(PROMPT, HINTS)).rejects.toBeInstanceOf(AiInvalidOutputError);
+    expect(sent).toBeLessThan(40);
   });
 
   it("devrait couper une réponse en flux qui dépasse 2 Mo sans content-length", async () => {

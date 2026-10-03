@@ -203,6 +203,57 @@ describe("normalizeTemplateDraft — réponse IA (cas Ollama réel)", () => {
   });
 });
 
+describe("normalizeTemplateDraft — le tableau de diapos du texte prime sur la structure de l'IA", () => {
+  const draft = (sections: [string, number, string?][]) => ({
+    format: "16:9",
+    language: "fr",
+    sections: sections.map(([title, slides, guidance]) => ({ title, slides, guidance: guidance ?? "" })),
+  });
+  // 1er essai réel : intercalaires perdus, Présentation à 2 diapos (29 diapos au lieu de 31).
+  const lossy = draft([
+    ["Couverture", 1], ["Présentation", 2], ["Chiffre d'accroche", 1], ["Définitions", 1], ["Frise historique", 1],
+    ["Problématique", 1], ["État des lieux", 4], ["Déplacement", 5], ["Enjeux", 1], ["Fronts", 8], ["Réponses", 1],
+    ["Conclusion", 1], ["Ouverture", 1],
+  ]);
+  // 2e essai réel : 16 sections, mais titres reformulés.
+  const faithful = draft([
+    ["Présentation", 1], ["Sommaire", 1], ["Chiffre d'accroche", 1], ["Définitions", 1], ["Frise historique", 1],
+    ["Problématique", 1], ["Intercalaire Partie I", 1], ["État des lieux", 4], ["Intercalaire Partie II", 1, "Titre de la partie II et ses diapos"],
+    ["Déplacement", 5], ["Intercalaire Partie III", 1], ["Enjeux", 1], ["Fronts", 8], ["Réponses", 1], ["Conclusion", 1], ["Ouverture", 1],
+  ]);
+  const structure = (r: ReturnType<typeof normalizeTemplateDraft>) => r.template.sections.map(({ id, title, slides }) => ({ id, title, slides }));
+
+  it("devrait reprendre les 16 sections et 31 diapos du tableau, intercalaires compris, quand l'IA en perd", () => {
+    const r = normalizeTemplateDraft(lossy, base, canva);
+    expect(r.template.sections).toHaveLength(16);
+    expect(totalSlides(r.template)).toBe(31);
+    expect(r.template.sections.map((s) => s.title)).toEqual(expect.arrayContaining(["Intercalaire Partie I", "Intercalaire Partie II", "Intercalaire Partie III"]));
+  });
+
+  it("devrait avertir que la structure proposée par l'IA divergeait du tableau", () => {
+    const r = normalizeTemplateDraft(lossy, base, canva);
+    expect(r.warnings.some((w) => /L'IA proposait 12 sections \/ 28 diapos/.test(w) && /tableau/.test(w) && /16 sections \/ 31 diapos/.test(w))).toBe(true);
+  });
+
+  it("devrait produire la même structure quelle que soit la réponse de l'IA (reproductible)", () => {
+    expect(structure(normalizeTemplateDraft(lossy, base, canva))).toEqual(structure(normalizeTemplateDraft(faithful, base, canva)));
+    expect(structure(normalizeTemplateDraft(lossy, base, canva))).toEqual(structure(parseTemplateText(canva, base)));
+  });
+
+  it("devrait compléter par l'IA la consigne d'une section que le tableau laisse vide", () => {
+    const r = normalizeTemplateDraft(faithful, base, canva);
+    expect(r.template.sections.find((s) => s.title === "Intercalaire Partie II")?.guidance).toBe("Titre de la partie II et ses diapos");
+    // Une consigne présente dans le tableau n'est pas remplacée.
+    expect(r.template.sections.find((s) => s.title === "Problématique")?.guidance).toMatch(/La question, seule au centre/);
+  });
+
+  it("devrait garder la structure de l'IA quand le texte n'a pas de tableau de diapos", () => {
+    const r = normalizeTemplateDraft(lossy, base, "Oral de 20 minutes en 16:9, ton formel.");
+    expect(r.template.sections.map((s) => s.title)).toContain("Définitions");
+    expect(r.warnings.some((w) => /L'IA proposait/.test(w))).toBe(false);
+  });
+});
+
 describe("normalizeTone", () => {
   it.each([
     ["Formal", "fr", "formel"],

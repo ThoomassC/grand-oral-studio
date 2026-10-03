@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SkeletonBoard, type SkeletonThemeItem } from "@/components/skeletons/SkeletonBoard";
 import { formatDateTime } from "@/components/ui/format";
+import { skeletonStaleness } from "@/domain/deck-quality";
 import { loadProgram } from "../../_lib/load";
 
 export async function generateMetadata({ params }: PageProps<"/projets/[id]/squelettes">): Promise<Metadata> {
@@ -24,6 +25,8 @@ export default async function SkeletonsPage({ params }: PageProps<"/projets/[id]
               slideCount: t.skeleton.spec.slides.length,
               updatedAtLabel: `mis à jour le ${formatDateTime(t.skeleton.updatedAt)}`,
               cover: { layout: cover.layout, title: cover.title, subtitle: cover.subtitle, bullets: cover.bullets },
+              // Gabarit modifié depuis (ou squelette hors gabarit) : à régénérer, sans rien stocker de plus.
+              staleReason: skeletonStaleness(t.skeleton.spec, program.template).reason,
             }
           : null,
     };

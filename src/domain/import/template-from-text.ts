@@ -641,6 +641,21 @@ interface Scan {
   inputs: Set<number>;
 }
 
+/** Lignes à ne jamais lire comme un tableau de diapos : entrées à remplir, titres de blocs. */
+function ignoredLines(scan: Scan): Set<number> {
+  const ignored = new Set<number>(scan.inputs);
+  for (const b of scan.blocks) if (b.heading >= 0) ignored.add(b.heading);
+  return ignored;
+}
+
+/** Le tableau de diapos du texte (celui qui a le plus de lignes exploitables), s'il y en a un. */
+function findSlideTable(scan: Scan, ignored: ReadonlySet<number> = ignoredLines(scan)) {
+  return findTables(scan.lines, scan.code)
+    .map((t) => ({ t, drafts: slidesFromTable(t) }))
+    .filter((x): x is { t: Table; drafts: NonNullable<ReturnType<typeof slidesFromTable>> } => x.drafts !== null && !ignored.has(x.t.start))
+    .sort((a, b) => b.drafts.drafts.length - a.drafts.drafts.length)[0];
+}
+
 /** Découpe le texte en lignes et repère blocs de code, blocs Markdown et entrées à remplir. */
 function scanText(text: string): Scan {
   const lines = splitInlineInstructions(stripControlChars(text).replace(/\r\n?/g, "\n"));
@@ -667,8 +682,7 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
   // Blocs de code (``` … ```) : jamais des sections ni des contraintes.
   const { lines, code, blocks } = scan;
   const blockOf = (i: number) => blocks.find((b) => i >= b.start && i < b.end) ?? blocks[0];
-  const ignored = new Set<number>(scan.inputs);
-  for (const b of blocks) if (b.heading >= 0) ignored.add(b.heading);
+  const ignored = ignoredLines(scan);
 
   const duration = readDuration(scan);
   warnings.push(...duration.warnings);
@@ -709,10 +723,7 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
   // Sections : tableau de diapos, sinon titres Markdown (au moins 2), sinon liste numérotée, sinon puces.
   const drafts: DraftSection[] = [];
   let tableBlock: Block | undefined;
-  const slideTables = findTables(lines, code)
-    .map((t) => ({ t, drafts: slidesFromTable(t) }))
-    .filter((x): x is { t: Table; drafts: NonNullable<ReturnType<typeof slidesFromTable>> } => x.drafts !== null && !ignored.has(x.t.start));
-  const best = slideTables.sort((a, b) => b.drafts.drafts.length - a.drafts.drafts.length)[0];
+  const best = findSlideTable(scan, ignored);
   const sectionHeadings = blocks.filter((b) => b.heading >= 0 && b.role === "plain");
   const structured = best !== undefined || blocks.length > 2;
   const plan = best ? undefined : findPlanList(blocks, lines, code);
@@ -807,10 +818,22 @@ export const RawTemplateDraftSchema = z.object({
 });
 export type RawTemplateDraft = z.infer<typeof RawTemplateDraftSchema>;
 
+/** Même découpage : même nombre de sections, mêmes nombres de diapos, dans l'ordre (les titres peuvent être reformulés). */
+function sameStructure(a: readonly Section[], b: readonly Section[]): boolean {
+  return a.length === b.length && a.every((s, i) => s.slides === b[i]?.slides);
+}
+
+/** « 16 sections / 31 diapos » (couverture comprise). */
+function structureLabel(sections: readonly Section[]): string {
+  const total = 1 + sections.reduce((sum, s) => sum + s.slides, 0);
+  return `${sections.length} ${sections.length > 1 ? "sections" : "section"} / ${total} diapos`;
+}
+
 /**
  * `sourceText` (le texte analysé) sert à vérifier que l'IA n'invente pas : une
  * durée ou un format absents du texte ne sont pas repris (valeur de base gardée,
- * signalée). Sans `sourceText`, la réponse est prise telle quelle.
+ * signalée), et un tableau de diapos du texte fixe la structure (l'écart de l'IA
+ * est signalé). Sans `sourceText`, la réponse est prise telle quelle.
  */
 export function normalizeTemplateDraft(raw: RawTemplateDraft, base: PromptTemplate, sourceText?: string): TemplateImport {
   const found: string[] = [];
@@ -854,13 +877,33 @@ export function normalizeTemplateDraft(raw: RawTemplateDraft, base: PromptTempla
   }
 
   let coverLead: string[] = [];
-  if (raw.sections) {
-    const bounded = boundSections(raw.sections.map((s) => ({ title: s.title ?? "", guidance: s.guidance ?? "", slides: s.slides ?? 1 })));
-    warnings.push(...bounded.warnings);
-    coverLead = bounded.coverGuidance.map((g) => `Couverture : ${g}`);
-    if (bounded.sections.length > 0) {
-      patch.sections = bounded.sections;
-      found.push(`${bounded.sections.length} ${bounded.sections.length > 1 ? "sections" : "section"}`);
+  const aiBounded = raw.sections
+    ? boundSections(raw.sections.map((s) => ({ title: s.title ?? "", guidance: s.guidance ?? "", slides: s.slides ?? 1 })))
+    : null;
+  // Le texte fait foi : un tableau de diapos lu sans IA fixe la structure (sections, nombre de diapos),
+  // reproductible d'une analyse à l'autre ; l'IA ne fait que compléter les consignes vides.
+  const table = source === undefined ? undefined : findSlideTable(scanText(source));
+  if (table) {
+    const fromTable = boundSections(table.drafts.drafts);
+    warnings.push(...table.drafts.warnings, ...fromTable.warnings);
+    coverLead = fromTable.coverGuidance.map((g) => `Couverture : ${g}`);
+    const aiGuidance = new Map((aiBounded?.sections ?? []).filter((s) => s.guidance).map((s) => [flat(s.title), s.guidance]));
+    const sections = fromTable.sections.map((s) => (s.guidance ? s : { ...s, guidance: aiGuidance.get(flat(s.title)) ?? "" }));
+    if (aiBounded && aiBounded.sections.length > 0 && !sameStructure(aiBounded.sections, sections)) {
+      warnings.push(
+        `L'IA proposait ${structureLabel(aiBounded.sections)} ; le tableau de diapos du texte (${structureLabel(sections)}) est retenu tel quel.`,
+      );
+    }
+    if (sections.length > 0) {
+      patch.sections = sections;
+      found.push(`${sections.length} ${sections.length > 1 ? "sections" : "section"}`);
+    }
+  } else if (aiBounded) {
+    warnings.push(...aiBounded.warnings);
+    coverLead = aiBounded.coverGuidance.map((g) => `Couverture : ${g}`);
+    if (aiBounded.sections.length > 0) {
+      patch.sections = aiBounded.sections;
+      found.push(`${aiBounded.sections.length} ${aiBounded.sections.length > 1 ? "sections" : "section"}`);
     }
   }
 

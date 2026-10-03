@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PromptPair } from "@/domain/contracts";
-import { buildClassificationPrompt, buildFinalDeckPrompt, buildSkeletonPrompt } from "@/domain/prompts";
+import { buildClassificationPrompt, buildFinalDeckPrompt, buildSkeletonPrompt, withRetryFeedback } from "@/domain/prompts";
 import { makeConformingDeck, makeProgram, makeTemplate, makeThemes } from "@/test/fixtures";
 
 const PROBLEM = "Comment concilier le besoin de mobilité et la sobriété énergétique en ville ?";
@@ -58,6 +58,12 @@ describe("buildSkeletonPrompt", () => {
     expect(fullText(buildSkeletonPrompt(program, theme))).not.toContain("<problematique>");
   });
 
+  it("devrait interdire au squelette de formuler une problématique, y compris dans la section qui lui est consacrée", () => {
+    const { system } = buildSkeletonPrompt(program, theme);
+    expect(system).toMatch(/n'écris aucune question/i);
+    expect(system).toContain("[problématique tirée le jour J]");
+  });
+
   it("devrait imposer dans le system une sortie JSON conforme au schéma, en français", () => {
     const { system } = buildSkeletonPrompt(program, theme);
     expect(system).toMatch(/JSON/);
@@ -85,25 +91,82 @@ describe("buildFinalDeckPrompt", () => {
     expect(user).toContain(theme.name);
   });
 
-  it.each(makeConformingDeck().slides.map((s) => ({ title: s.title })))(
+  it.each(makeConformingDeck().slides.slice(1).map((s) => ({ title: s.title })))(
     "devrait reprendre le titre de diapo du squelette « $title » quand un squelette est fourni",
     ({ title }) => {
       expect(buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM).user).toContain(title);
     },
   );
 
-  it("devrait raccourcir ou retirer les notes du squelette sur demande (contexte borné d'un modèle local)", () => {
+  it("devrait raccourcir ou retirer les pistes du squelette sur demande (contexte borné d'un modèle local)", () => {
     const skeleton = makeConformingDeck();
-    const long = "Une note rédigée assez longue pour être raccourcie. ".repeat(20).trim();
-    skeleton.slides = skeleton.slides.map((s) => ({ ...s, notes: long }));
+    const long = "Une piste rédigée assez longue pour être raccourcie dans le prompt";
+    skeleton.slides = skeleton.slides.map((s) => ({ ...s, bullets: [long, long.replace("Une", "Deux")] }));
     const full = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM).user;
-    const short = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonNotesMax: 30 }).user;
-    const none = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonNotesMax: 0 }).user;
+    const short = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonDetailMax: 30 }).user;
+    const none = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM, { skeletonDetailMax: 0 }).user;
     expect(short.length).toBeLessThan(full.length);
-    expect(short).toContain("Une note rédigée assez longue…");
-    expect(none).not.toContain("Une note rédigée");
-    // La structure du squelette reste transmise.
-    for (const slide of skeleton.slides) expect(none).toContain(slide.title);
+    expect(full).toContain(long);
+    expect(short).not.toContain(long);
+    expect(none).not.toContain("Une piste rédigée");
+    // La structure du squelette reste transmise (hors couverture : son titre est souvent le nom du projet).
+    for (const slide of skeleton.slides.slice(1)) expect(none).toContain(slide.title);
+  });
+
+  it("devrait présenter le squelette comme une trame à réécrire, jamais comme un texte à recopier", () => {
+    const { system, user } = buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM);
+    expect(user).toMatch(/trame/i);
+    expect(user).toMatch(/réécri/i);
+    expect(system).toMatch(/ne recopie jamais (ses|les) notes/i);
+    expect(system).not.toMatch(/pars de ses notes/i);
+  });
+
+  it("devrait exiger explicitement le nombre de diapos de chaque section et le plan diapo par diapo", () => {
+    const { user } = buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM);
+    expect(user).toContain("- Premier axe — 2 diapos");
+    expect(user).toContain("- Second axe — 3 diapos");
+    expect(user).toContain("1. Couverture (sectionId : cover)");
+    expect(user).toContain("5. Premier axe 2/2 (sectionId : part1)");
+    expect(user).toContain("9. Conclusion (sectionId : conclusion)");
+  });
+
+  it("devrait signaler l'écart entre le squelette et le gabarit (section à compléter)", () => {
+    const skeleton = makeConformingDeck();
+    skeleton.slides = skeleton.slides.filter((s, i) => !(s.sectionId === "part2" && i > 5));
+    const { user } = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM);
+    expect(user).toMatch(/Second axe.*3 diapos exigées.*le squelette n'en a que 1/);
+  });
+
+  it("ne devrait transmettre ni les pistes de la conclusion ni celles de la problématique du squelette (rédigées sans connaître la question)", () => {
+    const skeleton = makeConformingDeck();
+    skeleton.slides = skeleton.slides.map((s) =>
+      s.sectionId === "conclusion" || s.sectionId === "problem" ? { ...s, bullets: ["Maintien des avantages du numérique"] } : s,
+    );
+    const { user } = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM);
+    expect(user).not.toContain("Maintien des avantages du numérique");
+    expect(user).toContain("Vers une mobilité choisie");
+  });
+
+  it("devrait garder les marqueurs « [source à trouver] » du squelette comme données à sourcer", () => {
+    const skeleton = makeConformingDeck();
+    skeleton.slides[3] = { ...skeleton.slides[3]!, bullets: ["Part de la voiture", "[source à trouver] : part modale de la voiture"] };
+    const { user } = buildFinalDeckPrompt(program, theme, skeleton, PROBLEM);
+    expect(user).toContain("[source à trouver] : part modale de la voiture");
+    expect(user).toMatch(/conserve.*\[source à trouver\]/i);
+  });
+
+  it.each(makeConformingDeck().slides.map((s) => ({ notes: s.notes })))(
+    "ne devrait jamais transmettre la note d'orateur du squelette « $notes »",
+    ({ notes }) => {
+      expect(buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM).user).not.toContain(notes);
+    },
+  );
+
+  it("devrait demander le titre du sujet en couverture, jamais le nom du programme", () => {
+    for (const pair of [buildFinalDeckPrompt(program, theme, null, PROBLEM), buildSkeletonPrompt(program, theme)]) {
+      expect(pair.system).toMatch(/couverture.*titre du sujet/i);
+      expect(pair.system).toMatch(/jamais le nom du programme/i);
+    }
   });
 
   it("devrait demander des notes d'orateur calées sur la durée de l'oral", () => {
@@ -111,13 +174,6 @@ describe("buildFinalDeckPrompt", () => {
     expect(text).toMatch(/notes/i);
     expect(text).toMatch(/\b20\s*min/);
   });
-
-  it.each(makeConformingDeck().slides.map((s) => ({ notes: s.notes })))(
-    "devrait transmettre les notes d'orateur du squelette « $notes »",
-    ({ notes }) => {
-      expect(buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM).user).toContain(notes);
-    },
-  );
 
   it("devrait exiger des notes rédigées à dire, minutées, sur chaque diapo — pas des consignes", () => {
     const { system } = buildFinalDeckPrompt(program, theme, makeConformingDeck(), PROBLEM);
@@ -165,6 +221,16 @@ describe("buildFinalDeckPrompt", () => {
     expect(pair.system.length).toBeGreaterThan(0);
     expect(pair.user).toContain(PROBLEM);
     expect(pair.user).not.toContain(makeConformingDeck().slides[3].title);
+  });
+});
+
+describe("withRetryFeedback", () => {
+  it("devrait ajouter les corrections exigées à la fin du message utilisateur, sans toucher au system", () => {
+    const base = buildFinalDeckPrompt(makeProgram(), makeThemes()[2], null, PROBLEM);
+    const retry = withRetryFeedback(base, "- « Second axe » : 3 diapos (ta réponse en avait 1)");
+    expect(retry.system).toBe(base.system);
+    expect(retry.user.startsWith(base.user)).toBe(true);
+    expect(retry.user).toContain("- « Second axe » : 3 diapos (ta réponse en avait 1)");
   });
 });
 
