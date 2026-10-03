@@ -51,7 +51,7 @@ export type DomainFns = {
     theme: ThemeRef,
     skeleton: DeckSpec | null,
     problem: string,
-    options?: { skeletonNotesMax?: number },
+    options?: { skeletonDetailMax?: number },
   ): PromptPair;
   /** src/domain/prompts.ts */
   buildClassificationPrompt(ctx: ProgramContext, problem: string): PromptPair;

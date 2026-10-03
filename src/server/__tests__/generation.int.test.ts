@@ -8,6 +8,7 @@ import { AiUnavailableError, NotFoundError, RateLimitedError, ValidationError } 
 import { AI_QUOTA, aiQuotaKey, consumeQuota } from "@/server/rate-limit";
 import * as decks from "@/server/repo/decks";
 import * as gen from "@/server/services/generation";
+import { SKELETON_PROBLEM_PLACEHOLDER } from "@/domain/deck-quality";
 import { makeConformingDeck, makeTemplate } from "@/test/fixtures";
 import { createUser, setupTestDatabase } from "@/test/db";
 import { recordingLogger, seedProgram, seedThemes, themeInput } from "./helpers";
@@ -135,6 +136,27 @@ describe("generateSkeleton", () => {
     const result = await gen.generateSkeleton(a.id, numerique, d);
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(d.log.events.some((e) => e.level === "warn" && e.event === "deck.template_mismatch")).toBe(true);
+  });
+});
+
+describe("generateSkeleton — problématique jamais formulée", () => {
+  it("devrait retirer la question inventée par l'IA dans la section problématique et le nom du projet en couverture", async () => {
+    const { a, numerique } = await setup();
+    const invented = makeConformingDeck();
+    invented.title = "Programme d'essai";
+    invented.slides[0] = { ...invented.slides[0]!, title: "Programme d'essai" };
+    invented.slides[2] = {
+      ...invented.slides[2]!,
+      bullets: ["Comment réduire la fracture numérique sans freiner l'innovation ?"],
+      notes: "[3:00–3:40] Comment réduire la fracture numérique sans freiner l'innovation ?",
+    };
+    const result = await gen.generateSkeleton(a.id, numerique, deps(providerWith({ generateDeck: async () => invented })));
+
+    const { spec } = await decks.getDeck(a.id, result.deckId);
+    const problemSlide = spec.slides.find((s) => s.sectionId === "problem")!;
+    expect(JSON.stringify(problemSlide)).not.toContain("fracture numérique");
+    expect(problemSlide.bullets).toContain(SKELETON_PROBLEM_PLACEHOLDER);
+    expect(spec.slides[0]!.title).toBe("Numérique");
   });
 });
 
@@ -272,7 +294,9 @@ describe("generateFinalDeck", () => {
 
     const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
 
-    expect(received).toEqual(skeleton);
+    // Le squelette transmis est celui du thème, section problématique neutralisée (aucune question imposée).
+    expect(received?.slides.filter((sl) => sl.sectionId !== "problem")).toEqual(skeleton.slides.filter((sl) => sl.sectionId !== "problem"));
+    expect(received?.slides.find((sl) => sl.sectionId === "problem")?.bullets).toContain(SKELETON_PROBLEM_PLACEHOLDER);
     const deck = await decks.getDeck(a.id, result.deckId);
     expect(deck.spec.slides.some((s) => s.bullets.includes("Puce venue du squelette"))).toBe(true);
   });
@@ -299,7 +323,9 @@ describe("generateFinalDeck", () => {
     expect(spec.slides.every((s) => s.notes.length <= 3000)).toBe(true);
     expect(spec.slides.find((s) => s.sectionId === "part1")!.notes).toBe("[0:30–2:00 environ, prendre son temps]");
     expect(result.warnings.some((w) => /reprises du squelette, à adapter/.test(w))).toBe(true);
-    expect(result.warnings.some((w) => w.includes("part1") && /non complétée/.test(w))).toBe(true);
+    // Section citée par son titre, jamais par son identifiant technique.
+    expect(result.warnings.some((w) => w.includes("« Premier axe »") && /non complétée/.test(w))).toBe(true);
+    expect(result.warnings.join(" ")).not.toContain("part1");
   });
 
   it("devrait fonctionner sans squelette", async () => {
@@ -357,6 +383,27 @@ describe("generateFinalDeck", () => {
     expect(await db().deck.count({ where: { programId } })).toBe(0);
   });
 
+  it("devrait écrire la problématique tirée sur la couverture et la diapo « Problématique », à la place d'une question inventée", async () => {
+    const { a, programId, numerique } = await setup();
+    const mock = createMockProvider();
+    const ai = providerWith({
+      generateDeck: async (prompt, hints) => {
+        const deck = await mock.generateDeck(prompt, hints);
+        deck.slides = deck.slides.map((s) =>
+          s.sectionId === "problem" ? { ...s, title: "Faut-il interdire les écrans ?", bullets: ["Faut-il interdire les écrans ?"] } : s,
+        );
+        return deck;
+      },
+    });
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    const { spec } = await decks.getDeck(a.id, result.deckId);
+    expect(spec.slides[0]!.subtitle).toBe(PROBLEM);
+    const problemSlide = spec.slides.find((s) => s.sectionId === "problem")!;
+    expect(problemSlide.bullets[0]).toBe(PROBLEM);
+    expect(JSON.stringify(problemSlide)).not.toContain("interdire les écrans");
+  });
+
   it("devrait suivre le gabarit du programme pour la structure du deck", async () => {
     const { a, programId, numerique } = await setup();
     const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps());
@@ -364,5 +411,117 @@ describe("generateFinalDeck", () => {
     const sectionIds = [...new Set(spec.slides.slice(1).map((s) => s.sectionId))];
     expect(sectionIds).toEqual(makeTemplate().sections.map((s) => s.id));
     expect(result.warnings).toEqual([]);
+  });
+});
+
+/** Squelette aux notes rédigées : ce qu'un modèle local recopie volontiers. */
+function richSkeleton(): DeckSpec {
+  const deck = makeConformingDeck();
+  deck.slides = deck.slides.map((s, i) => ({
+    ...s,
+    bullets: [`Piste générique ${i} sur les réseaux`, `Exemple type ${i} du thème numérique`, `Notion clé ${i} à maîtriser`],
+    notes: `[0:${10 + i}–0:${20 + i}] Sur cette diapo générique numéro ${i}, je présente les notions clés du thème numérique et les repères à vérifier avant l'oral.`,
+  }));
+  return deck;
+}
+
+/** Deck réécrit pour PROBLEM : rien de commun avec le squelette, conclusion qui répond. */
+function rewrittenDeck(): DeckSpec {
+  const deck = makeConformingDeck();
+  deck.slides = deck.slides.map((s, i) => ({
+    ...s,
+    bullets: [`Argument propre ${i} sur la sobriété des usages`, `Cas concret ${i} de streaming allégé`],
+    notes:
+      s.sectionId === "conclusion"
+        ? "[19:00–20:00] Pour réduire la consommation de données sur internet, je retiens trois leviers : la sobriété des usages, des services allégés et la régulation."
+        : `[1:${10 + i}–1:${30 + i}] Avec cet argument propre numéro ${i}, je montre au jury comment chaque usage pèse sur le volume de données échangées.`,
+  }));
+  return deck;
+}
+
+describe("generateFinalDeck — contrôle qualité et nouvelle tentative", () => {
+  it("devrait refaire UNE tentative avec un retour explicite quand le deck recopie le squelette, garder la meilleure et compter deux unités de quota", async () => {
+    const { a, programId, numerique } = await setup();
+    await decks.upsertSkeleton(a.id, numerique, richSkeleton());
+    const prompts: PromptPair[] = [];
+    const ai = providerWith({
+      generateDeck: async (prompt) => {
+        prompts.push(prompt);
+        return prompts.length === 1 ? richSkeleton() : rewrittenDeck();
+      },
+    });
+
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    expect(ai.calls).toBe(2);
+    expect(await quotaUsed(a.id)).toBe(2);
+    expect(prompts[1]!.user).toContain("Corrections exigées");
+    expect(prompts[1]!.user).toMatch(/Notes d'orateur recopiées du squelette/);
+    const { spec } = await decks.getDeck(a.id, result.deckId);
+    expect(spec.slides[3]!.notes).toBe(rewrittenDeck().slides[3]!.notes);
+    expect(result.warnings.some((w) => /recopi/.test(w))).toBe(false);
+  });
+
+  it("devrait garder le meilleur des deux résultats et avertir clairement quand le deck reste hors seuil", async () => {
+    const { a, programId, numerique } = await setup();
+    await decks.upsertSkeleton(a.id, numerique, richSkeleton());
+    const copy = richSkeleton();
+    const worse = { ...richSkeleton(), slides: richSkeleton().slides.filter((s) => s.sectionId !== "part2") };
+    let n = 0;
+    const ai = providerWith({ generateDeck: async () => (++n === 1 ? copy : worse) });
+
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    expect(ai.calls).toBe(2);
+    const { spec } = await decks.getDeck(a.id, result.deckId);
+    expect(spec.slides.filter((s) => s.sectionId === "part2")).toHaveLength(3);
+    expect(result.warnings.some((w) => /recopiées du squelette/.test(w))).toBe(true);
+    expect(result.warnings.some((w) => /conclusion/i.test(w) && /problématique/.test(w))).toBe(true);
+    expect(result.warnings.join(" ")).not.toMatch(/« part\d »/);
+  });
+
+  it("devrait demander à la nouvelle tentative les sections à compléter, par leur titre", async () => {
+    const { a, programId, numerique } = await setup();
+    const prompts: PromptPair[] = [];
+    const ai = providerWith({
+      generateDeck: async (prompt) => {
+        prompts.push(prompt);
+        const deck = rewrittenDeck();
+        return prompts.length === 1 ? { ...deck, slides: deck.slides.filter((s, i) => !(s.sectionId === "part2" && i > 5)) } : deck;
+      },
+    });
+
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    expect(prompts[1]!.user).toContain("« Second axe » : 3 diapos (ta réponse en avait 1)");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("devrait conserver la première tentative quand la seconde échoue, en restituant le quota d'un appel qui n'a rien calculé", async () => {
+    const { a, programId, numerique } = await setup();
+    await decks.upsertSkeleton(a.id, numerique, richSkeleton());
+    let n = 0;
+    const ai = providerWith({
+      generateDeck: async () => {
+        n += 1;
+        if (n === 1) return richSkeleton();
+        throw new AiUnavailableError("connexion refusée", { refundable: true });
+      },
+    });
+
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
+
+    expect(ai.calls).toBe(2);
+    expect(await quotaUsed(a.id)).toBe(1);
+    expect(await db().deck.count({ where: { themeId: numerique, kind: "FINAL" } })).toBe(1);
+    expect(result.warnings.some((w) => /nouvelle tentative/i.test(w))).toBe(true);
+  });
+
+  it("devrait signaler un chiffre affiché sans source", async () => {
+    const { a, programId, numerique } = await setup();
+    const deck = rewrittenDeck();
+    deck.slides[3] = { ...deck.slides[3]!, bullets: ["70 % du trafic internet est de la vidéo"] };
+    const result = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(providerWith({ generateDeck: async () => deck })));
+    expect(result.warnings.some((w) => /Chiffre sans source/.test(w) && w.includes("Un constat chiffré"))).toBe(true);
   });
 });

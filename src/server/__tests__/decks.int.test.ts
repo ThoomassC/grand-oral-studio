@@ -213,6 +213,18 @@ describe("repo decks — lectures et suppression", () => {
     expect(deck.program).toEqual({ id: programId, name: "Programme d'essai", brand: makeBrand(), template: makeTemplate() });
   });
 
+  it("devrait joindre au deck final le squelette de son thème (relecture : contrôle de recopie), et rien à un squelette", async () => {
+    const { a, programId, themeId, otherThemeId } = await ownedSetup();
+    const skeleton = makeConformingDeck();
+    skeleton.slides[1] = { ...skeleton.slides[1]!, title: "Diapo du squelette" };
+    const { deckId: skeletonId } = await decks.upsertSkeleton(a.id, themeId, skeleton);
+    const finalId = await seedDeck(programId, themeId, "FINAL");
+    const orphanId = await seedDeck(programId, otherThemeId, "FINAL");
+    expect((await decks.getDeck(a.id, finalId)).skeletonSpec).toEqual(skeleton);
+    expect((await decks.getDeck(a.id, orphanId)).skeletonSpec).toBeNull();
+    expect((await decks.getDeck(a.id, skeletonId)).skeletonSpec).toBeNull();
+  });
+
   it("devrait lister uniquement les decks finaux, du plus récent au plus ancien", async () => {
     const { a, programId, themeId, otherThemeId } = await ownedSetup();
     await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());

@@ -4,6 +4,7 @@ import { DeckReview } from "@/components/decks/DeckReview";
 import { EngineBadge } from "@/components/decks/EngineBadge";
 import { FocusOnMount } from "@/components/ui/FocusOnMount";
 import { formatDateTime } from "@/components/ui/format";
+import { finalDeckReview, skeletonStaleness } from "@/domain/deck-quality";
 import { loadDeck } from "../../../_lib/load";
 
 const toIso = (value: Date | string): string => (typeof value === "string" ? value : value.toISOString());
@@ -26,6 +27,13 @@ export async function DeckPageContent({
   const updatedAt = toIso(deck.updatedAt);
   const showSubtitle = deck.spec.subtitle && normalize(deck.spec.subtitle) !== normalize(deck.program.name);
   const showProblem = deck.problem && !normalize(deck.spec.title).includes(normalize(deck.problem));
+  // Recalculés depuis le deck enregistré : un point corrigé par l'utilisateur disparaît de la liste.
+  const review =
+    isSkeleton
+      ? [skeletonStaleness(deck.spec, deck.program.template).reason].filter((r): r is string => r !== null)
+      : deck.engine !== "free" && deck.problem
+        ? finalDeckReview(deck.spec, { template: deck.program.template, skeleton: deck.skeletonSpec, problem: deck.problem })
+        : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,6 +84,23 @@ export async function DeckPageContent({
           }
         >
           Relisez-le, puis téléchargez le .pptx pour Canva.
+        </Feedback>
+      ) : null}
+
+      {review.length > 0 ? (
+        <Feedback
+          tone="warning"
+          title={
+            isSkeleton
+              ? "Squelette à régénérer"
+              : `${review.length} point${review.length > 1 ? "s" : ""} à vérifier avant l'oral`
+          }
+        >
+          <ul className="list-disc pl-5">
+            {review.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
         </Feedback>
       ) : null}
 

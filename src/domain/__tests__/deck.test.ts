@@ -31,27 +31,28 @@ describe("checkDeckAgainstTemplate", () => {
     expect(issues.some((issue) => /couverture/i.test(issue))).toBe(true);
   });
 
-  it("devrait signaler une section du gabarit absente du deck en citant son id", () => {
+  it("devrait signaler une section du gabarit absente du deck en citant son titre", () => {
     const deck = makeConformingDeck();
     const withoutConclusion: DeckSpec = { ...deck, slides: deck.slides.filter((s) => s.sectionId !== "conclusion") };
     const issues = checkDeckAgainstTemplate(withoutConclusion, makeTemplate());
-    expect(issues.some((issue) => issue.includes("conclusion"))).toBe(true);
+    expect(issues.some((issue) => issue.includes("« Conclusion »"))).toBe(true);
   });
 
-  it("devrait signaler une section dont le nombre de diapos diffère du gabarit en citant son id", () => {
+  it("devrait signaler une section dont le nombre de diapos diffère du gabarit en citant son titre", () => {
     const deck = makeConformingDeck();
     const firstPart2 = deck.slides.findIndex((s) => s.sectionId === "part2");
     const shortPart2: DeckSpec = { ...deck, slides: deck.slides.filter((_, i) => i !== firstPart2) };
     const issues = checkDeckAgainstTemplate(shortPart2, makeTemplate());
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toContain("part2");
+    expect(issues[0]).toContain("« Second axe »");
+    expect(issues[0]).not.toContain("part2");
   });
 
   it("devrait signaler une section qui a trop de diapos", () => {
     const deck = makeConformingDeck();
     const extra: Slide = { ...newSlide, sectionId: "intro" };
     const issues = checkDeckAgainstTemplate({ ...deck, slides: [...deck.slides.slice(0, 2), extra, ...deck.slides.slice(2)] }, makeTemplate());
-    expect(issues.some((issue) => issue.includes("intro"))).toBe(true);
+    expect(issues.some((issue) => issue.includes("« Introduction »"))).toBe(true);
   });
 });
 

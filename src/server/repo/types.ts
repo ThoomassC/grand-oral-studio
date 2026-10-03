@@ -74,6 +74,8 @@ export interface DeckWithProgram extends Omit<DeckView, "updatedAt"> {
   updatedAt: string;
   themeName: string;
   program: { id: string; name: string; brand: Brand; template: PromptTemplate };
+  /** Deck final : squelette actuel de son thème (relecture, contrôle de recopie) ; null pour un squelette ou sans squelette. */
+  skeletonSpec: DeckSpec | null;
 }
 
 export interface FinalDeckSummary {

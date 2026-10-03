@@ -5,7 +5,8 @@ export const COVER_SECTION_ID = "cover";
 
 /**
  * Vérifie qu'un deck respecte le gabarit. Renvoie la liste des écarts (vide si
- * conforme), un message par problème, en citant l'id de section concerné :
+ * conforme), un message par problème, en citant le TITRE de la section concernée
+ * (lisible par l'utilisateur ; l'id n'apparaît que pour une section inconnue du gabarit) :
  * - une seule couverture (layout "title"), en tête ;
  * - chaque section du gabarit présente avec exactement `slides` diapos ;
  * - aucune section inconnue du gabarit ;
@@ -34,9 +35,9 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
   for (const section of template.sections) {
     const actual = counts.get(section.id) ?? 0;
     if (actual === 0) {
-      issues.push(`La section « ${section.id} » est absente du deck.`);
+      issues.push(`La section « ${section.title} » est absente du deck.`);
     } else if (actual !== section.slides) {
-      issues.push(`La section « ${section.id} » compte ${actual} diapo(s) au lieu de ${section.slides}.`);
+      issues.push(`La section « ${section.title} » compte ${actual} diapo(s) au lieu de ${section.slides}.`);
     }
   }
   for (const id of counts.keys()) {
@@ -51,7 +52,7 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
   for (const id of sequence) {
     const pos = order.indexOf(id);
     if (pos <= cursor) {
-      issues.push(`La section « ${id} » n'est pas à sa place dans l'ordre du gabarit.`);
+      issues.push(`La section « ${template.sections[pos]?.title ?? id} » n'est pas à sa place dans l'ordre du gabarit.`);
       break;
     }
     cursor = pos;
@@ -72,12 +73,18 @@ export function replaceSlide(deck: DeckSpec, index: number, slide: Slide): DeckS
 }
 
 /** Minutage de tête « [2:30–4:00] » d'une note d'orateur. */
-const TIMING = /^\s*\[[^\]]*\]\s*/;
+export const NOTES_TIMING = /^\s*\[[^\]]*\]\s*/;
+const TIMING = NOTES_TIMING;
 /** En deçà, une note n'est pas un texte à dire (vide, ou consigne du type « Présentez le contexte. »). */
 const THIN_NOTES_WORDS = 8;
 
 function spokenWords(notes: string): number {
   return notes.replace(TIMING, "").split(/\s+/).filter(Boolean).length;
+}
+
+/** Note vide ou réduite à une consigne / un minutage : ce n'est pas un texte à dire. */
+export function isThinNotes(notes: string): boolean {
+  return spokenWords(notes) < THIN_NOTES_WORDS;
 }
 
 /** Coupe un texte à `max` caractères, sur une fin de mot, avec une ellipse si coupé. */
