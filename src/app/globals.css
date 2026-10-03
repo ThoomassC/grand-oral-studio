@@ -525,6 +525,14 @@
     font-size: var(--opale-text-sm);
     font-weight: 600;
   }
+  /*
+   * Icône dans un bouton d'Opale (`startIcon`, `endIcon`) : `.opale-icon` porte le
+   * primaire, invisible sur un bouton primaire en thème clair. Elle suit l'encre
+   * du bouton.
+   */
+  .opale-button .opale-icon {
+    color: currentColor;
+  }
   /* `.opale-icon` porte sa taille (24 px, boîte de 40) et le primaire : ici, celles du texte. */
   .project-step__dot .opale-icon,
   .project-step__summary .opale-icon {
