@@ -113,6 +113,8 @@ test.describe("5. Préparer — thèmes manuels", () => {
     await page.getByRole("button", { name: "Monter Charlie" }).click();
     await expect(themeTitles(page)).toHaveText(["Thème 1 : Bravo", "Thème 2 : Charlie", "Thème 3 : Alpha"]);
     await expect(page.getByText("« Charlie » déplacé en position 2 sur 3.")).toBeAttached();
+    // Le rechargement attend la fin de l'enregistrement (avant, la garde « non enregistré » l'aurait retenu).
+    await expect(page.getByRole("status").filter({ hasText: "Ordre enregistré." })).toBeVisible();
     await page.reload();
     await expect(themeTitles(page)).toHaveText(["Thème 1 : Bravo", "Thème 2 : Charlie", "Thème 3 : Alpha"]);
   });
