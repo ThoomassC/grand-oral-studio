@@ -1,17 +1,39 @@
-import { test, expect, BASE_URL } from "./support/fixtures";
+import { test, expect, BASE_URL, expectNoHorizontalScroll } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, dialog, importThemeList } from "./support/app";
+import { createProject, dialog, importThemeList, openNewProjectDialog, projectRowAction, waitForHydration } from "./support/app";
 
 test.afterAll(async () => {
   await deleteE2eUsers();
 });
 
 test.describe("4. Projets — création et carte", () => {
-  test("devrait afficher la liste vide pour un nouveau compte", async ({ page, account }) => {
+  test("devrait afficher la liste vide pour un nouveau compte, avec un appel à créer le premier projet", async ({ page, account }) => {
     void account;
     await page.goto("/projets");
     await expect(page.getByText("Aucun projet pour l'instant")).toBeVisible();
-    await expect(page.getByLabel("Nom du projet")).toBeFocused();
+    // Plus de formulaire latéral : la création passe par une modale.
+    await expect(page.getByLabel("Nom du projet")).toHaveCount(0);
+    const cta = page.getByRole("button", { name: "Créer mon premier projet" });
+    await waitForHydration(cta);
+    await cta.click();
+    const modal = dialog(page, "Nouveau projet");
+    await expect(modal.getByLabel("Nom du projet")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(modal).toBeHidden();
+    await expect(cta).toBeFocused();
+  });
+
+  test("devrait ouvrir la modale « Nouveau projet » depuis l'en-tête, et la fermer par Annuler en rendant le focus", async ({
+    page,
+    account,
+  }) => {
+    void account;
+    const modal = await openNewProjectDialog(page);
+    await modal.getByLabel("Nom du projet").fill("Brouillon abandonné");
+    await modal.getByRole("button", { name: "Annuler" }).click();
+    await expect(modal).toBeHidden();
+    await expect(page.getByRole("main").getByRole("button", { name: "Nouveau projet" })).toBeFocused();
+    await expect(page.getByText("Aucun projet pour l'instant")).toBeVisible();
   });
 
   for (const [label, value] of [
@@ -21,20 +43,22 @@ test.describe("4. Projets — création et carte", () => {
   ] as const) {
     test(`devrait refuser un nom ${label}`, async ({ page, account }) => {
       void account;
-      await page.goto("/projets");
-      await page.getByLabel("Nom du projet").fill(value);
-      await page.getByRole("button", { name: "Créer le projet" }).click();
-      await expect(page.getByText("Le nom doit contenir entre 2 et 120 caractères.")).toBeVisible();
-      await expect(page.getByLabel("Nom du projet")).toHaveAttribute("aria-invalid", "true");
+      const modal = await openNewProjectDialog(page);
+      await modal.getByLabel("Nom du projet").fill(value);
+      await modal.getByRole("button", { name: "Créer le projet" }).click();
+      await expect(modal.getByText("Le nom doit contenir entre 2 et 120 caractères.")).toBeVisible();
+      await expect(modal.getByLabel("Nom du projet")).toHaveAttribute("aria-invalid", "true");
+      await expect(modal.getByLabel("Nom du projet")).toBeFocused();
+      await expect(modal).toBeVisible();
       await expect(page).toHaveURL(`${BASE_URL}/projets`);
     });
   }
 
   test("ne devrait créer qu'un projet sur un double clic", async ({ page, account }) => {
     void account;
-    await page.goto("/projets");
-    await page.getByLabel("Nom du projet").fill("Projet double clic");
-    await page.getByRole("button", { name: "Créer le projet" }).dblclick();
+    const modal = await openNewProjectDialog(page);
+    await modal.getByLabel("Nom du projet").fill("Projet double clic");
+    await modal.getByRole("button", { name: "Créer le projet" }).dblclick();
     await page.waitForURL(/\/projets\/[a-z0-9]+$/);
     await page.goto("/projets");
     await expect(page.getByRole("main").getByRole("heading", { name: "Projet double clic", level: 3 })).toHaveCount(1);
@@ -118,12 +142,37 @@ test.describe("4. Projets — menu du projet", () => {
 });
 
 test.describe("4. Projets — duplication et suppression", () => {
+  test("devrait garder le bouton d'avancement et ouvrir le menu « ⋮ » au clavier, lisible à 375 px", async ({ page, account }) => {
+    void account;
+    await createProject(page, "Projet au nom assez long pour tester le menu de la ligne sur mobile");
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/projets");
+    const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { level: 3 }) });
+    await expect(card.getByRole("link", { name: /^Reprendre : Préparer/ })).toBeVisible();
+    const trigger = card.getByRole("button", { name: /^Actions du projet / });
+    const box = await trigger.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expectNoHorizontalScroll(page);
+
+    await waitForHydration(trigger);
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: /^Actions du projet / });
+    await expect(menu.getByRole("menuitem")).toHaveText(["Dupliquer", "Supprimer"]);
+    await expect(menu.getByRole("menuitem", { name: "Dupliquer" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
   test("devrait dupliquer le projet en tête de liste", async ({ page, account }) => {
     void account;
     await createProject(page, "Projet source");
     await page.goto("/projets");
-    await page.getByRole("button", { name: "Dupliquer le projet Projet source" }).click();
+    await projectRowAction(page, "Projet source", "Dupliquer");
     await expect(page.getByText("Copie de « Projet source » créée en tête de liste.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Actions du projet Projet source", exact: true })).toBeFocused();
     const titles = page.getByRole("region", { name: "Liste des projets" }).getByRole("heading", { level: 3 });
     await expect(titles).toHaveText(["Projet source (copie)", "Projet source"]);
     await expect(page.getByText("2 projets")).toBeVisible();
@@ -134,7 +183,7 @@ test.describe("4. Projets — duplication et suppression", () => {
     const id = await createProject(page, "Source avec thèmes");
     await importThemeList(page, id);
     await page.goto("/projets");
-    await page.getByRole("button", { name: "Dupliquer le projet Source avec thèmes" }).click();
+    await projectRowAction(page, "Source avec thèmes", "Dupliquer");
     const copy = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Source avec thèmes (copie)" }) });
     await expect(copy).toContainText("Thèmes :3");
   });
@@ -143,7 +192,7 @@ test.describe("4. Projets — duplication et suppression", () => {
     void account;
     await createProject(page, "Projet à supprimer");
     await page.goto("/projets");
-    await page.getByRole("button", { name: "Supprimer le projet Projet à supprimer" }).click();
+    await projectRowAction(page, "Projet à supprimer", "Supprimer");
     const modal = dialog(page, "Supprimer le projet ?");
     await expect(modal).toBeVisible();
     const input = modal.getByLabel("Recopiez « Projet à supprimer » pour confirmer");
@@ -174,9 +223,11 @@ test.describe("4. Projets — duplication et suppression", () => {
     void account;
     await createProject(page, "Projet conservé");
     await page.goto("/projets");
-    await page.getByRole("button", { name: "Supprimer le projet Projet conservé" }).click();
+    await projectRowAction(page, "Projet conservé", "Supprimer");
+    await expect(dialog(page, "Supprimer le projet ?")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog(page, "Supprimer le projet ?")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Actions du projet Projet conservé" })).toBeFocused();
     await expect(page.getByRole("heading", { name: "Projet conservé", level: 3 })).toBeVisible();
   });
 });

@@ -2,11 +2,22 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Helpers de parcours : passent par l'interface, comme un utilisateur. */
 
-export async function createProject(page: Page, name: string, description = ""): Promise<string> {
+/** Ouvre la modale « Nouveau projet » depuis /projets (bouton à côté du titre) ; renvoie la modale. */
+export async function openNewProjectDialog(page: Page): Promise<Locator> {
   await page.goto("/projets");
-  await page.getByLabel("Nom du projet").fill(name);
-  if (description) await page.getByLabel(/^Description/).fill(description);
-  await page.getByRole("button", { name: "Créer le projet" }).click();
+  const trigger = page.getByRole("main").getByRole("button", { name: "Nouveau projet" });
+  await waitForHydration(trigger);
+  await trigger.click();
+  const modal = dialog(page, "Nouveau projet");
+  await expect(modal.getByLabel("Nom du projet")).toBeFocused();
+  return modal;
+}
+
+export async function createProject(page: Page, name: string, description = ""): Promise<string> {
+  const modal = await openNewProjectDialog(page);
+  await modal.getByLabel("Nom du projet").fill(name);
+  if (description) await modal.getByLabel(/^Description/).fill(description);
+  await modal.getByRole("button", { name: "Créer le projet" }).click();
   await page.waitForURL(/\/projets\/[a-z0-9]+$/);
   await expect(page.getByRole("heading", { name: "Thèmes", level: 2 })).toBeVisible();
   return projectIdFromUrl(page.url());
@@ -92,4 +103,12 @@ export async function generateFinalDeck(page: Page, programId: string, problem: 
 
 export function dialog(page: Page, name: string | RegExp): Locator {
   return page.getByRole("dialog", { name });
+}
+
+/** Ouvre le menu « ⋮ » d'une ligne de /projets et active l'entrée demandée. */
+export async function projectRowAction(page: Page, projectName: string, action: "Dupliquer" | "Supprimer"): Promise<void> {
+  const trigger = page.getByRole("button", { name: `Actions du projet ${projectName}`, exact: true });
+  await waitForHydration(trigger);
+  await trigger.click();
+  await page.getByRole("menu", { name: `Actions du projet ${projectName}`, exact: true }).getByRole("menuitem", { name: action }).click();
 }
