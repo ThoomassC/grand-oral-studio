@@ -23,7 +23,28 @@ describe("focusLater", () => {
   });
 });
 
+describe("focusLater — window disparu", () => {
+  // Observé en CI : « ReferenceError: window is not defined » dans tryFocus (ThemeManager.test).
+  it("ne devrait pas lever quand le window global disparaît pendant les nouvelles tentatives", () => {
+    vi.useFakeTimers();
+    focusLater(["absent"]);
+    vi.advanceTimersByTime(100);
+    vi.stubGlobal("window", undefined);
+    vi.stubGlobal("HTMLInputElement", undefined);
+    expect(() => vi.runAllTimers()).not.toThrow();
+  });
+});
+
 describe("focusFirstInvalid", () => {
+  it("ne devrait pas lever quand le window global disparaît pendant les nouvelles tentatives", () => {
+    vi.useFakeTimers();
+    const form = window.document.createElement("form");
+    focusFirstInvalid(form);
+    vi.advanceTimersByTime(70);
+    vi.stubGlobal("window", undefined);
+    expect(() => vi.runAllTimers()).not.toThrow();
+  });
+
   it("ne devrait pas lever quand le document global disparaît pendant les nouvelles tentatives", () => {
     vi.useFakeTimers();
     const form = window.document.createElement("form");
