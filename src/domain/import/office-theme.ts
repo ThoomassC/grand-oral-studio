@@ -1,10 +1,15 @@
 import JSZip from "jszip";
 import { ImportFileError } from "./errors";
 import { hasSignature } from "./file-kind";
+import { attr, elements, firstInner, hexOf, NS } from "./ooxml";
+import { analyzeUsage, detectOfficeDefault, type ThemeUsage } from "./office-usage";
 
 /**
  * Thème d'une présentation Office (.pptx, .potx) ou d'un thème (.thmx) :
  * couleurs (a:clrScheme), polices (a:fontScheme) et logo du masque.
+ * Si le thème est le thème Office PAR DÉFAUT (cas des fichiers produits par un
+ * générateur), on lit en plus l'usage réel des couleurs et polices dans le
+ * masque, les layouts et les diapositives (voir office-usage.ts).
  *
  * Sécurité (le fichier vient de l'utilisateur) :
  *  - taille du fichier ≤ 20 Mo, ≤ 2 000 entrées ;
@@ -14,7 +19,9 @@ import { hasSignature } from "./file-kind";
  *    parseur, aucune résolution externe) ;
  *  - macros refusées (vbaProject.bin, type de contenu macroEnabled) ;
  *  - seules quelques entrées connues sont lues ; les chemins des .rels sont
- *    résolus sans jamais sortir de l'archive.
+ *    résolus sans jamais sortir de l'archive ;
+ *  - l'analyse d'usage n'a lieu que pour un thème par défaut, et s'arrête à
+ *    300 diapositives, 100 layouts ou 40 Mo de XML décompressé au total.
  */
 
 export const OFFICE_IMPORT_LIMITS = {
@@ -23,6 +30,9 @@ export const OFFICE_IMPORT_LIMITS = {
   xmlBytes: 5 * 1024 * 1024,
   imageBytes: 2 * 1024 * 1024,
   logoBytes: 500 * 1024,
+  usageSlides: 300,
+  usageLayouts: 100,
+  usageXmlBytes: 40 * 1024 * 1024,
 } as const;
 
 export const THEME_COLOR_SLOTS = ["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
@@ -38,6 +48,10 @@ export interface ExtractedTheme {
   logoDataUrl: string | null;
   /** Remarques affichables (logo ignoré…). */
   notes: string[];
+  /** Couleurs / polices du thème identiques à un thème Office livré par Microsoft. */
+  officeDefault?: { colors: boolean; fonts: boolean };
+  /** Usage réel dans les diapositives ; lu seulement quand le thème est un thème par défaut. */
+  usage?: ThemeUsage | null;
 }
 
 declare module "jszip" {
@@ -46,6 +60,8 @@ declare module "jszip" {
     internalStream(type: "uint8array"): JSZip.JSZipStreamHelper<Uint8Array>;
   }
 }
+
+const MASTER_PART = "ppt/slideMasters/slideMaster1.xml";
 
 class EntryTooLargeError extends ImportFileError {
   constructor() {
@@ -104,47 +120,24 @@ async function readXml(zip: JSZip, path: string): Promise<string | null> {
   return xml;
 }
 
-function decodeEntities(value: string): string {
-  return value.replace(/&(#x[0-9a-fA-F]{1,6}|#\d{1,7}|amp|lt|gt|quot|apos);/g, (_, e: string) => {
-    if (e === "amp") return "&";
-    if (e === "lt") return "<";
-    if (e === "gt") return ">";
-    if (e === "quot") return '"';
-    if (e === "apos") return "'";
-    const code = e.startsWith("#x") ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
-  });
-}
-
-function attr(tag: string, name: string): string | null {
-  const m = new RegExp(`\\b${name}="([^"]*)"`).exec(tag);
-  return m ? decodeEntities(m[1] ?? "") : null;
-}
-
-/** Préfixe d'espace de noms quelconque (a:, p:, ou aucun). */
-const NS = "(?:[A-Za-z][\\w.-]*:)?";
-
-function hexOf(value: string | null): string | null {
-  return value && /^[0-9a-fA-F]{6}$/.test(value) ? `#${value.toUpperCase()}` : null;
-}
-
 function parseTheme(xml: string): Omit<ExtractedTheme, "logoDataUrl" | "notes"> {
-  const themeTag = new RegExp(`<${NS}theme\\b[^>]*>`).exec(xml)?.[0] ?? "";
+  const themeTag = new RegExp(`<${NS}theme\\b[^<>]*>`).exec(xml)?.[0] ?? "";
   const name = attr(themeTag, "name")?.trim() || null;
 
-  const scheme = new RegExp(`<${NS}clrScheme\\b[\\s\\S]*?</${NS}clrScheme>`).exec(xml)?.[0] ?? "";
+  // firstInner : parcours linéaire, même sur un thème piégé (ouvrantes sans fermante).
+  const scheme = firstInner(xml, "clrScheme") ?? "";
   const colors: Partial<Record<ThemeColorSlot, string>> = {};
   for (const slot of THEME_COLOR_SLOTS) {
-    const inner = new RegExp(`<${NS}${slot}>([\\s\\S]*?)</${NS}${slot}>`).exec(scheme)?.[1] ?? "";
-    const srgb = new RegExp(`<${NS}srgbClr\\b[^>]*>`).exec(inner)?.[0];
-    const sys = new RegExp(`<${NS}sysClr\\b[^>]*>`).exec(inner)?.[0];
+    const inner = firstInner(scheme, slot) ?? "";
+    const srgb = new RegExp(`<${NS}srgbClr\\b[^<>]*>`).exec(inner)?.[0];
+    const sys = new RegExp(`<${NS}sysClr\\b[^<>]*>`).exec(inner)?.[0];
     const hex = srgb ? hexOf(attr(srgb, "val")) : sys ? hexOf(attr(sys, "lastClr")) : null;
     if (hex) colors[slot] = hex;
   }
 
   const font = (kind: "majorFont" | "minorFont"): string | null => {
-    const block = new RegExp(`<${NS}${kind}>([\\s\\S]*?)</${NS}${kind}>`).exec(xml)?.[1] ?? "";
-    const latin = new RegExp(`<${NS}latin\\b[^>]*>`).exec(block)?.[0];
+    const block = firstInner(xml, kind) ?? "";
+    const latin = new RegExp(`<${NS}latin\\b[^<>]*>`).exec(block)?.[0];
     return (latin && attr(latin, "typeface")?.trim()) || null;
   };
   return { name, colors, fonts: { major: font("majorFont"), minor: font("minorFont") } };
@@ -159,7 +152,7 @@ interface Relationship {
 function parseRels(xml: string | null): Relationship[] {
   if (!xml) return [];
   const out: Relationship[] = [];
-  for (const m of xml.matchAll(/<Relationship\b[^>]*>/g)) {
+  for (const m of xml.matchAll(/<Relationship\b[^<>]*>/g)) {
     const tag = m[0];
     if (attr(tag, "TargetMode") === "External") continue;
     const id = attr(tag, "Id");
@@ -189,7 +182,7 @@ function relsPathOf(part: string): string {
 }
 
 async function findThemePart(zip: JSZip): Promise<{ themePart: string | null; masterRels: Relationship[] }> {
-  const master = "ppt/slideMasters/slideMaster1.xml";
+  const master = MASTER_PART;
   const masterRels = parseRels(await readXml(zip, relsPathOf(master)));
   const rel = masterRels.find((r) => r.type.endsWith("/theme"));
   const linked = rel ? resolvePart(master, rel.target) : null;
@@ -204,8 +197,13 @@ async function findThemePart(zip: JSZip): Promise<{ themePart: string | null; ma
 async function firstPicture(zip: JSZip, part: string, rels: Relationship[], notes: string[]): Promise<string | null> {
   const xml = await readXml(zip, part);
   if (!xml) return null;
-  const pic = new RegExp(`<${NS}pic\\b[\\s\\S]*?<${NS}blip\\b[^>]*\\br:embed="([^"]+)"`).exec(xml);
-  const rid = pic?.[1];
+  // Parcours linéaire (pas de `[\s\S]*?` rejoué à chaque <p:pic> d'un XML piégé).
+  let rid: string | null = null;
+  for (const pic of elements(xml, "pic")) {
+    const blip = new RegExp(`<${NS}blip\\b[^<>]*>`).exec(pic.inner ?? "")?.[0];
+    rid = blip ? attr(blip, "r:embed") : null;
+    if (rid) break;
+  }
   if (!rid) return null;
   const rel = rels.find((r) => r.id === rid && r.type.endsWith("/image"));
   const path = rel ? resolvePart(part, rel.target) : null;
@@ -232,7 +230,7 @@ async function firstPicture(zip: JSZip, part: string, rels: Relationship[], note
 }
 
 async function findLogo(zip: JSZip, masterRels: Relationship[], notes: string[]): Promise<string | null> {
-  const master = "ppt/slideMasters/slideMaster1.xml";
+  const master = MASTER_PART;
   const fromMaster = await firstPicture(zip, master, masterRels, notes);
   if (fromMaster || notes.length > 0) return fromMaster;
   const layoutRel = masterRels.find((r) => r.type.endsWith("/slideLayout"));
@@ -240,6 +238,56 @@ async function findLogo(zip: JSZip, masterRels: Relationship[], notes: string[])
   if (!layout) return null;
   const layoutRels = parseRels(await readXml(zip, relsPathOf(layout)));
   return firstPicture(zip, layout, layoutRels, notes);
+}
+
+const DEFAULT_SLIDE_AREA = 12_192_000 * 6_858_000;
+
+/** Lit masque, layouts et diapositives dans un budget global de XML décompressé. */
+async function readUsage(
+  zip: JSZip,
+  masterRels: Relationship[],
+  theme: Pick<ExtractedTheme, "colors" | "fonts">,
+  notes: string[],
+): Promise<ThemeUsage> {
+  let budget: number = OFFICE_IMPORT_LIMITS.usageXmlBytes;
+  let truncated = false;
+  const read = async (part: string): Promise<string | null> => {
+    if (budget <= 0) {
+      truncated = true;
+      return null;
+    }
+    const xml = await readXml(zip, part);
+    if (xml) budget -= xml.length;
+    return xml;
+  };
+
+  const sldSz = new RegExp(`<${NS}sldSz\\b[^<>]*>`).exec((await read("ppt/presentation.xml")) ?? "")?.[0];
+  const cx = Number(sldSz ? attr(sldSz, "cx") : NaN);
+  const cy = Number(sldSz ? attr(sldSz, "cy") : NaN);
+  const slideArea = cx > 0 && cy > 0 ? cx * cy : DEFAULT_SLIDE_AREA;
+  const masterXml = await read(MASTER_PART);
+  const layouts = new Map<string, string>();
+  for (const rel of masterRels.filter((r) => r.type.endsWith("/slideLayout")).slice(0, OFFICE_IMPORT_LIMITS.usageLayouts)) {
+    const part = resolvePart(MASTER_PART, rel.target);
+    if (!part || layouts.has(part)) continue;
+    const xml = await read(part);
+    if (xml) layouts.set(part, xml);
+  }
+
+  const slidePaths = Object.keys(zip.files)
+    .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
+    .sort((a, b) => Number(/(\d+)\.xml$/.exec(a)?.[1]) - Number(/(\d+)\.xml$/.exec(b)?.[1]));
+  if (slidePaths.length > OFFICE_IMPORT_LIMITS.usageSlides) truncated = true;
+  const slides: { xml: string; layoutPart: string | null }[] = [];
+  for (const path of slidePaths.slice(0, OFFICE_IMPORT_LIMITS.usageSlides)) {
+    const xml = await read(path);
+    if (!xml) break;
+    const layoutRel = parseRels(await read(relsPathOf(path))).find((r) => r.type.endsWith("/slideLayout"));
+    slides.push({ xml, layoutPart: layoutRel ? resolvePart(path, layoutRel.target) : null });
+  }
+  if (truncated) notes.push(`Couleurs analysées sur les ${slides.length} premières diapositives seulement.`);
+
+  return analyzeUsage({ theme: { colors: theme.colors, fonts: theme.fonts }, masterXml, layouts, slides, slideArea });
 }
 
 export async function extractOfficeTheme(bytes: Uint8Array, kind: "pptx" | "potx" | "thmx"): Promise<ExtractedTheme> {
@@ -274,5 +322,9 @@ export async function extractOfficeTheme(bytes: Uint8Array, kind: "pptx" | "potx
 
   const theme = parseTheme(themeXml);
   const logoDataUrl = kind === "thmx" ? null : await findLogo(zip, masterRels, notes);
-  return { ...theme, logoDataUrl, notes };
+  const officeDefault = detectOfficeDefault(theme.colors, theme.fonts);
+  // Ne lit les diapositives que si le thème ne dit rien de la charte.
+  const usage =
+    kind !== "thmx" && (officeDefault.colors || officeDefault.fonts) ? await readUsage(zip, masterRels, theme, notes) : null;
+  return { ...theme, logoDataUrl, notes, officeDefault, usage };
 }
