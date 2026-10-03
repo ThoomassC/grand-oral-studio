@@ -70,3 +70,26 @@ describe("deckToPptx", () => {
     expect(await slideSizeRatio(makeTemplate({ format: "4:3" }))).toBeCloseTo(4 / 3, 2);
   });
 });
+
+describe("deckToPptx — palette du thème (theme1.xml)", () => {
+  it("devrait écrire les couleurs de la charte dans le jeu de couleurs du thème, à la place de celles d'Office", async () => {
+    const theme = await readFile(await exportZip(), "ppt/theme/theme1.xml");
+    const scheme = /<a:clrScheme[^>]*>([\s\S]*?)<\/a:clrScheme>/.exec(theme)?.[1] ?? "";
+    const color = (slot: string) => new RegExp(`<a:${slot}><a:(?:srgbClr val|sysClr val="[^"]*" lastClr)="([0-9A-F]{6})"`).exec(scheme)?.[1];
+    expect(color("dk1")).toBe("222222");
+    expect(color("lt1")).toBe("FFFFFF");
+    expect(color("dk2")).toBe("1F4E79");
+    expect(color("accent1")).toBe("1F4E79");
+    expect(color("accent2")).toBe("E07A1F");
+    expect(color("accent3")).toBe("5B8DB8");
+    expect(scheme).not.toContain("4472C4");
+    expect(theme).toMatch(/<a:clrScheme name="Charte d'essai"|<a:clrScheme name="Charte d&apos;essai"/);
+  });
+
+  it("devrait échapper le nom de la charte dans le XML du thème", async () => {
+    const zip = await JSZip.loadAsync(await deckToPptx(deck, makeBrand({ name: 'Charte <"&">' }), makeTemplate()));
+    const theme = await readFile(zip, "ppt/theme/theme1.xml");
+    expect(theme).toContain('name="Charte &lt;&quot;&amp;&quot;&gt;"');
+  });
+});
+
