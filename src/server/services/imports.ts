@@ -5,7 +5,12 @@ import { ImportFileError } from "@/domain/import/errors";
 import { detectImportFile, isOfficeKind, type ImportFileKind } from "@/domain/import/file-kind";
 import { extractOfficeTheme } from "@/domain/import/office-theme";
 import { buildTemplateDraftPrompt, buildThemePromptDraftPrompt } from "@/domain/import/prompts";
-import { normalizeTemplateDraft, parseTemplateText, type TemplateImport } from "@/domain/import/template-from-text";
+import {
+  normalizeTemplateDraft,
+  parseTemplateText,
+  type RecognizedField,
+  type TemplateImport,
+} from "@/domain/import/template-from-text";
 import { normalizeThemePromptDraft, parseThemePromptText, type ThemePromptImport } from "@/domain/import/themes-from-text";
 import { PromptTemplateSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import type { ResolvedEngine } from "../ai";
@@ -83,6 +88,10 @@ export interface BrandImportResult {
 export interface TemplateImportResult {
   template: PromptTemplate;
   found: string[];
+  /** Champs trouvés dans le texte ; les autres valeurs sont celles du gabarit actuel (« par défaut »). */
+  recognized: RecognizedField[];
+  /** Ce qui a été écarté, coupé ou ignoré à l'analyse (FR, affichable). */
+  warnings: string[];
   source: "ai" | "free";
   fallbackReason: string | null;
 }
@@ -224,8 +233,8 @@ export async function analyzeTemplatePrompt(
   await quotas.consumeImport(userId);
 
   const free = (fallbackReason: string | null): TemplateImportResult => {
-    const { template, found } = parseTemplateText(input.text, base);
-    return { template, found, source: "free", fallbackReason };
+    const { template, found, recognized, warnings } = parseTemplateText(input.text, base);
+    return { template, found, recognized, warnings, source: "free", fallbackReason };
   };
 
   let engine: ResolvedEngine;
@@ -246,13 +255,28 @@ export async function analyzeTemplatePrompt(
     const raw = await billed(userId, engine.billing, quotas, deps.log, () =>
       draft(prompt, { text: input.text, base }),
     );
-    const normalized: TemplateImport = normalizeTemplateDraft(raw, base);
-    if (normalized.found.length === 0) throw new AiInvalidOutputError("draftTemplate: aucun élément repris");
+    // Le texte source sert à écarter ce que l'IA aurait inventé (durée, format absents du texte).
+    const normalized: TemplateImport = normalizeTemplateDraft(raw, base, input.text);
+    // La durée lue dans le texte est reprise même si l'IA n'en propose pas : elle ne compte pas comme apport de l'IA.
+    const fromAi = normalized.recognized.filter((f) => f !== "durationMinutes" || raw.durationMinutes !== undefined);
+    if (fromAi.length === 0) throw new AiInvalidOutputError("draftTemplate: aucun élément repris");
     const checked = PromptTemplateSchema.safeParse(normalized.template);
     if (!checked.success) throw new AiInvalidOutputError("draftTemplate: gabarit hors contrat après normalisation");
     const template = checked.data;
-    deps.log.info("import.template_ai", { engine: engine.engine, found: normalized.found.length });
-    return { template, found: normalized.found, source: "ai", fallbackReason: null };
+    deps.log.info("import.template_ai", {
+      engine: engine.engine,
+      found: normalized.found.length,
+      sections: template.sections.length,
+      warnings: normalized.warnings.length,
+    });
+    return {
+      template,
+      found: normalized.found,
+      recognized: normalized.recognized,
+      warnings: normalized.warnings,
+      source: "ai",
+      fallbackReason: null,
+    };
   } catch (error) {
     // Un bug de code ou une panne de base n'est pas une défaillance de l'IA : pas de maquillage en repli.
     if (!isAppError(error)) throw error;

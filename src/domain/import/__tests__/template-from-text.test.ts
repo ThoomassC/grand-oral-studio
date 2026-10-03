@@ -25,9 +25,12 @@ describe("parseTemplateText — durée", () => {
     expect(r.found).toContain(`Durée : ${minutes} min`);
   });
 
-  it("devrait borner une durée hors limites (3..90)", () => {
-    expect(parse("Durée : 3 h").template.durationMinutes).toBe(90);
+  it("devrait borner une durée hors limites (3..90) en le signalant", () => {
+    const long = parse("Durée : 120 min");
+    expect(long.template.durationMinutes).toBe(90);
+    expect(long.warnings.some((w) => /120 min/.test(w) && /90 min/.test(w))).toBe(true);
     expect(parse("Durée : 1 min").template.durationMinutes).toBe(3);
+    // Une durée en heures au-delà de 2 h n'est pas une durée d'oral : ignorée et signalée (voir template-from-text.review.test.ts).
   });
 });
 
@@ -86,12 +89,13 @@ describe("parseTemplateText — sections", () => {
     expect(parse("Durée : 20 min").template.sections).toEqual(base.sections);
   });
 
-  it("devrait respecter les bornes : 15 sections, 8 diapos par section, 60 diapos au total", () => {
+  it("devrait respecter les bornes : 30 sections, 8 diapos par section, 60 diapos au total — en le signalant", () => {
     const many = Array.from({ length: 20 }, (_, i) => `${i + 1}. Partie ${i + 1} (8 diapos)`).join("\n");
     const r = parse(many);
-    expect(r.template.sections).toHaveLength(15);
+    expect(r.template.sections).toHaveLength(20);
     expect(r.template.sections.every((s) => s.slides >= 1 && s.slides <= 8)).toBe(true);
-    expect(totalSlides(r.template)).toBeLessThanOrEqual(MAX_TEMPLATE_SLIDES);
+    expect(totalSlides(r.template)).toBe(MAX_TEMPLATE_SLIDES);
+    expect(r.warnings.some((w) => /60 diapos/.test(w))).toBe(true);
   });
 
   it("devrait tronquer les titres trop longs", () => {

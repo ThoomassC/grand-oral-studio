@@ -48,7 +48,14 @@ describe("Préremplissage du gabarit avec un prompt", () => {
   it("devrait analyser un texte collé et montrer le gabarit proposé, focus sur l'aperçu", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: { template: PROPOSED, found: ["Durée : 20 min", "3 sections"], source: "ai", fallbackReason: null },
+      data: {
+        template: PROPOSED,
+        found: ["Durée : 20 min", "3 sections"],
+        recognized: ["durationMinutes", "sections", "tone"],
+        warnings: [],
+        source: "ai",
+        fallbackReason: null,
+      },
     });
     const user = userEvent.setup();
     renderWorkspace();
@@ -68,10 +75,75 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     expect(within(preview).getByText("professionnel")).toBeInTheDocument();
   });
 
+  it("devrait distinguer ce qui vient du texte des valeurs par défaut, et afficher les avertissements", async () => {
+    analyze.mockResolvedValue({
+      ok: true,
+      data: {
+        template: { ...PROPOSED, constraints: "Un chiffre par diapo." },
+        found: ["Format : 16:9", "3 sections", "Contraintes"],
+        recognized: ["format", "sections", "constraints"],
+        warnings: ["Durée non précisée dans le texte : la durée actuelle du gabarit (20 min) est conservée — vérifiez-la."],
+        source: "free",
+        fallbackReason: null,
+      },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(textarea());
+    await user.paste(PROMPT);
+    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    const preview = await screen.findByRole("region", { name: "Gabarit proposé" });
+
+    const recognized = within(preview).getByRole("list", { name: "Trouvé dans le texte" });
+    expect(within(recognized).queryByText(/Durée/)).toBeNull();
+    expect(within(recognized).getByText("Format : 16:9")).toBeInTheDocument();
+    // La durée et le ton sont affichés, mais comme valeurs par défaut.
+    expect(within(preview).getByText("20 min").closest("dd")).toHaveTextContent("par défaut");
+    expect(within(preview).getByText("professionnel").closest("dd")).toHaveTextContent("par défaut");
+    expect(within(preview).getByText(/16:9 \(écran large\)/).closest("dd")).not.toHaveTextContent("par défaut");
+    expect(within(preview).getByText(/Durée non précisée dans le texte/)).toBeInTheDocument();
+  });
+
+  it("devrait afficher une seule fois deux avertissements identiques, sans clé React en double", async () => {
+    const twice = "Tableau : ligne 2 sans titre ignorée (« rôle »).";
+    analyze.mockResolvedValue({
+      ok: true,
+      data: {
+        template: PROPOSED,
+        found: ["3 sections"],
+        recognized: ["sections"],
+        warnings: [twice, twice, "Autre avertissement."],
+        source: "free",
+        fallbackReason: null,
+      },
+    });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const user = userEvent.setup();
+      renderWorkspace();
+      await user.click(textarea());
+      await user.paste(PROMPT);
+      await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+      const preview = await screen.findByRole("region", { name: "Gabarit proposé" });
+      expect(within(preview).getAllByText(twice)).toHaveLength(1);
+      expect(within(preview).getByText("Autre avertissement.")).toBeInTheDocument();
+      expect(errors.mock.calls.some((args) => String(args[0]).includes("same key"))).toBe(false);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   it("devrait appliquer le gabarit à l'éditeur sans enregistrer", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: { template: { ...PROPOSED, durationMinutes: 25 }, found: ["Durée : 25 min"], source: "ai", fallbackReason: null },
+      data: {
+        template: { ...PROPOSED, durationMinutes: 25 },
+        found: ["Durée : 25 min"],
+        recognized: ["durationMinutes"],
+        warnings: [],
+        source: "ai",
+        fallbackReason: null,
+      },
     });
     const user = userEvent.setup();
     renderWorkspace();
@@ -122,7 +194,7 @@ describe("Préremplissage du gabarit avec un prompt", () => {
   it("devrait dire qu'aucun réglage n'est reconnu, sans proposer d'appliquer", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: { template: defaultTemplate(), found: [], source: "free", fallbackReason: null },
+      data: { template: defaultTemplate(), found: [], recognized: [], warnings: [], source: "free", fallbackReason: null },
     });
     const user = userEvent.setup();
     renderWorkspace();
@@ -136,7 +208,14 @@ describe("Préremplissage du gabarit avec un prompt", () => {
   it("devrait signaler le repli sans IA et sa raison", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: { template: PROPOSED, found: ["Durée : 20 min"], source: "free", fallbackReason: "Le service IA n'a pas répondu." },
+      data: {
+        template: PROPOSED,
+        found: ["Durée : 20 min"],
+        recognized: ["durationMinutes"],
+        warnings: [],
+        source: "free",
+        fallbackReason: "Le service IA n'a pas répondu.",
+      },
     });
     const user = userEvent.setup();
     renderWorkspace();

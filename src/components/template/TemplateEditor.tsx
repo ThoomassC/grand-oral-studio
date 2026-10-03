@@ -4,8 +4,8 @@ import { SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
 import { useId, useImperativeHandle, useRef, useState, useTransition, type Ref } from "react";
 import { defaultTemplate } from "@/domain/defaults";
-import { PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
-import { suggestSlideCount, totalSlides } from "@/domain/slides";
+import { LIMITS, PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
+import { slideBudgetWarning, suggestSlideCount, totalSlides } from "@/domain/slides";
 import { updateTemplate } from "@/server/actions/programs";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
@@ -15,7 +15,7 @@ import { countFieldErrors, focusFirstInvalid, focusLater, invalidCountMessage } 
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 
-const MAX_SECTIONS = 15;
+const MAX_SECTIONS = LIMITS.maxSections;
 
 let sectionCounter = 0;
 function newSectionId(): string {
@@ -62,8 +62,7 @@ export function TemplateEditor({
   const slidesOk = template.sections.every((s) => Number.isFinite(s.slides));
   const total = slidesOk ? totalSlides(template) : null;
   const suggested = durationOk ? suggestSlideCount(template.durationMinutes) : null;
-  const gap = total !== null && suggested !== null && suggested > 0 ? (total - suggested) / suggested : 0;
-  const tooFar = Math.abs(gap) > 0.3;
+  const budgetWarning = total !== null && durationOk ? slideBudgetWarning(total, template.durationMinutes) : null;
 
   useImperativeHandle(ref, () => ({
     applyImport(imported) {
@@ -231,7 +230,7 @@ export function TemplateEditor({
         </div>
       </div>
 
-      <div id={ids.summary} className={`rounded-lg border p-4 ${tooFar ? "border-warning/60 bg-warning-soft" : "border-border bg-surface-2"}`}>
+      <div id={ids.summary} className={`rounded-lg border p-4 ${budgetWarning ? "border-warning/60 bg-warning-soft" : "border-border bg-surface-2"}`}>
         <p className="flex flex-wrap gap-x-6 gap-y-1">
           <span>
             Total : <strong className="num">{total ?? "—"} diapos</strong>{" "}
@@ -243,9 +242,7 @@ export function TemplateEditor({
           </span>
         </p>
         <LiveRegion className="mt-2 text-sm font-medium text-warning">
-          {tooFar && suggested !== null && total !== null
-            ? `Attention : ${total > suggested ? "trop" : "pas assez"} de diapos pour la durée (${gap > 0 ? "+" : ""}${Math.round(gap * 100)} %). Ajustez le nombre de diapos par section ou la durée.`
-            : null}
+          {budgetWarning ? `Attention — ${budgetWarning}` : null}
         </LiveRegion>
       </div>
 

@@ -86,7 +86,8 @@ const BRAND_FORMAT = jsonFormat(RawBrandDraftSchema);
 const THEMES_FORMAT = jsonFormat(RawThemePromptDraftSchema);
 
 const DRAFT_BUDGET_MS = 60_000;
-const DRAFT_MAX_TOKENS = 4_000;
+/** Gabarit : jusqu'à 30 sections avec consigne (600 car.) + 2 000 car. de contraintes. */
+const TEMPLATE_DRAFT_MAX_TOKENS = 8_000;
 /** 60 thèmes avec description et mots-clés, plus la charte. */
 const THEMES_MAX_TOKENS = 8_000;
 const VISION_BUDGET_MS = 90_000;
@@ -163,7 +164,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
     },
 
     async draftTemplate(prompt: PromptPair): Promise<RawTemplateDraft> {
-      const params = baseParams(prompt, DRAFT_MAX_TOKENS, "low", TEMPLATE_FORMAT);
+      const params = baseParams(prompt, TEMPLATE_DRAFT_MAX_TOKENS, "low", TEMPLATE_FORMAT);
       const message = await run("draftTemplate", DRAFT_BUDGET_MS, (signal) =>
         client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: DRAFT_BUDGET_MS }),
       );
