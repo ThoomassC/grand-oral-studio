@@ -1,22 +1,34 @@
 "use client";
 
+import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { TextArea } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type CopyState = { kind: "idle" } | { kind: "copied" } | { kind: "manual" };
+
+/** Durée du retour « Copié ! » sur le bouton. */
+const COPIED_LABEL_MS = 3_000;
 
 /** Panneau « Ouvrir dans Canva » : marche à suivre et prompt à copier. */
 export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
   const textareaId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copy, setCopy] = useState<CopyState>({ kind: "idle" });
+  // « Copié ! » sur le bouton pendant 3 s ; chaque nouvelle copie relance le délai.
+  const [justCopied, setJustCopied] = useState(false);
+  const copiedTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
 
   async function copyPrompt() {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard indisponible");
       await navigator.clipboard.writeText(prompt);
       setCopy({ kind: "copied" });
+      setJustCopied(true);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setJustCopied(false), COPIED_LABEL_MS);
     } catch {
       // Repli : on sélectionne le texte pour une copie au clavier.
       const el = textareaRef.current;
@@ -24,6 +36,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
         el.focus();
         el.select();
       }
+      setJustCopied(false);
       setCopy({ kind: "manual" });
     }
   }
@@ -59,8 +72,9 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
           <label htmlFor={textareaId} className="opale-field__label mb-0">
             Prompt Canva
           </label>
+          {/* Les deux libellés partagent la même cellule : la largeur du bouton ne bouge pas. */}
           <Button type="button" variant="ghost" size="small" onClick={copyPrompt}>
-            Copier le prompt Canva
+            <ButtonLabel idle="Copier le prompt Canva" busy="Copié !" isBusy={justCopied} />
           </Button>
         </div>
         <TextArea
