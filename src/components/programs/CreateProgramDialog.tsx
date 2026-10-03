@@ -45,6 +45,7 @@ export function CreateProgramDialog({
       <Button
         ref={triggerRef}
         variant={variant}
+        size="small"
         aria-haspopup="dialog"
         startIcon={<Icon name="plus" />}
         onClick={show}
