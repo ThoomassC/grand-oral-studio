@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CreateProgramForm } from "@/components/programs/CreateProgramForm";
+import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
 import { ProgramActions } from "@/components/programs/ProgramActions";
 import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
 import { formatDate, plural } from "@/components/ui/format";
@@ -16,27 +16,38 @@ export default async function ProgramsPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <p className="eyebrow">Espace de préparation</p>
-      <h1 className="mt-2 text-3xl sm:text-4xl">Projets</h1>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <h1 className="text-3xl sm:text-4xl">Projets</h1>
+        <CreateProgramDialog />
+      </div>
       <p className="mt-2 max-w-2xl text-muted">
         Un projet regroupe les thèmes d&apos;une formation, sa charte graphique et son gabarit de présentation.
       </p>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section aria-labelledby="liste-programmes">
-          <h2 id="liste-programmes" tabIndex={-1} className="sr-only">
-            Liste des projets
-          </h2>
-          {programs.length === 0 ? (
-            <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
-              <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
-              <p className="text-muted">Créez votre premier projet avec le formulaire, puis ajoutez ses thèmes.</p>
+      <section aria-labelledby="liste-programmes" className="mt-8">
+        <h2 id="liste-programmes" tabIndex={-1} className="sr-only">
+          Liste des projets
+        </h2>
+        {programs.length === 0 ? (
+          <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
+            <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
+            <p className="text-muted">Créez votre premier projet, puis ajoutez ses thèmes.</p>
+            <div className="mt-2">
+              <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
             </div>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {programs.map((p, i) => {
-                const neighbour = programs[i + 1] ?? programs[i - 1];
-                return (
-                  <li key={p.id} className="opale-card opale-card--e1 flex flex-col gap-4 p-5 pt-7 sm:flex-row sm:items-start sm:justify-between sm:p-6 sm:pt-8">
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {programs.map((p, i) => {
+              const neighbour = programs[i + 1] ?? programs[i - 1];
+              return (
+                // Ligne : contenu (infos, puis avancement à droite dès sm) | bouton « ⋮ » toujours en fin de ligne.
+                // `flex-row` : la carte Opale impose `flex-direction: column`. `flex-wrap` : l'annonce de la duplication (dans ProgramActions) passe dessous, sur toute la largeur.
+                <li
+                  key={p.id}
+                  className="opale-card opale-card--e1 flex flex-row flex-wrap items-start gap-x-2 gap-y-3 p-5 pt-7 sm:gap-x-3 sm:p-6 sm:pt-8"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <h3 className="text-xl">
                         <Link
@@ -59,38 +70,24 @@ export default async function ProgramsPage() {
                         </div>
                       </dl>
                     </div>
-                    <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                    <div className="shrink-0">
                       <ProjectProgressSummary programId={p.id} programName={p.name} progress={p.progress} />
-                      <ProgramActions
-                        programId={p.id}
-                        programName={p.name}
-                        focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
-                          (x): x is string => x !== null,
-                        )}
-                      />
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {programs.length > 0 ? (
-            <p className="num mt-3 text-sm text-muted">{plural(programs.length, "projet")}</p>
-          ) : null}
-        </section>
-
-        <section aria-labelledby="nouveau-programme" className="opale-card opale-card--e1 block h-fit p-5 sm:p-6 lg:sticky lg:top-6">
-          <h2 id="nouveau-programme" className="text-xl">
-            Nouveau projet
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Une charte neutre et un gabarit par défaut sont créés ; vous les ajusterez ensuite.
-          </p>
-          <div className="mt-4">
-            <CreateProgramForm autoFocus={programs.length === 0} />
-          </div>
-        </section>
-      </div>
+                  </div>
+                  <ProgramActions
+                    programId={p.id}
+                    programName={p.name}
+                    focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
+                      (x): x is string => x !== null,
+                    )}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {programs.length > 0 ? <p className="num mt-3 text-sm text-muted">{plural(programs.length, "projet")}</p> : null}
+      </section>
     </div>
   );
 }

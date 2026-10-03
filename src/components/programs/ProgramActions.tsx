@@ -1,14 +1,32 @@
 "use client";
 
-import { Button } from "@thomascaron/opale-ui";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Icon,
+} from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { deleteProgram, duplicateProgram } from "@/server/actions/programs";
-import { ButtonLabel } from "@/components/ui/ButtonLabel";
-import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { ConfirmActionDialog } from "@/components/ui/ConfirmAction";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 
+/**
+ * Bouton « ⋮ » en fin de ligne d'un projet : un `DropdownMenu` d'Opale
+ * (« Dupliquer », « Supprimer »). « Supprimer » ouvre la confirmation avec
+ * recopie du nom (`ConfirmActionDialog`).
+ *
+ * Focus : Échap ou une entrée du menu le rendent au bouton (Opale) ; en
+ * annulant la confirmation, on le rend au bouton nous-mêmes (l'entrée de menu
+ * qui l'a ouverte n'existe plus) ; après suppression, `focusAfterDelete`.
+ *
+ * Rend un fragment : le bouton, puis la région d'annonce de la duplication,
+ * qui prend toute la largeur de la ligne (`basis-full`, parent en
+ * `flex-wrap`) ; vide, elle sort du flux (voir LiveRegion).
+ */
 export function ProgramActions({
   programId,
   programName,
@@ -20,8 +38,11 @@ export function ProgramActions({
   focusAfterDelete: string[];
 }) {
   const router = useRouter();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const label = `Actions du projet ${programName}`;
 
   function duplicate() {
     if (pending) return;
@@ -42,35 +63,61 @@ export function ProgramActions({
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-        <Button
-          type="button"
-          variant="ghost"
-          size="small"
-          onClick={duplicate}
-          aria-disabled={pending || undefined}
-          aria-label={pending ? `Duplication de ${programName} en cours` : `Dupliquer le projet ${programName}`}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          ref={triggerRef}
+          aria-label={label}
+          aria-busy={pending || undefined}
+          className="project-row-trigger shrink-0"
         >
-          <ButtonLabel idle="Dupliquer" busy="Duplication…" isBusy={pending} />
-        </Button>
-        <ConfirmAction
-          triggerLabel="Supprimer"
-          triggerAccessibleLabel={`Supprimer le projet ${programName}`}
-          title="Supprimer le projet ?"
-          question={`Supprimer « ${programName} », ses thèmes, squelettes et decks ? Cette action est définitive.`}
-          confirmLabel="Supprimer définitivement"
-          requireText={programName}
-          onConfirm={async () => {
-            const result = await deleteProgram(programId);
-            return result.ok ? null : result.error;
-          }}
-          onDone={() => focusLater(focusAfterDelete)}
-        />
-      </div>
-      <LiveRegion className={`text-sm ${message?.kind === "error" ? "text-danger" : "text-success"}`}>
+          <span aria-hidden="true" className="inline-flex">
+            <Icon name="more-vertical" />
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          aria-label={label}
+          placement="bottom"
+          align="end"
+          className="header-menu min-w-[11rem] max-w-[min(20rem,calc(100vw-2rem))]"
+        >
+          <DropdownMenuItem className="header-menu__item" value="dupliquer" disabled={pending} onSelect={duplicate}>
+            {pending ? "Duplication…" : "Dupliquer"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="header-menu__item"
+            value="supprimer"
+            disabled={pending}
+            onSelect={() => setConfirming(true)}
+          >
+            Supprimer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <LiveRegion className={`basis-full text-sm ${message?.kind === "error" ? "text-danger" : "text-success"}`}>
         {message?.text}
       </LiveRegion>
-    </div>
+      <ConfirmActionDialog
+        open={confirming}
+        title="Supprimer le projet ?"
+        question={`Supprimer « ${programName} », ses thèmes, squelettes et decks ? Cette action est définitive.`}
+        confirmLabel="Supprimer définitivement"
+        requireText={programName}
+        onConfirm={async () => {
+          const result = await deleteProgram(programId);
+          return result.ok ? null : result.error;
+        }}
+        onCancel={() => {
+          setConfirming(false);
+          // Après le démontage de la modale (qui rend le focus à l'élément actif
+          // à son ouverture, parfois l'entrée de menu disparue) : le bouton « ⋮ ».
+          window.setTimeout(() => triggerRef.current?.focus(), 0);
+        }}
+        onDone={() => {
+          setConfirming(false);
+          focusLater(focusAfterDelete);
+        }}
+      />
+    </>
   );
 }
