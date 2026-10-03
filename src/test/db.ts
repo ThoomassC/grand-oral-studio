@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach } from "vitest";
+import { Client } from "pg";
+import { afterAll, beforeAll, beforeEach } from "vitest";
 import { db, disconnectDb } from "@/server/db/client";
 
 /**
@@ -27,17 +28,35 @@ export async function resetDatabase(): Promise<void> {
   );
 }
 
+/** Clé du verrou consultatif qui sérialise les fichiers d'intégration (base partagée). */
+const TEST_DB_LOCK = 4_242_001;
+
 /**
- * À appeler en tête de chaque fichier *.int.test.ts : base vidée avant chaque
- * test, pool fermé en fin de fichier.
+ * À appeler en tête de chaque fichier *.int.test.ts : verrou exclusif sur la base
+ * le temps du fichier, base vidée avant chaque test, pool fermé en fin de fichier.
+ *
+ * Le verrou (pg_advisory_lock, tenu par une connexion dédiée) garantit qu'un seul
+ * fichier utilise la base à la fois, quelle que soit la parallélisation de Vitest :
+ * `fileParallelism: false` ne suffisait pas, deux fichiers se vidaient la base
+ * mutuellement (TRUNCATE) et échouaient en violation de clé étrangère.
  */
 export function setupTestDatabase(): void {
   assertTestDatabase();
+  let lock: Client | null = null;
+  beforeAll(async () => {
+    lock = new Client({ connectionString: process.env.DATABASE_URL });
+    await lock.connect();
+    await lock.query("SELECT pg_advisory_lock($1)", [TEST_DB_LOCK]);
+  }, 120_000);
   beforeEach(async () => {
     await resetDatabase();
   });
   afterAll(async () => {
     await disconnectDb();
+    if (lock) {
+      await lock.query("SELECT pg_advisory_unlock($1)", [TEST_DB_LOCK]).catch(() => undefined);
+      await lock.end();
+    }
   });
 }
 
