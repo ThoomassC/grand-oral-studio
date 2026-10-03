@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestSlideCount, totalSlides } from "@/domain/slides";
+import { slideBudgetWarning, suggestSlideCount, totalSlides } from "@/domain/slides";
 import { makeTemplate } from "@/test/fixtures";
 
 describe("suggestSlideCount", () => {
@@ -26,5 +26,28 @@ describe("totalSlides", () => {
   it("devrait renvoyer 2 quand le gabarit n'a qu'une section d'une diapo", () => {
     const template = makeTemplate({ sections: [{ id: "only", title: "Unique", guidance: "", slides: 1 }] });
     expect(totalSlides(template)).toBe(2);
+  });
+});
+
+describe("slideBudgetWarning — écart au nombre de diapos conseillé, explicite", () => {
+  it("ne devrait rien dire sous 30 % d'écart", () => {
+    expect(slideBudgetWarning(13, 20)).toBeNull();
+    expect(slideBudgetWarning(16, 20)).toBeNull();
+  });
+
+  it("devrait chiffrer le rythme réel et le repère pour 31 diapos en 20 min (+138 %)", () => {
+    const w = slideBudgetWarning(31, 20)!;
+    expect(w).toMatch(/31 diapos pour 20 min/);
+    expect(w).toMatch(/~39 s par diapo/);
+    expect(w).toMatch(/13 diapos/);
+    expect(w).toMatch(/\+138 %/);
+    expect(w).toMatch(/enregistrer/);
+  });
+
+  it("devrait signaler un deck trop court pour la durée (4 diapos en 20 min)", () => {
+    const w = slideBudgetWarning(4, 20)!;
+    expect(w).toMatch(/4 diapos pour 20 min/);
+    expect(w).toMatch(/5 min par diapo/);
+    expect(w).toMatch(/-69 %/);
   });
 });

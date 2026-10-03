@@ -8,7 +8,8 @@ import {
 } from "@/domain/normalize";
 import { RawTemplateDraftSchema, type RawTemplateDraft } from "@/domain/import/template-from-text";
 import { RawThemePromptDraftSchema, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
-import { ClassificationSchema, DeckSpecSchema, type Classification, type DeckSpec } from "@/domain/schemas";
+import { ClassificationSchema, DeckSpecSchema, type Classification, type DeckSpec, type PromptTemplate } from "@/domain/schemas";
+import { totalSlides } from "@/domain/slides";
 import { AiInvalidOutputError, AiUnavailableError } from "../errors";
 import { createSemaphore, SemaphoreTimeoutError, type Semaphore } from "../concurrency";
 import { createLogger } from "../logger";
@@ -40,8 +41,68 @@ const TEMPERATURE = 0.4;
 const CLASSIFY_MAX_TOKENS = 2_000;
 /** Contexte : prompt (gabarit + thèmes) + sortie d'un deck complet. */
 const DEFAULT_NUM_CTX = 16_384;
+/** Plafond pour un gros deck (contexte natif des modèles 14B courants : qwen2.5, llama3.1). */
+const MAX_DECK_NUM_CTX = 32_768;
+/** Estimations prudentes : ~3 caractères par jeton (français + JSON), ~400 jetons de sortie par diapo avec notes rédigées. */
+const CHARS_PER_TOKEN = 3;
+const OUTPUT_TOKENS_PER_SLIDE = 400;
+
+/** Longueurs successives des notes du squelette transmises quand le prompt déborde (0 = omises). */
+const SKELETON_NOTES_STEPS = [300, 120, 0] as const;
+
+export interface DeckContext {
+  /** num_ctx à demander : besoin estimé arrondi au Ki, entre le défaut et le plafond. */
+  numCtx: number;
+  /** Besoin estimé (prompt + sortie + marge), en jetons. */
+  neededTokens: number;
+  /** false : Ollama tronquerait le DÉBUT du prompt (les règles du system) sans le dire. */
+  fits: boolean;
+}
+
+/**
+ * Contexte d'une génération de deck : prompt + sortie attendue. Sans
+ * agrandissement, un deck de 31 diapos dont le prompt transmet les notes du
+ * squelette dépasse 16 k ; au-delà du plafond, `fits` est faux.
+ */
+export function deckContext(prompt: PromptPair, template: PromptTemplate | undefined, max: number = MAX_DECK_NUM_CTX): DeckContext {
+  const promptTokens = Math.ceil((prompt.system.length + prompt.user.length) / CHARS_PER_TOKEN);
+  const outputTokens = (template ? totalSlides(template) : 20) * OUTPUT_TOKENS_PER_SLIDE;
+  const neededTokens = promptTokens + outputTokens + 512;
+  const rounded = Math.ceil(neededTokens / 1024) * 1024;
+  return { numCtx: Math.min(max, Math.max(Math.min(DEFAULT_NUM_CTX, max), rounded)), neededTokens, fits: neededTokens <= max };
+}
+
+export function deckNumCtx(prompt: PromptPair, template: PromptTemplate | undefined): number {
+  return deckContext(prompt, template).numCtx;
+}
 
 const log = createLogger({ component: "ai.ollama" });
+
+/**
+ * Prompt de deck ajusté au plafond de contexte : s'il déborde, les notes du
+ * squelette (le moins important : l'IA les réécrit de toute façon) sont
+ * raccourcies par paliers, puis omises. Journalise sans aucune donnée
+ * utilisateur (tailles seulement).
+ */
+function fitDeckPrompt(prompt: PromptPair, hints: DeckHints | undefined, max: number = MAX_DECK_NUM_CTX) {
+  const initial = deckContext(prompt, hints?.template, max);
+  if (initial.fits) return { prompt, context: initial };
+  if (hints?.compactPrompt) {
+    for (const skeletonNotesMax of SKELETON_NOTES_STEPS) {
+      const candidate = hints.compactPrompt(skeletonNotesMax);
+      const context = deckContext(candidate, hints.template, max);
+      if (context.fits) {
+        log.warn("ollama.context_reduced", { neededTokens: initial.neededTokens, maxCtx: max, skeletonNotesMax, reducedTokens: context.neededTokens });
+        return { prompt: candidate, context };
+      }
+    }
+  }
+  // Rien à réduire (ou pas assez) : Ollama tronquera le début du prompt, le deck sera probablement hors gabarit.
+  const last = hints?.compactPrompt?.(0) ?? prompt;
+  const context = deckContext(last, hints?.template, max);
+  log.warn("ollama.context_overflow", { neededTokens: context.neededTokens, maxCtx: max, reduced: last !== prompt });
+  return { prompt: last, context };
+}
 
 const DECK_SCHEMA = z.toJSONSchema(RawDeckSpecSchema, { io: "input", unrepresentable: "any" });
 const CLASSIFY_SCHEMA = z.toJSONSchema(RawClassificationSchema, { io: "input", unrepresentable: "any" });
@@ -49,7 +110,8 @@ const TEMPLATE_SCHEMA = z.toJSONSchema(RawTemplateDraftSchema, { io: "input", un
 const THEMES_SCHEMA = z.toJSONSchema(RawThemePromptDraftSchema, { io: "input", unrepresentable: "any" });
 /** Brouillon de gabarit : court, mais un modèle local est lent. */
 const DRAFT_TIMEOUT_MS = 120_000;
-const DRAFT_MAX_TOKENS = 3_000;
+/** ~30 sections avec consigne + contraintes : ~3 000 jetons observés sur un prompt de 31 diapos ; marge ×2. */
+const DRAFT_MAX_TOKENS = 6_000;
 const THEMES_MAX_TOKENS = 6_000;
 
 const ChatResponseSchema = z.object({
@@ -141,7 +203,8 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
   const doFetch = options.fetch ?? fetch;
   const deckTimeoutMs = options.timeoutMs ?? envMs(process.env.AI_OLLAMA_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
   const classifyTimeoutMs = options.classifyTimeoutMs ?? envMs(process.env.AI_OLLAMA_CLASSIFY_TIMEOUT_MS, DEFAULT_CLASSIFY_TIMEOUT_MS);
-  const numCtx = options.numCtx ?? DEFAULT_NUM_CTX;
+  /** Fixé par l'option (tests, réglage) ; sinon défaut, agrandi pour un gros deck (deckNumCtx). */
+  const fixedNumCtx = options.numCtx;
   const semaphore = options.semaphore ?? sharedSemaphore;
   const queueWaitMs = options.queueWaitMs ?? DEFAULT_QUEUE_WAIT_MS;
   const production = options.production ?? process.env.NODE_ENV === "production";
@@ -153,7 +216,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     });
   }
 
-  async function send(operation: string, prompt: PromptPair, format: unknown, maxTokens: number, timeoutMs: number) {
+  async function send(operation: string, prompt: PromptPair, format: unknown, maxTokens: number, timeoutMs: number, numCtx: number) {
     const started = Date.now();
     const signal = AbortSignal.timeout(timeoutMs);
     let response: Response;
@@ -229,9 +292,16 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     return parsed.data.message.content;
   }
 
-  async function chat(operation: string, prompt: PromptPair, format: unknown, maxTokens: number, timeoutMs: number) {
+  async function chat(
+    operation: string,
+    prompt: PromptPair,
+    format: unknown,
+    maxTokens: number,
+    timeoutMs: number,
+    numCtx: number = fixedNumCtx ?? DEFAULT_NUM_CTX,
+  ) {
     try {
-      return await semaphore.run(() => send(operation, prompt, format, maxTokens, timeoutMs), queueWaitMs);
+      return await semaphore.run(() => send(operation, prompt, format, maxTokens, timeoutMs, numCtx), queueWaitMs);
     } catch (error) {
       if (error instanceof SemaphoreTimeoutError) {
         log.warn("ollama.busy", { operation, active: semaphore.active, waiting: semaphore.waiting });
@@ -249,7 +319,9 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
     engine: "ollama",
 
     async generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
-      const text = await chat("generateDeck", prompt, DECK_SCHEMA, deckMaxTokens(hints?.template), deckTimeoutMs);
+      const fitted = fitDeckPrompt(prompt, hints, fixedNumCtx);
+      const numCtx = fixedNumCtx ?? fitted.context.numCtx;
+      const text = await chat("generateDeck", fitted.prompt, DECK_SCHEMA, deckMaxTokens(hints?.template), deckTimeoutMs, numCtx);
       const raw = parseStructured("generateDeck", text, RawDeckSpecSchema);
       return strict("generateDeck", DeckSpecSchema, normalizeDeckSpec(raw));
     },

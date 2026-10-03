@@ -17,6 +17,12 @@ export interface DeckHints {
   problem?: string;
   /** Squelette existant à enrichir (deck final). */
   skeleton?: DeckSpec | null;
+  /**
+   * Même prompt avec les notes du squelette raccourcies à `skeletonNotesMax`
+   * caractères (0 = omises) : ce qui compte le moins, sacrifié en premier quand
+   * un modèle à contexte borné (Ollama) ne peut pas tout recevoir.
+   */
+  compactPrompt?: (skeletonNotesMax: number) => PromptPair;
 }
 
 export interface ClassifyHints {

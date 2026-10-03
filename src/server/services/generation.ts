@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ClassificationOutcome } from "@/domain/contracts";
-import { checkDeckAgainstTemplate } from "@/domain/deck";
+import { checkDeckAgainstTemplate, completeThinNotes } from "@/domain/deck";
 import { buildFreeFinalDeck, buildFreeSkeleton } from "@/domain/free";
 import { buildClassificationPrompt, buildFinalDeckPrompt, buildSkeletonPrompt } from "@/domain/prompts";
 import type { DeckSpec, ProblemInput } from "@/domain/schemas";
@@ -232,11 +232,33 @@ export async function generateFinalDeck(
           programName: g.ctx.name,
           problem: input.problem,
           skeleton: g.skeleton,
+          // Pour un modèle à contexte borné : mêmes consignes, notes du squelette raccourcies.
+          compactPrompt: g.skeleton
+            ? (skeletonNotesMax) => buildFinalDeckPrompt(g.ctx, g.theme, g.skeleton, input.problem, { skeletonNotesMax })
+            : undefined,
         }),
       );
     }
     const warnings = checkDeckAgainstTemplate(spec, g.ctx.template);
     if (warnings.length > 0) deps.log.warn("deck.template_mismatch", { themeId: input.themeId, kind: "FINAL", warnings });
+    if (deps.mode !== "free") {
+      // Un modèle local rend parfois des notes vides ou réduites à une consigne : le squelette rédigé prend le relais.
+      const completed = completeThinNotes(spec, g.skeleton);
+      spec = completed.deck;
+      if (completed.filled.length > 0) {
+        deps.log.info("deck.notes_completed_from_skeleton", { themeId: input.themeId, slides: completed.filled.length });
+        // Le squelette est générique (rédigé avant la problématique) : la note reprise est un point de départ.
+        warnings.push(
+          `Notes d'orateur trop courtes reprises du squelette, à adapter à votre problématique (diapo${completed.filled.length > 1 ? "s" : ""} ${completed.filled.join(", ")}).`,
+        );
+      }
+      if (completed.skippedSections.length > 0) {
+        deps.log.warn("deck.notes_section_mismatch", { themeId: input.themeId, sections: completed.skippedSections });
+        warnings.push(
+          `Notes trop courtes non complétées dans ${completed.skippedSections.length > 1 ? "les sections" : "la section"} ${completed.skippedSections.map((id) => `« ${id} »`).join(", ")} : le nombre de diapos diffère du squelette. Rédigez-les.`,
+        );
+      }
+    }
 
     const { deckId } = await createFinalDeck(userId, { ...input, spec, engine });
     deps.log.info("deck.final_saved", { deckId, themeId: input.themeId, engine });

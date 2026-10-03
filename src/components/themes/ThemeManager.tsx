@@ -2,11 +2,12 @@
 
 import { Notice } from "@/components/ui/Notice";
 import { Button } from "@thomascaron/opale-ui";
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import type { ThemeInput } from "@/domain/schemas";
 import { addTheme, deleteTheme, reorderThemes, updateTheme } from "@/server/actions/themes";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { focusLater } from "@/components/ui/focus";
+import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ThemeForm } from "./ThemeForm";
 import { ThemeImport } from "./ThemeImport";
@@ -66,7 +67,52 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
   const [panel, setPanel] = useState<"none" | "add" | "import">("none");
   const [announce, setAnnounce] = useState("");
   const [reorderError, setReorderError] = useState<string | null>(null);
+  /** Un ordre est en cours d'enregistrement : quitter ou recharger la page le perdrait. */
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderSaved, setOrderSaved] = useState(false);
   const [, startTransition] = useTransition();
+  /**
+   * Enregistrement de l'ordre, sérialisé côté client : une seule requête à la
+   * fois, et des déplacements rapides n'envoient ensuite que le DERNIER ordre.
+   * (Next.js expédie déjà les Server Actions une à une ; on ne s'appuie pas sur
+   * ce détail et on évite les requêtes intermédiaires inutiles.)
+   */
+  const orderQueue = useRef<{ running: boolean; latest: string[] | null; waiters: (() => void)[] }>({
+    running: false,
+    latest: null,
+    waiters: [],
+  });
+  useUnsavedChanges(savingOrder);
+
+  /** Résout quand l'ordre demandé (ou un ordre plus récent) est enregistré ou a échoué. */
+  async function saveOrder(ids: string[]): Promise<void> {
+    const queue = orderQueue.current;
+    queue.latest = ids;
+    if (queue.running) return new Promise<void>((resolve) => queue.waiters.push(resolve));
+    queue.running = true;
+    let error: string | null = null;
+    while (queue.latest) {
+      const order = queue.latest;
+      queue.latest = null;
+      try {
+        const result = await reorderThemes(programId, order);
+        if (!result.ok) error = `Le nouvel ordre n'a pas été enregistré : ${result.error}`;
+      } catch {
+        error = "Le nouvel ordre n'a pas été enregistré : la connexion a été interrompue. Réessayez.";
+      }
+      // Après un échec, l'ordre en attente n'est pas envoyé : la liste revient à l'ordre enregistré.
+      if (error) queue.latest = null;
+    }
+    queue.running = false;
+    setSavingOrder(false);
+    if (error) {
+      setReorderError(error);
+      setAnnounce("");
+    } else {
+      setOrderSaved(true);
+    }
+    for (const resolve of queue.waiters.splice(0)) resolve();
+  }
 
   function openPanel(next: "add" | "import") {
     if (panel === next) {
@@ -96,6 +142,9 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     if (!moved) return;
     next.splice(target, 0, moved);
     setReorderError(null);
+    setOrderSaved(false);
+    // Hors transition : la garde doit être armée tout de suite, pas à la fin de l'enregistrement.
+    setSavingOrder(true);
     setAnnounce(`« ${moved.name} » déplacé en position ${target + 1} sur ${next.length}.`);
 
     // Le bouton déplacé change de place dans le DOM : on lui rend le focus,
@@ -106,19 +155,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
     startTransition(async () => {
       setOptimisticThemes(next);
-      try {
-        const result = await reorderThemes(
-          programId,
-          next.map((t) => t.id),
-        );
-        if (!result.ok) {
-          setReorderError(`Le nouvel ordre n'a pas été enregistré : ${result.error}`);
-          setAnnounce("");
-        }
-      } catch {
-        setReorderError("Le nouvel ordre n'a pas été enregistré : la connexion a été interrompue. Réessayez.");
-        setAnnounce("");
-      }
+      await saveOrder(next.map((t) => t.id));
     });
   }
 
@@ -186,6 +223,13 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       ) : null}
 
       <LiveRegion>{announce}</LiveRegion>
+      {/* Visible, mais seule la fin est annoncée : l'annonce « déplacé » reste la première entendue. */}
+      {savingOrder ? (
+        <p aria-hidden="true" className="text-sm text-muted">
+          Enregistrement de l&apos;ordre…
+        </p>
+      ) : null}
+      <LiveRegion className="text-sm text-muted">{orderSaved && !savingOrder ? "Ordre enregistré." : ""}</LiveRegion>
       <LiveRegion role="alert">
         {reorderError ? (
           <Notice tone="error">

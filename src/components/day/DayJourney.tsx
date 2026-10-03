@@ -115,9 +115,10 @@ interface DayJourneyProps {
   recentDeck: RecentDeck | null;
   /**
    * Moteur qui rédigera le deck : libellé prêt à afficher (ex. « Ollama · mistral »)
-   * et `outlineOnly` pour le moteur gratuit (trame à compléter, pas de rédaction).
+   * et `outlineOnly` pour le moteur gratuit (trame à compléter, pas de rédaction) ;
+   * `waitHint` : durée d'attente annoncée, qui dépend du moteur (cf. generationWaitHint).
    */
-  writer: { label: string; outlineOnly: boolean };
+  writer: { label: string; outlineOnly: boolean; waitHint: string };
 }
 
 const draftKey = (programId: string) => `grand-oral-studio:jour-j:${programId}`;
@@ -642,7 +643,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             {generating ? (
               <Notice tone="info">
                 <p id={`${ids.s3}-progress`} className="font-semibold text-accent-strong">
-                  Génération du diaporama en cours. Cela prend en général 1 à 3 minutes.
+                  Génération du diaporama en cours. {writer.waitHint}
                 </p>
                 <p className="mt-1 text-sm">
                   Ne fermez pas cette page : vous serez redirigé vers le deck dès qu&apos;il sera prêt. En attendant,

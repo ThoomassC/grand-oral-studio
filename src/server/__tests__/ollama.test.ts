@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PromptPair } from "@/domain/contracts";
-import { createOllamaProvider, listOllamaModels } from "@/server/ai/ollama";
+import { createOllamaProvider, deckContext, listOllamaModels } from "@/server/ai/ollama";
 import type { DeckHints } from "@/server/ai/types";
 import { AiInvalidOutputError, AiUnavailableError } from "@/server/errors";
 import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
@@ -38,6 +38,80 @@ function provider(respond: Parameters<typeof fakeFetch>[0], timeoutMs = 5_000) {
     calls,
   };
 }
+
+describe("createOllamaProvider — contexte (num_ctx) d'un deck", () => {
+  function sections(n: number, slides: number) {
+    return Array.from({ length: n }, (_, i) => ({ id: `s${i}`, title: `Section ${i}`, guidance: "", slides }));
+  }
+
+  it("devrait garder 16 k pour un petit deck", async () => {
+    const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
+    await ai.generateDeck(PROMPT, HINTS);
+    expect((calls[0]!.body?.options as { num_ctx: number }).num_ctx).toBe(16_384);
+  });
+
+  it("devrait agrandir le contexte pour un deck de 31 diapos avec un long prompt (squelette + notes), plafonné à 32 k", async () => {
+    const big: DeckHints = { ...HINTS, template: makeTemplate({ sections: sections(15, 2) }) };
+    const long: PromptPair = { system: "s".repeat(6_000), user: "u".repeat(30_000) };
+    const { impl, calls } = fakeFetch(() => json(200, { message: { content: "{}" }, done: true, done_reason: "stop" }));
+    const ai = createOllamaProvider({ baseUrl: BASE, model: "m", fetch: impl, production: false });
+    await ai.generateDeck(long, big).catch(() => undefined);
+    const numCtx = (calls[0]!.body?.options as { num_ctx: number }).num_ctx;
+    expect(numCtx).toBeGreaterThan(16_384);
+    expect(numCtx).toBeLessThanOrEqual(32_768);
+  });
+});
+
+describe("deckContext — estimation du contexte et dépassement du plafond", () => {
+  it("devrait tenir dans le plafond pour un petit prompt", () => {
+    const ctx = deckContext(PROMPT, makeTemplate());
+    expect(ctx).toMatchObject({ numCtx: 16_384, fits: true });
+  });
+
+  it("devrait signaler qu'un prompt trop long dépasse le plafond de 32 k (Ollama tronquerait le début)", () => {
+    const huge: PromptPair = { system: "s".repeat(10_000), user: "u".repeat(90_000) };
+    const ctx = deckContext(huge, makeTemplate());
+    expect(ctx.fits).toBe(false);
+    expect(ctx.numCtx).toBe(32_768);
+    // ~3 caractères par jeton : 100 000 caractères ≈ 33 334 jetons de prompt, plus la sortie.
+    expect(ctx.neededTokens).toBeGreaterThan(33_334);
+  });
+});
+
+describe("createOllamaProvider — prompt trop long pour le contexte", () => {
+  const huge: PromptPair = { system: "règles", user: `début ${"u".repeat(110_000)}` };
+  const compact = (max: number): PromptPair => ({ system: "règles", user: max >= 300 ? "u".repeat(100_000) : `notes ${max}` });
+
+  it("devrait raccourcir les notes du squelette pour tenir dans le plafond et le journaliser sans données utilisateur", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
+      await ai.generateDeck(huge, { ...HINTS, compactPrompt: compact });
+      const messages = calls[0]!.body?.messages as { content: string }[];
+      expect(messages[1]!.content).toBe("notes 120");
+      expect((calls[0]!.body?.options as { num_ctx: number }).num_ctx).toBeLessThanOrEqual(32_768);
+      const logged = warn.mock.calls.map((args) => String(args[0])).join("\n");
+      expect(logged).toContain("ollama.context_reduced");
+      expect(logged).not.toContain("début");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("devrait journaliser un avertissement quand le prompt ne peut pas être réduit", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
+      await ai.generateDeck(huge, HINTS);
+      expect(calls).toHaveLength(1);
+      const logged = warn.mock.calls.map((args) => String(args[0])).join("\n");
+      expect(logged).toContain("ollama.context_overflow");
+      expect(logged).not.toContain("début");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
 
 describe("createOllamaProvider — generateDeck", () => {
   it("devrait appeler POST /api/chat sans streaming, avec un schéma JSON et renvoyer un deck validé", async () => {

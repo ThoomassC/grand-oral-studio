@@ -38,6 +38,9 @@ export const LIMITS = {
   bullet: 180,
   notes: 3000,
   sectionId: 40,
+  /** Sections d'un gabarit : de quoi couvrir une structure de ~31 diapos à une section par ligne. */
+  maxSections: 30,
+  maxSlidesPerSection: 8,
   minSlides: 2,
   maxSlides: 60,
   reformulated: 600,
@@ -112,7 +115,7 @@ export const SectionSchema = z.object({
     .number("Indiquez un nombre de diapos.")
     .int("Le nombre de diapos doit être entier.")
     .min(1, "Une section compte au moins 1 diapo.")
-    .max(8, "Une section compte au plus 8 diapos."),
+    .max(LIMITS.maxSlidesPerSection, `Une section compte au plus ${LIMITS.maxSlidesPerSection} diapos.`),
 });
 export type Section = z.infer<typeof SectionSchema>;
 
@@ -130,7 +133,7 @@ export const PromptTemplateSchema = z
     sections: z
       .array(SectionSchema)
       .min(1, "Le gabarit compte au moins une section.")
-      .max(15, "Le gabarit compte au plus 15 sections."),
+      .max(LIMITS.maxSections, `Le gabarit compte au plus ${LIMITS.maxSections} sections.`),
     tone: text().max(200, "Le ton ne doit pas dépasser 200 caractères.").default(""),
     constraints: text().max(2000, "Les contraintes ne doivent pas dépasser 2000 caractères.").default(""),
   })

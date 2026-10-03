@@ -1,6 +1,6 @@
 import type { PromptPair } from "../contracts";
 import { neutralize } from "../prompts";
-import type { PromptTemplate } from "../schemas";
+import { LIMITS, type PromptTemplate } from "../schemas";
 import { totalSlides } from "../slides";
 
 /**
@@ -19,15 +19,23 @@ export function buildTemplateDraftPrompt(text: string, base: PromptTemplate): Pr
       "deck template.",
     "Reply only with a JSON object that conforms to the provided schema: durationMinutes (integer), format (\"16:9\" or " +
       "\"4:3\"), language (\"fr\" or \"en\"), sections (ordered list of { title, guidance, slides }), tone, constraints.",
-    "Only fill in what the instructions actually state or clearly imply; omit a field otherwise. Section titles are short " +
-      "(80 characters max); guidance tells what the section must contain (600 characters max); slides is the number of slides " +
-      "for that section (1 to 8). At most 15 sections and 59 slides in total. Keep the language of the instructions for " +
-      "titles and guidance. Put any remaining requirement in constraints.",
+    "Only fill in what the instructions actually state; omit a field otherwise. Never guess: durationMinutes only if the " +
+      "instructions give a number of minutes or hours; format only if they give a ratio or a resolution; tone only if they " +
+      "describe one.",
+    "Sections: the cover (title slide) is added automatically, never list it as a section. If the instructions contain a " +
+      "table or list of slides (columns such as #, slide, role), it IS the structure: one section per row, in order, a range " +
+      "such as \"9-12\" meaning 4 slides of the same section, the role becoming the guidance. Keep every row through the last " +
+      `one (conclusion, opening): never drop the end of the plan. Section titles are short (80 characters max), without ` +
+      `Markdown; guidance tells what the section must contain (600 characters max); slides is the number of slides for that ` +
+      `section (1 to ${LIMITS.maxSlidesPerSection}). At most ${LIMITS.maxSections} sections and ${LIMITS.maxSlides - 1} slides in total.`,
+    "Write titles, guidance, tone and constraints in the language of the instructions (in French if they are in French), " +
+      "without Markdown. Put the content rules (sources, figures, speaker notes, wording limits…) in constraints; ignore " +
+      "placeholders to fill in (\"…\") and tool-specific mechanics.",
     DATA_RULE,
   ].join("\n\n");
   const user = [
-    `Current template (for reference): ${base.durationMinutes} min, ${base.format}, language ${base.language}, ` +
-      `${base.sections.length} sections, ${totalSlides(base)} slides.`,
+    `Current template (for reference only — do not copy its values): language ${base.language}, ${base.sections.length} sections, ` +
+      `${totalSlides(base)} slides.`,
     `<consignes>\n${neutralize(text.trim())}\n</consignes>`,
   ].join("\n\n");
   return { system, user };

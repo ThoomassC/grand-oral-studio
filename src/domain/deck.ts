@@ -1,4 +1,4 @@
-import type { DeckSpec, PromptTemplate, Slide } from "./schemas";
+import { LIMITS, type DeckSpec, type PromptTemplate, type Slide } from "./schemas";
 
 /** Identifiant réservé de la diapo de couverture. */
 export const COVER_SECTION_ID = "cover";
@@ -69,4 +69,83 @@ export function replaceSlide(deck: DeckSpec, index: number, slide: Slide): DeckS
     ...deck,
     slides: deck.slides.map((s, i) => (i === index ? { ...slide, bullets: [...slide.bullets] } : s)),
   };
+}
+
+/** Minutage de tête « [2:30–4:00] » d'une note d'orateur. */
+const TIMING = /^\s*\[[^\]]*\]\s*/;
+/** En deçà, une note n'est pas un texte à dire (vide, ou consigne du type « Présentez le contexte. »). */
+const THIN_NOTES_WORDS = 8;
+
+function spokenWords(notes: string): number {
+  return notes.replace(TIMING, "").split(/\s+/).filter(Boolean).length;
+}
+
+/** Coupe un texte à `max` caractères, sur une fin de mot, avec une ellipse si coupé. */
+function clampText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+/** Diapos d'un deck regroupées par section, dans l'ordre (index global conservé). */
+function slidesBySection(slides: readonly Slide[]): Map<string, number[]> {
+  const groups = new Map<string, number[]>();
+  slides.forEach((slide, i) => {
+    const group = groups.get(slide.sectionId);
+    if (group) group.push(i);
+    else groups.set(slide.sectionId, [i]);
+  });
+  return groups;
+}
+
+export type CompletedNotes = {
+  deck: DeckSpec;
+  /** Numéros (1 = couverture) des diapos dont la note a été reprise du squelette. */
+  filled: number[];
+  /** Sections laissées telles quelles car leur nombre de diapos diffère du squelette. */
+  skippedSections: string[];
+};
+
+/**
+ * Filet de sécurité du deck final produit par l'IA : une note d'orateur vide ou
+ * réduite à une consigne est remplacée par la note rédigée de la diapo de même
+ * rang dans la même section du squelette, en gardant le minutage du deck.
+ *
+ * L'alignement se fait par rang au sein de chaque section : une diapo omise ou
+ * ajoutée par l'IA ailleurs ne décale rien. Une section dont le nombre de diapos
+ * diffère entre deck et squelette n'est pas complétée (impossible de savoir quelle
+ * diapo correspond à quoi) et est signalée dans `skippedSections` quand elle avait
+ * des notes trop courtes. La note produite ne dépasse jamais `LIMITS.notes`.
+ */
+export function completeThinNotes(deck: DeckSpec, skeleton: DeckSpec | null): CompletedNotes {
+  if (!skeleton) return { deck, filled: [], skippedSections: [] };
+  const skeletonGroups = slidesBySection(skeleton.slides);
+  const deckGroups = slidesBySection(deck.slides);
+  const filled: number[] = [];
+  const skippedSections: string[] = [];
+  const slides = [...deck.slides];
+
+  for (const [sectionId, indexes] of deckGroups) {
+    const thin = indexes.filter((i) => spokenWords(deck.slides[i]!.notes) < THIN_NOTES_WORDS);
+    if (thin.length === 0) continue;
+    const sources = skeletonGroups.get(sectionId) ?? [];
+    if (sources.length !== indexes.length) {
+      skippedSections.push(sectionId);
+      continue;
+    }
+    indexes.forEach((deckIndex, rank) => {
+      const slide = deck.slides[deckIndex]!;
+      const source = skeleton.slides[sources[rank]!]!;
+      if (spokenWords(slide.notes) >= THIN_NOTES_WORDS || spokenWords(source.notes) < THIN_NOTES_WORDS) return;
+      const timing = TIMING.exec(slide.notes)?.[0]?.trim() ?? TIMING.exec(source.notes)?.[0]?.trim() ?? "";
+      const spoken = source.notes.replace(TIMING, "").trim();
+      const notes = clampText(timing ? `${timing} ${spoken}` : spoken, LIMITS.notes);
+      slides[deckIndex] = { ...slide, bullets: [...slide.bullets], notes };
+      filled.push(deckIndex + 1);
+    });
+  }
+
+  filled.sort((a, b) => a - b);
+  return filled.length > 0 ? { deck: { ...deck, slides }, filled, skippedSections } : { deck, filled, skippedSections };
 }

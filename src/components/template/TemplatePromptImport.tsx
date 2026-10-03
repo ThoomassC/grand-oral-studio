@@ -238,6 +238,11 @@ export function TemplatePromptImport({
   );
 }
 
+/** Valeur non trouvée dans le texte : celle du gabarit actuel. */
+function DefaultMark({ show }: { show: boolean }) {
+  return show ? <span className="ml-2 text-xs text-muted">(par défaut)</span> : null;
+}
+
 function TemplateImportPreview({
   titleId,
   result,
@@ -249,8 +254,12 @@ function TemplateImportPreview({
   onApply: () => void;
   onCancel: () => void;
 }) {
-  const { template, found, source, fallbackReason } = result;
+  const { template, recognized, source, fallbackReason } = result;
+  // Deux avertissements identiques n'apportent rien et donneraient des clés React en double.
+  const warnings = [...new Set(result.warnings)];
+  const found = [...new Set(result.found)];
   const nothing = found.length === 0;
+  const isRecognized = (field: TemplateImportData["recognized"][number]) => recognized.includes(field);
   const total = totalSlides(template);
   return (
     <section aria-labelledby={titleId} className="mt-5 border-t border-border pt-5">
@@ -284,28 +293,58 @@ function TemplateImportPreview({
         </div>
       ) : (
         <>
-          <p className="mt-1 text-sm text-muted">Rien n&apos;est encore appliqué ni enregistré.</p>
+          <p className="mt-1 text-sm text-muted">
+            Rien n&apos;est encore appliqué ni enregistré. Les valeurs marquées « par défaut » ne figurent pas dans le
+            texte : ce sont celles de votre gabarit actuel.
+          </p>
+          {warnings.length > 0 ? (
+            <Notice tone="warning" className="mt-3">
+              <p className="font-semibold">À vérifier avant d&apos;appliquer :</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </Notice>
+          ) : null}
           <div className="mt-4 grid gap-6 md:grid-cols-2">
             <div>
-              <h4 className="opale-field__label">Réglages reconnus</h4>
-              <ul className="list-disc space-y-0.5 pl-5 text-sm">
+              <h4 id={`${titleId}-found`} className="opale-field__label">
+                Trouvé dans le texte
+              </h4>
+              <ul aria-labelledby={`${titleId}-found`} className="list-disc space-y-0.5 pl-5 text-sm">
                 {found.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
               <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
                 <dt className="text-muted">Durée</dt>
-                <dd className="num">{template.durationMinutes} min</dd>
+                <dd>
+                  <span className="num">{template.durationMinutes} min</span>
+                  <DefaultMark show={!isRecognized("durationMinutes")} />
+                </dd>
                 <dt className="text-muted">Format</dt>
-                <dd>{template.format === "16:9" ? "16:9 (écran large)" : "4:3 (standard)"}</dd>
+                <dd>
+                  <span>{template.format === "16:9" ? "16:9 (écran large)" : "4:3 (standard)"}</span>
+                  <DefaultMark show={!isRecognized("format")} />
+                </dd>
                 <dt className="text-muted">Langue</dt>
-                <dd>{template.language === "fr" ? "Français" : "Anglais"}</dd>
+                <dd>
+                  <span>{template.language === "fr" ? "Français" : "Anglais"}</span>
+                  <DefaultMark show={!isRecognized("language")} />
+                </dd>
                 <dt className="text-muted">Ton</dt>
-                <dd>{template.tone || "—"}</dd>
+                <dd>
+                  <span>{template.tone || "—"}</span>
+                  <DefaultMark show={!isRecognized("tone")} />
+                </dd>
                 {template.constraints ? (
                   <>
                     <dt className="text-muted">Contraintes</dt>
-                    <dd className="whitespace-pre-line">{template.constraints}</dd>
+                    <dd>
+                      <span className="whitespace-pre-line">{template.constraints}</span>
+                      <DefaultMark show={!isRecognized("constraints")} />
+                    </dd>
                   </>
                 ) : null}
               </dl>
@@ -313,6 +352,7 @@ function TemplateImportPreview({
             <div>
               <h4 className="opale-field__label">
                 Sections <span className="font-normal text-muted">({plural(total, "diapo")}, couverture comprise)</span>
+                <DefaultMark show={!isRecognized("sections")} />
               </h4>
               <ol className="list-decimal space-y-0.5 pl-6 text-sm">
                 {template.sections.map((section) => (
