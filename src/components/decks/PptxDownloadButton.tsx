@@ -68,17 +68,25 @@ export function PptxDownloadButton({ href, fallbackName }: { href: string; fallb
 
   return (
     <div className="flex flex-col gap-2">
-      <Button type="button" onClick={download} aria-disabled={busy || undefined}>
-        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
-          <path
-            d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      {/* `startIcon` : Opale place l'icône dans sa propre cellule, sur la ligne du libellé
+          (dans `children`, le SVG en bloc passait à la ligne). */}
+      <Button
+        type="button"
+        onClick={download}
+        aria-disabled={busy || undefined}
+        startIcon={
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+            <path
+              d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        }
+      >
         <ButtonLabel idle="Télécharger le .pptx" busy="Préparation du fichier…" isBusy={busy} />
       </Button>
       <LiveRegion className="text-sm font-medium text-success">
