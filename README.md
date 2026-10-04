@@ -4,6 +4,8 @@ Prépare un grand oral à plusieurs thèmes : un diaporama squelette par thème 
 
 L'app est générique : thèmes, charte graphique et gabarit de prompt sont des données propres à chaque projet.
 
+En ligne : https://grand-oral-studio.vercel.app. Pour participer : [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Parcours
 
 1. **Thèmes** : saisie ou import en masse (`Nom | description | mot1, mot2`).
