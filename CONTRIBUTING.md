@@ -2,13 +2,11 @@
 
 ## Installer
 
-Suivre « Démarrer en local » du [README](README.md). En résumé : Node 20+, PostgreSQL 15+, puis
+Prérequis : Node 20+ et PostgreSQL 15+ démarré. Puis :
 
 ```bash
-cp .env.example .env          # compléter DATABASE_URL, TEST_DATABASE_URL, BETTER_AUTH_SECRET
-createdb grand_oral_dev && createdb grand_oral_test
 npm install
-npm run db:migrate && npm run db:test:migrate
+npm run setup     # crée et complète .env, crée les bases dev/test, applique les migrations
 npm run dev
 ```
 

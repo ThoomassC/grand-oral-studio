@@ -20,13 +20,12 @@ En ligne : https://grand-oral-studio.vercel.app. Pour participer : [CONTRIBUTING
 Prérequis : Node 20+, PostgreSQL 15+.
 
 ```bash
-cp .env.example .env          # puis compléter DATABASE_URL et BETTER_AUTH_SECRET
-createdb grand_oral_dev
-createdb grand_oral_test
-npm install                   # génère aussi le client Prisma
-npm run db:migrate
+npm install
+npm run setup                 # .env complété (secrets générés), bases dev/test créées, migrations appliquées
 npm run dev
 ```
+
+`npm run setup` ne remplace jamais une valeur déjà présente dans `.env` : on peut le relancer sans risque. Les variables facultatives (Google, clé Anthropic, Ollama) sont documentées dans [`.env.example`](.env.example).
 
 Sans aucune clé, le moteur gratuit (sans IA) rédige des trames à compléter : le parcours complet fonctionne. `AI_PROVIDER=mock` (dev/tests) remplace la clé serveur par un mock déterministe. Voir « Moteurs de rédaction ».
 
