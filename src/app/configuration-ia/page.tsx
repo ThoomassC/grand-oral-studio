@@ -1,0 +1,111 @@
+import type { Metadata } from "next";
+import { ApiKeySettings, type ApiKeyStatus } from "@/components/settings/ApiKeySettings";
+import { EngineSettings, type EngineStatus } from "@/components/settings/EngineSettings";
+import { SettingsToc } from "@/components/settings/SettingsToc";
+import { formatDateTime } from "@/components/ui/format";
+import { getAiSettings } from "@/server/queries";
+import { requireUser } from "@/server/session";
+
+export const metadata: Metadata = { title: "Configuration IA" };
+
+const CONSOLE_URL = "https://console.anthropic.com/settings/keys";
+
+export default async function AiConfigurationPage() {
+  const user = await requireUser();
+  const settings = await getAiSettings(user.id);
+
+  // DTO explicite : seulement ce que l'interface affiche.
+  const status: ApiKeyStatus = {
+    configured: settings.userKey.configured,
+    last4: settings.userKey.last4,
+    updatedAtLabel: settings.userKey.updatedAt ? formatDateTime(new Date(settings.userKey.updatedAt)) : null,
+    effectiveSource: settings.effectiveSource,
+    model: settings.model,
+  };
+  const engine: EngineStatus = {
+    selected: settings.engine.selected,
+    effective: settings.engine.effective,
+    available: {
+      claude: settings.engine.available.claude,
+      ollama: {
+        configured: settings.engine.available.ollama.configured,
+        reachable: settings.engine.available.ollama.reachable,
+        models: settings.engine.available.ollama.models,
+        selectedModel: settings.engine.available.ollama.selectedModel,
+      },
+      free: true,
+    },
+  };
+
+  return (
+    <div className="flex flex-1 flex-col md:flex-row">
+      {/*
+        Sommaire : en haut sous 768 px ; au-delà, rail collé au bord gauche de
+        la fenêtre, pleine hauteur, qui reste en place au défilement (voir
+        .settings-rail dans globals.css).
+      */}
+      <div className="settings-rail">
+        <SettingsToc />
+      </div>
+      <div className="min-w-0 flex-1 px-4 py-8 sm:px-6 sm:py-10 md:px-10">
+        <div className="mx-auto w-full max-w-3xl">
+          <p className="eyebrow">Compte</p>
+          <h1 className="mt-2 text-3xl sm:text-4xl">Configuration IA</h1>
+          <p className="mt-2 text-muted">
+            Le moteur qui rédige vos diaporamas et votre clé d&apos;accès à Claude. Thème, taille du texte et animations
+            se règlent dans Réglages, depuis l&apos;en-tête.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-6">
+            <section aria-labelledby="moteur" className="scroll-mt-6 opale-card opale-card--e1 block p-5 pt-7 sm:p-6 sm:pt-8">
+              <h2 id="moteur" tabIndex={-1} className="text-2xl focus:outline-none">
+                Moteur de rédaction
+              </h2>
+              <p className="mt-1 text-muted">
+                Qui reconnaît le thème de votre problématique et rédige squelettes et decks du jour J.
+              </p>
+              <div className="mt-5">
+                <EngineSettings status={engine} />
+              </div>
+            </section>
+
+            <section aria-labelledby="cle-api" className="scroll-mt-6 opale-card opale-card--e1 block p-5 sm:p-6">
+              <h2 id="cle-api" tabIndex={-1} className="text-2xl focus:outline-none">
+                Clé API Anthropic
+              </h2>
+              <p className="mt-1 text-muted">
+                Nécessaire pour le moteur Claude. Avec votre propre clé, les générations sont facturées sur votre compte
+                Anthropic.
+              </p>
+              <div className="mt-5">
+                <ApiKeySettings status={status} />
+              </div>
+
+              <div className="mt-6 rounded-lg bg-surface-2 p-4 text-sm">
+                <h3 className="text-base">Bon à savoir</h3>
+                <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5">
+                  <li>
+                    Créez une clé dans la{" "}
+                    <a href={CONSOLE_URL} className="opale-link font-semibold" target="_blank" rel="noopener noreferrer">
+                      console Anthropic, rubrique API Keys
+                      <span className="sr-only"> (nouvel onglet)</span>
+                    </a>
+                    , puis collez-la ci-dessus.
+                  </li>
+                  <li>
+                    Coût indicatif : quelques centimes par diaporama généré, selon sa longueur et le modèle. Le détail figure
+                    dans votre console Anthropic.
+                  </li>
+                  <li>
+                    La clé est chiffrée avant d&apos;être enregistrée et n&apos;est jamais réaffichée : seuls ses quatre
+                    derniers caractères restent visibles. Pour en changer, saisissez-en une nouvelle.
+                  </li>
+                </ul>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

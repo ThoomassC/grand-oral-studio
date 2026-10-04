@@ -1,26 +1,786 @@
+/*
+ * Direction artistique : celle d'Opale (@thomascaron/opale-ui). Sa feuille est
+ * rangée dans la couche `opale`, placée avant `components` et `utilities` :
+ * un utilitaire Tailwind l'emporte sur une règle d'Opale (README d'Opale,
+ * « Avec Tailwind v4 : la feuille en couche »). Elle relie aussi ses polices,
+ * Chivo et Bricolage Grotesque.
+ */
+@layer theme, base, opale, components, utilities;
 @import "tailwindcss";
+@import "@thomascaron/opale-ui/opale.layered.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Thème : `data-theme="light" | "dark"` sur <html>, toujours posé — par le
+ * serveur quand le cookie `theme` porte un choix, sinon par le script
+ * d'Opale (`opaleThemeScript`) avant la première peinture. La variante
+ * `dark:` de Tailwind lit le même attribut que les blocs sombres d'Opale.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Personnalisation documentée d'un seul jeton (README d'Opale, « Personnaliser
+ * à sa marque » : surcharge hors couche). En sombre, l'encre de danger
+ * d'Opale (#e2726b) ne tient que 4,14:1 sur le lavis d'erreur de
+ * `.opale-feedback--error` (9 % de danger sur la surface #262c27), sous le
+ * seuil AA de 4,5:1 — un couple de rendu de composant, hors du périmètre
+ * mesuré par le contrat de couleur. On éclaircit seulement le rôle « danger
+ * qui écrit » : 5,15:1 sur ce lavis, 5,80:1 sur la surface, 7,83:1 sur le fond.
+ * Le remplissage `--opale-danger` (boutons destructifs) est inchangé.
+ */
+:root[data-theme="dark"] {
+  --opale-danger-on-surface: #ec8a84;
 }
 
+/*
+ * Nos noms de couleur, branchés sur les jetons publics d'Opale : aucune
+ * couleur n'est définie ici, les deux thèmes viennent d'Opale. Les « lavis »
+ * (fonds doux) sont des mélanges de ces jetons avec la surface, comme ceux
+ * d'Opale (`.opale-feedback--*`).
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--opale-background);
+  --color-surface: var(--opale-surface);
+  --color-surface-2: var(--opale-surface-sunken);
+  --color-border: var(--opale-divider);
+  --color-border-strong: var(--opale-field-border);
+  --color-text: var(--opale-text);
+  --color-muted: var(--opale-text-secondary);
+  /* L'action principale : le primaire d'Opale. */
+  --color-accent: var(--opale-primary);
+  --color-on-accent: var(--opale-on-primary);
+  --color-accent-soft: color-mix(in srgb, var(--opale-primary) 12%, var(--opale-surface));
+  --color-accent-strong: var(--opale-primary-on-surface);
+  /* Le surlignage : l'accent ambré d'Opale, toujours avec son encre. */
+  --color-highlight: var(--opale-accent);
+  --color-on-highlight: var(--opale-on-accent);
+  --color-highlight-soft: color-mix(in srgb, var(--opale-accent) 30%, var(--opale-surface));
+  --color-ring: var(--opale-focus);
+  --color-danger: var(--opale-danger-on-surface);
+  --color-danger-soft: color-mix(in srgb, var(--opale-danger) 9%, var(--opale-surface));
+  --color-success: var(--opale-success-on-surface);
+  --color-success-soft: color-mix(in srgb, var(--opale-success) 9%, var(--opale-surface));
+  --color-warning: var(--opale-warning-on-surface);
+  --color-warning-soft: color-mix(in srgb, var(--opale-warning) 9%, var(--opale-surface));
+  --shadow-card: var(--opale-shadow-1);
+  --shadow-raised: var(--opale-shadow-2);
+  --shadow-slide: var(--opale-shadow-2);
+  --font-sans: var(--opale-font-body);
+  --font-display: var(--opale-font-display);
+  --font-title: var(--opale-font-title);
+  --font-mono: var(--opale-font-mono);
+  /* Rayons : petites marques (sm), contrôles et encarts (md, lg), cartes (card). */
+  --radius-sm: 0.375rem;
+  --radius-md: var(--opale-radius-sm);
+  --radius-lg: var(--opale-radius-sm);
+  --radius-card: var(--opale-radius-md);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * Styles d'éléments dans la couche « base » : les utilitaires Tailwind doivent
+ * pouvoir les surcharger. Le fond, l'encre et la police de la page viennent de
+ * `.opale-root`, posée sur <body>.
+ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Les barres d'enregistrement collantes ne doivent pas masquer le champ focalisé (WCAG 2.4.11). */
+    scroll-padding-bottom: 7rem;
+  }
+
+  body {
+    line-height: var(--opale-leading-relaxed);
+  }
+
+  /* Titres : l'échelle d'Opale — Bricolage pour le titre de page, Chivo ensuite. */
+  h1,
+  h2,
+  h3 {
+    color: var(--opale-text);
+    line-height: var(--opale-leading-tight);
+    text-wrap: balance;
+  }
+  h1 {
+    font-family: var(--opale-font-title);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+  }
+  h2 {
+    font-family: var(--opale-font-display);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+  }
+  h3 {
+    font-family: var(--opale-font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  :focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--opale-accent) 45%, var(--opale-surface));
+    color: var(--opale-text);
+  }
+
+  /* Edge ajoute son propre œil : un seul bouton (celui de PasswordInput). */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /*
+   * Corps de la Modal d'Opale : `overflow-y: auto` découpe aussi les débordements
+   * horizontaux et le bas, si bien que l'anneau de focus (tracé hors du champ)
+   * était rogné. On réserve sa place, compensée par une marge négative pour
+   * garder l'alignement du contenu. (À corriger aussi dans Opale.)
+   */
+  .opale-modal__body {
+    --app-focus-room: calc(var(--opale-focus-ring-width, 3px) + var(--opale-focus-ring-offset, 2px) + 1px);
+    margin-inline: calc(-1 * var(--app-focus-room));
+    padding-inline: var(--app-focus-room);
+    padding-block: var(--app-focus-room);
+  }
+
+  /*
+   * Contrôles de l'en-tête : la boîte encadrée de l'en-tête d'Opale
+   * (`HeaderThemeToggle`, déclencheur de `LanguageSelector`, non exportés par
+   * le paquet — repris de header-controls/HeaderControls.module.css avec les
+   * mêmes jetons). Filet et fond peints par deux pseudo-éléments en squircle ;
+   * le filet passe au primaire au survol et menu ouvert.
+   */
+  .header-control {
+    --header-control-border: var(--opale-divider);
+    position: relative;
+    isolation: isolate;
+    min-height: var(--opale-control-md);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--opale-text);
+    cursor: pointer;
+    font: inherit;
+  }
+  .header-control::before,
+  .header-control::after {
+    position: absolute;
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+  }
+  .header-control::before {
+    z-index: -2;
+    inset: 0;
+    background: var(--header-control-border);
+  }
+  .header-control::after {
+    z-index: -1;
+    inset: 1px;
+    background: var(--opale-surface);
+  }
+  .header-control:hover,
+  .header-control[aria-expanded="true"] {
+    --header-control-border: var(--opale-primary);
+  }
+  .header-control:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: var(--opale-focus-ring-offset);
+  }
+  /* Bouton carré (thème) : `.theme` d'Opale. */
+  .header-control--square {
+    display: grid;
+    width: var(--opale-control-md);
+    place-items: center;
+    font-size: var(--opale-text-md);
+  }
+  .header-control__moon,
+  .header-control__sun,
+  .header-control__settings {
+    font-size: var(--opale-text-lg);
+  }
+  .header-control__moon {
+    color: var(--opale-primary-on-surface);
+  }
+  .header-control__sun {
+    color: var(--opale-accent-graphic);
+  }
+  /*
+   * Panneau Réglages (SiteSettingsPanel) : blocs séparés par le filet d'Opale ;
+   * le dernier (réinitialisation) est mis à part.
+   */
+  .site-settings__block {
+    padding-block: var(--opale-space-md);
+    border-top: 1px solid var(--opale-divider);
+  }
+  .site-settings__block:first-child {
+    border-top: 0;
+  }
+
+  /* Bouton à libellé et chevron (menu du compte) : `.languageTrigger` d'Opale. */
+  .header-control--menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--opale-space-2xs);
+    padding-inline: var(--opale-space-xs);
+    font-size: var(--opale-text-lg);
+  }
+  .header-control__caret {
+    width: 0.4rem;
+    height: 0.4rem;
+    flex: none;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    color: var(--opale-text-secondary);
+    transform: translateY(-0.1rem) rotate(45deg);
+    transition: transform var(--opale-motion) var(--opale-ease);
+  }
+  .header-control[aria-expanded="true"] .header-control__caret {
+    transform: translateY(0.1rem) rotate(-135deg);
+  }
+  .header-control:hover .header-control__caret {
+    color: var(--opale-primary-on-surface);
+  }
+
+  /*
+   * Panneau du menu du compte : la liste de `LanguageSelector` d'Opale
+   * (`.languageList` / `.option`), posée sur `DropdownMenuContent` /
+   * `DropdownMenuItem`. L'élément focalisé prend le lavis « actif » d'Opale ;
+   * un anneau de focus s'y ajoute au clavier (le lavis seul ne tient pas 3:1
+   * sur la surface).
+   */
+  .header-menu {
+    display: grid;
+    min-width: 100%;
+    gap: var(--opale-space-2xs);
+    margin: 0;
+    padding: var(--opale-space-2xs);
+    border: 1px solid var(--opale-divider);
+    border-radius: var(--opale-radius-md);
+    background: var(--opale-surface);
+    box-shadow: var(--opale-shadow-4);
+  }
+  .header-menu__title {
+    padding: var(--opale-space-xs) var(--opale-space-sm);
+  }
+  .header-menu__item {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    min-height: var(--opale-control-sm);
+    align-items: center;
+    padding-inline: var(--opale-space-sm);
+    border-radius: 0;
+    background: transparent;
+    color: var(--opale-text);
+    cursor: pointer;
+    outline: none;
+  }
+  .header-menu__item::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: transparent;
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .header-menu__item:hover::before,
+  .header-menu__item:focus::before {
+    background: color-mix(in srgb, var(--opale-primary) 34%, transparent);
+  }
+  .header-menu__item:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: calc(-1 * var(--opale-focus-ring-width));
+    border-radius: calc(var(--opale-squircle-radius) * 0.68);
+  }
+  .header-menu__item[aria-disabled="true"] {
+    cursor: progress;
+    opacity: var(--opale-disabled-opacity);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .header-control__caret,
+    .header-menu__item::before {
+      transition: none;
+    }
+  }
+
+  /*
+   * Onglet-lien, repris de la barre de la vitrine d'Opale (.tc-doc-topbar__tab) :
+   * repos en texte secondaire, survol et page courante sur un lavis primaire
+   * à 12 % découpé en squircle, page courante en graisse 600.
+   */
+  .app-tab {
+    --app-tab-fill: transparent;
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.45rem 0.85rem;
+    color: var(--opale-text-secondary);
+    font-family: var(--opale-font-body);
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.3;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .app-tab::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: var(--app-tab-fill);
+    clip-path: var(--opale-squircle-clip);
+    content: "";
+    pointer-events: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .app-tab:hover,
+  .app-tab[aria-current="page"] {
+    --app-tab-fill: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+    color: var(--opale-primary-on-surface);
+  }
+  .app-tab[aria-current="page"] {
+    font-weight: 600;
+  }
+  .app-tab:focus-visible {
+    outline-offset: -3px;
+  }
+
+  /*
+   * `aria-disabled` : Opale ne grise un bouton que sous `disabled` ou
+   * `aria-busy`. Nos actions indisponibles restent focalisables
+   * (`aria-disabled`, pour ne pas perdre le focus) : même rendu que `disabled`.
+   */
+  .opale-button[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: var(--opale-disabled-opacity);
+  }
+  .opale-button[aria-disabled="true"]:hover::before {
+    background: var(--opale-button-background);
+  }
+  .opale-button[aria-disabled="true"]:hover,
+  .opale-button[aria-disabled="true"]:active {
+    filter: none;
+    transform: none;
+  }
+
+  /*
+   * Bouton destructif secondaire : le `ghost` d'Opale (contour), recoloré par
+   * ses propres jetons avec la couleur de danger d'Opale.
+   */
+  .opale-button.danger-outline {
+    --opale-primary: var(--opale-danger);
+    --opale-primary-on-surface: var(--opale-danger-on-surface, var(--opale-danger));
+  }
+
+  /*
+   * Libellé, aide et erreur de nos champs (components/ui/Field.tsx) : mêmes
+   * classes qu'Opale ; hors de sa grille `.opale-field`, on rétablit l'écart.
+   */
+  :where(:not(.opale-field)) > .opale-field__label {
+    display: block;
+    margin-bottom: var(--opale-space-xs);
+  }
+  :where(:not(.opale-field)) > .opale-field__helper {
+    margin-top: var(--opale-space-2xs);
+  }
+
+  /*
+   * Fil d'étapes d'un projet (components/layout/ProjectSteps.tsx). Numéro dans
+   * une pastille (coche quand l'étape est faite, cadenas quand elle est
+   * bloquée, à toutes les largeurs), libellé, résumé ; étapes reliées par un
+   * trait. Courante : lavis et pastille au primaire ; faite : pastille cerclée
+   * et coche au vert « sur surface » (contraste ≥ 3:1 dans les deux thèmes).
+   * Jamais la couleur seule : coche, cadenas, graisse et texte masqué disent
+   * l'état.
+   */
+  /*
+   * Engrenage « Paramètres du projet », à côté du titre (ProjectSettingsMenu),
+   * et bouton « ⋮ » d'une ligne de la liste des projets (ProgramActions), qui
+   * monte à 44 px : cible tactile confortable au doigt.
+   */
+  .project-settings-trigger,
+  .project-row-trigger {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--opale-radius-sm);
+    background: transparent;
+    color: var(--opale-text-secondary);
+    cursor: pointer;
+    transition: background var(--opale-motion) var(--opale-ease), border-color var(--opale-motion) var(--opale-ease);
+  }
+  .project-row-trigger {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .project-settings-trigger:hover,
+  .project-settings-trigger[aria-expanded="true"],
+  .project-row-trigger:hover,
+  .project-row-trigger[aria-expanded="true"] {
+    border-color: var(--opale-field-border);
+    background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
+    color: var(--opale-text);
+  }
+  .project-settings-trigger:focus-visible,
+  .project-row-trigger:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: var(--opale-focus-ring-offset);
+  }
+  .project-settings-trigger .opale-icon,
+  .project-row-trigger .opale-icon {
+    display: inline-grid;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+  }
+  .project-settings-trigger .opale-icon svg,
+  .project-row-trigger .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .project-steps {
+    /* Contient les textes `sr-only` (absolus) : sinon ils débordent de la page. */
+    position: relative;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--opale-space-md);
+    scrollbar-width: thin;
+  }
+  .project-steps__list {
+    display: flex;
+    min-width: max-content;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    margin: 0;
+    padding: 3px 0;
+    list-style: none;
+  }
+  .project-steps__item {
+    display: flex;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+  }
+  .project-steps__connector {
+    width: 1.25rem;
+    height: 2px;
+    flex: none;
+    border-radius: 1px;
+    background: var(--opale-field-border);
+  }
+  .project-steps__connector[data-done] {
+    background: var(--opale-success-on-surface);
+  }
+  /*
+   * Boîte d'une étape, courante ou non (même gabarit : rien ne saute quand on
+   * change d'étape) : marges internes généreuses pour que le titre respire.
+   * Sous 768 px, le fil compact ne montre que le libellé courant ; la boîte
+   * reste assez étroite pour tenir à 320 px (pastille + libellé + 2 numéros).
+   */
+  .project-step {
+    position: relative;
+    display: inline-flex;
+    min-height: 3.25rem;
+    align-items: center;
+    gap: var(--opale-space-sm);
+    padding: var(--opale-space-xs) var(--opale-space-lg) var(--opale-space-xs) var(--opale-space-sm);
+    border-radius: var(--opale-radius-md);
+    color: var(--opale-text-secondary);
+    text-decoration: none;
+    transition: background var(--opale-motion) var(--opale-ease);
+  }
+  .project-step:hover {
+    background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
+    color: var(--opale-text);
+  }
+  .project-step:focus-visible {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: calc(-1 * var(--opale-focus-ring-width));
+  }
+  .project-step__dot {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    place-items: center;
+    border: 1.5px solid var(--opale-field-border);
+    border-radius: var(--opale-radius-pill);
+    background: var(--opale-surface);
+    color: var(--opale-text-secondary);
+    font-size: var(--opale-text-sm);
+    font-weight: 600;
+  }
+  /*
+   * Icône dans un bouton d'Opale (`startIcon`, `endIcon`) : `.opale-icon` porte le
+   * primaire, invisible sur un bouton primaire en thème clair. Elle suit l'encre
+   * du bouton, à la taille de son texte.
+   */
+  .opale-button .opale-icon {
+    /* En bloc : son enveloppe prend sa hauteur et le flex du bouton la centre sur le texte. */
+    display: grid;
+    /* `.opale-icon` est une boîte de 40 px : dans un bouton, 1 rem (taille du texte). */
+    width: 1rem;
+    height: 1rem;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: currentColor;
+  }
+  .opale-button .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+  /* `.opale-icon` porte sa taille (24 px, boîte de 40) et le primaire : ici, celles du texte. */
+  .project-step__dot .opale-icon,
+  .project-step__summary .opale-icon {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .project-step__dot .opale-icon {
+    font-size: 0.95rem;
+  }
+  .project-step__dot .opale-icon svg,
+  .project-step__summary .opale-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+  .project-step__dot .opale-icon svg {
+    stroke-width: 2.5;
+  }
+  .project-step[data-state="done"] .project-step__dot {
+    border-color: var(--opale-success-on-surface);
+    color: var(--opale-success-on-surface);
+  }
+  .project-step[data-state="blocked"] .project-step__dot {
+    border-style: dashed;
+    color: var(--opale-warning-on-surface);
+  }
+  .project-step[aria-current="step"] {
+    background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step[aria-current="step"] .project-step__dot {
+    border-color: var(--opale-primary);
+    background: var(--opale-primary);
+    color: var(--opale-on-primary);
+  }
+  .project-step__text {
+    display: grid;
+    line-height: var(--opale-leading-snug);
+  }
+  .project-step__label {
+    color: var(--opale-text);
+    font-size: var(--opale-text-md);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  @media (max-width: 47.99rem) {
+    .project-step {
+      min-height: var(--opale-control-md);
+      gap: var(--opale-space-xs);
+      padding: var(--opale-space-xs) var(--opale-space-md) var(--opale-space-xs) var(--opale-space-xs);
+    }
+  }
+  .project-step[aria-current="step"] .project-step__label {
+    color: var(--opale-primary-on-surface);
+  }
+  .project-step__summary {
+    display: inline-flex;
+    /* Trois étapes : la place permet le résumé complet (« 9 thèmes · charte et gabarit par défaut »). */
+    max-width: 20rem;
+    align-items: center;
+    gap: var(--opale-space-2xs);
+    overflow: hidden;
+    font-size: var(--opale-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .project-step__summary--blocked {
+    color: var(--opale-warning-on-surface);
+  }
+
+  /* Cadenas de « Étape suivante » bloquée (StepNav) : à la taille du texte du bouton. */
+  .step-nav__lock {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    color: inherit;
+    font-size: inherit;
+  }
+  .step-nav__lock svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */
+  .opale-breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--opale-space-xs);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .project-step,
+    .project-settings-trigger {
+      transition: none;
+    }
+  }
+
+  /*
+   * Sommaire de la Configuration IA : le Sidebar d'Opale tel quel (rail sur le fond de
+   * page, filet, parties, barre de défilement et poignée d'Opale). On ne fait
+   * que le placer : sous 768 px en haut de page ; au-delà, collé au bord gauche
+   * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
+   * barre de défilement d'Opale exige une hauteur.
+   */
+  @media (max-width: 767px) {
+    .settings-rail {
+      padding: var(--opale-space-md) 1rem 0;
+    }
+  }
+  @media (min-width: 768px) {
+    .settings-rail {
+      position: sticky;
+      top: 0;
+      flex: none;
+      align-self: flex-start;
+      height: 100dvh;
+    }
+    /* Le cadre d'Opale (poignée, format mobile) s'étire seul ; le rail le remplit. */
+    .settings-rail .settings-toc__root {
+      height: 100%;
+    }
+  }
+
+  /* Zone de texte dans la coquille d'Opale (voir components/ui/Field.tsx). */
+  .opale-input-shell--textarea {
+    align-items: stretch;
+    padding-block: var(--opale-space-xs);
+  }
+  .opale-input-shell--textarea > textarea {
+    min-height: 5.5rem;
+    resize: vertical;
+    line-height: var(--opale-leading-relaxed);
+  }
+
+  /* Un lien Next.js habillé en bouton d'Opale : pas de soulignement. */
+  a.opale-button {
+    text-decoration: none;
+  }
+
+  /* Champ maison (mot de passe, puces, mots-clés) dans la coquille d'Opale : état invalide. */
+  .opale-input-shell:has(> [aria-invalid="true"]) {
+    border-color: var(--opale-danger);
+  }
+
+  /* Petite étiquette au-dessus d'un titre. */
+  .eyebrow {
+    font-size: var(--opale-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--opale-text-secondary);
+  }
+
+  /* Compteurs, durées, numéros : police mono d'Opale, chiffres tabulaires. */
+  .num {
+    font-family: var(--opale-font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    /* Les espaces mono sont larges : « 1 h 30 » resserré. */
+    word-spacing: -0.3em;
+  }
+
+  /*
+   * Surlignage « dessiné » sous un ou deux mots d'un titre : un trait épais à
+   * l'accent ambré d'Opale, posé sous la ligne de base, tracé de gauche à
+   * droite à l'apparition (supprimé si prefers-reduced-motion). Le texte garde
+   * sa couleur : il ne passe jamais sur l'ambre, donc aucun contraste ne dépend
+   * de l'animation, en clair comme en sombre.
+   */
+  .marker {
+    padding: 0 0.06em;
+    background-image: linear-gradient(100deg, transparent 0, var(--opale-accent) 0.12em, var(--opale-accent) 97%, transparent 100%);
+    background-repeat: no-repeat;
+    background-size: 100% 0.2em;
+    background-position: 0 96%;
+    border-radius: 0.1em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: marker-draw 700ms cubic-bezier(0.3, 0.7, 0.3, 1) 200ms both;
+  }
+}
+
+@keyframes marker-draw {
+  from {
+    background-size: 0% 0.2em;
+  }
+  to {
+    background-size: 100% 0.2em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Réglages du site (panneau Réglages), posés sur <html> avant la première
+ * peinture (preferencesScript, layout racine). Hors couche, comme le bloc
+ * ci-dessus, pour l'emporter sur Opale et Tailwind.
+ *
+ * Taille du texte : la taille de la racine, en pourcentage pour respecter la
+ * taille choisie dans le navigateur ; tout ce qui est en rem suit (texte,
+ * espacements, contrôles d'Opale).
+ */
+:root[data-text-size="large"] {
+  font-size: 112.5%;
+}
+:root[data-text-size="xlarge"] {
+  font-size: 125%;
+}
+
+/* « Réduire les animations » : la même règle que prefers-reduced-motion, quel que soit l'appareil. */
+:root[data-motion="reduced"] {
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
 }
