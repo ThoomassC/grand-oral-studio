@@ -9,15 +9,12 @@ import {
   type SlideLayout,
 } from "@/domain/schemas";
 import { AiInvalidOutputError } from "../errors";
-import type { RawBrandDraft } from "@/domain/import/brand-from-draft";
-import { parseTemplateText, type RawTemplateDraft } from "@/domain/import/template-from-text";
-import { parseThemePromptText, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
-import type { AiProvider, ClassifyHints, DeckHints, TemplateDraftHints, ThemePromptHints } from "./types";
+import type { AiProvider, ClassifyHints, DeckHints } from "./types";
 
 /**
  * Fournisseur déterministe, sans réseau : même entrée → même sortie. Sert au dev
- * sans clé et aux tests E2E. Il s'appuie sur les `hints` structurés (gabarit,
- * thème, problématique) plutôt que d'analyser le texte du prompt.
+ * sans clé et aux tests E2E. Il s'appuie sur les `hints` structurés (trame,
+ * sujet éventuel, problématique) plutôt que d'analyser le texte du prompt.
  */
 
 const MAX_SLIDES = 60;
@@ -52,53 +49,47 @@ function layoutFor(sectionIndex: number, sectionCount: number, slideIndex: numbe
 }
 
 function buildDeck(h: DeckHints): DeckSpec {
-  const { template, theme, problem } = h;
+  const { template, subject, problem } = h;
   const en = template.language === "en";
-  const keywords = theme.keywords.length > 0 ? theme.keywords : tokenize(`${theme.name} ${theme.description}`).slice(0, 6);
+  // Sans sujet : la problématique et la trame seules (nom du projet en sous-titre).
+  const label = subject?.name ?? h.programName;
+  const fromSubject = subject ? (subject.keywords.length > 0 ? subject.keywords : tokenize(`${subject.name} ${subject.description}`).slice(0, 6)) : [];
+  const keywords = fromSubject.length > 0 ? fromSubject : tokenize(problem).slice(0, 6);
   const slides: Slide[] = [
     {
       layout: "title",
       sectionId: "cover",
-      title: clip(problem ?? theme.name, 140),
-      subtitle: clip(problem ? theme.name : h.programName, 200),
+      title: clip(problem, 140),
+      subtitle: clip(label, 200),
       bullets: [],
-      notes: clip(
-        problem
-          ? `${en ? "Introduce the question" : "Annoncer la problématique"} : « ${problem} »`
-          : `${en ? "Introduce the theme" : "Présenter le thème"} « ${theme.name} ».`,
-        3000,
-      ),
+      notes: clip(`${en ? "Introduce the question" : "Annoncer la problématique"} : « ${problem} »`, 3000),
     },
   ];
 
   const sections = template.sections;
   sections.forEach((section, si) => {
     for (let k = 0; k < section.slides && slides.length < MAX_SLIDES; k += 1) {
-      const kw = keywords.length > 0 ? keywords[(si + k) % keywords.length] : theme.name;
-      const skeletonSlide = h.skeleton?.slides.find((s) => s.sectionId === section.id);
+      const kw = keywords.length > 0 ? keywords[(si + k) % keywords.length]! : label;
       const bullets = [
         clip(`${section.title} — ${kw}`, LIMITS.bullet),
-        clip(section.guidance || (en ? `Key idea on ${theme.name}` : `Idée clé sur ${theme.name}`), LIMITS.bullet),
-        ...(skeletonSlide?.bullets.slice(0, 2) ?? []),
-      ].slice(0, Math.min(4, LIMITS.bullets));
+        clip(section.guidance || (en ? `Key idea on ${label}` : `Idée clé sur ${label}`), LIMITS.bullet),
+      ];
       slides.push({
         layout: layoutFor(si, sections.length, k),
         sectionId: section.id,
         title: clip(section.slides > 1 ? `${section.title} (${k + 1}/${section.slides})` : section.title, 140),
         subtitle: "",
         bullets,
-        notes: problem
-          ? clip(
-              `${en ? "Link to the question" : "Relier à la problématique"} « ${problem} » : ${section.title.toLowerCase()}, ${kw}.`,
-              3000,
-            )
-          : "",
+        notes: clip(
+          `${en ? "Link to the question" : "Relier à la problématique"} « ${problem} » : ${section.title.toLowerCase()}, ${kw}.`,
+          3000,
+        ),
       });
     }
   });
 
   const deck = {
-    title: clip(problem ? `${theme.name} — ${problem}` : theme.name, 160),
+    title: clip(subject ? `${subject.name} — ${problem}` : problem, 160),
     subtitle: clip(h.programName, 240),
     slides,
   };
@@ -121,7 +112,7 @@ export function overlapScore(problemTokens: Set<string>, theme: ThemeRef): numbe
 
 function buildClassification(h: ClassifyHints): Classification {
   if (h.themes.length === 0) {
-    throw new AiInvalidOutputError("mock: aucun thème à classer");
+    throw new AiInvalidOutputError("mock: aucun sujet à classer");
   }
   const tokens = new Set(tokenize(h.problem));
   const scored = h.themes
@@ -140,7 +131,7 @@ function buildClassification(h: ClassifyHints): Classification {
       confidence: best > 0 ? Math.round((s.raw / (best + 2)) * 100) / 100 : 0.1,
       rationale: clip(
         s.raw > 0
-          ? `Mots en commun avec le thème « ${s.theme.name} ».`
+          ? `Mots en commun avec le sujet « ${s.theme.name} ».`
           : `Aucun mot-clé commun ; « ${s.theme.name} » proposé par défaut.`,
         600,
       ),
@@ -158,24 +149,6 @@ export function createMockProvider(): AiProvider {
     async generateDeck(_prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour generateDeck");
       return buildDeck(hints);
-    },
-    async draftTemplate(_prompt: PromptPair, hints: TemplateDraftHints): Promise<RawTemplateDraft> {
-      // Déterministe : les heuristiques du moteur gratuit, présentées comme un brouillon d'IA.
-      const { template } = parseTemplateText(hints.text, hints.base);
-      return { ...template };
-    },
-    async draftThemes(_prompt: PromptPair, hints: ThemePromptHints): Promise<RawThemePromptDraft> {
-      // Déterministe : les heuristiques du moteur gratuit, présentées comme un brouillon d'IA.
-      const { themes, brand } = parseThemePromptText(hints.text, hints.brand);
-      return { themes, ...(brand ? { brand: { colors: { ...brand.colors }, fonts: { ...brand.fonts } } } : {}) };
-    },
-    async deduceBrand(): Promise<RawBrandDraft> {
-      return {
-        name: "Charte simulée",
-        colors: { primary: "#1E3A5F", secondary: "#4A6A8A", accent: "#D9822B", background: "#FFFFFF", text: "#1F2933" },
-        headingFont: "Georgia",
-        bodyFont: "Arial",
-      };
     },
     async classify(_prompt: PromptPair, hints?: ClassifyHints): Promise<Classification> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour classify");

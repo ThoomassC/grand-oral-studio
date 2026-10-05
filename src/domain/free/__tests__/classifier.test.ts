@@ -83,7 +83,7 @@ describe("classifyProblemFree — confiance", () => {
     expect(ranked.length).toBeGreaterThan(0);
     for (const r of ranked) {
       expect(r.confidence).toBeLessThanOrEqual(0.3);
-      expect(r.rationale).toBe("Aucun mot-clé en commun : proposition par défaut, vérifiez le thème.");
+      expect(r.rationale).toBe("Aucun mot-clé en commun : proposition par défaut, vérifiez le sujet.");
     }
   });
 
@@ -108,6 +108,8 @@ describe("classifyProblemFree — justification et thème annoncé", () => {
     const { ranked } = classifyProblemFree(makeMasterProgram(), "La gestion des risques suffit-elle face aux cyberattaques ?");
     expect(ranked[0].themeId).toBe("cyber");
     expect(ranked[0].rationale).toContain("gestion des risques");
+    expect(ranked[0].rationale).toMatch(/du sujet retrouvé/);
+    expect(ranked.map((r) => r.rationale).join(" ")).not.toMatch(/thème/);
   });
 
   it("devrait placer le thème annoncé en tête, avec sa propre justification, même s'il est loin", () => {
@@ -116,7 +118,7 @@ describe("classifyProblemFree — justification et thème annoncé", () => {
     const { ranked } = classifyProblemFree(program, problem, "agile");
     expect(ranked).toHaveLength(3);
     expect(ranked[0].themeId).toBe("agile");
-    expect(ranked[0].rationale).not.toBe("Thème annoncé avec la problématique.");
+    expect(ranked[0].rationale).not.toBe("Sujet annoncé avec la problématique.");
     expect(ranked.map((r) => r.themeId)).toContain("cyber");
   });
 

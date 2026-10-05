@@ -1,6 +1,6 @@
 /**
- * Mode gratuit : reconnaissance du thème et decks squelettes, sans IA, purs et
+ * Moteur gratuit : reconnaissance du sujet et deck du jour J, sans IA, purs et
  * déterministes.
  */
 export { classifyProblemFree } from "./classifier";
-export { buildFreeFinalDeck, buildFreeSkeleton } from "./skeleton";
+export { buildFreeFinalDeck } from "./outline";

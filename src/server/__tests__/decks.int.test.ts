@@ -44,19 +44,13 @@ describe("repo decks — autorisation", () => {
     await expect(decks.listFinalDecks(b.id, programId)).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it("devrait lever NotFoundError et ne rien créer quand B écrit un squelette sur un thème de A", async () => {
-    const { b, themeId } = await ownedSetup();
-    await expect(decks.upsertSkeleton(b.id, themeId, makeConformingDeck())).rejects.toBeInstanceOf(NotFoundError);
-    expect(await db().deck.count({ where: { themeId } })).toBe(0);
-  });
-
-  it("ne devrait pas écraser le squelette de A quand B tente un upsert", async () => {
-    const { a, b, themeId } = await ownedSetup();
-    await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());
-    const hostile: DeckSpec = { ...makeConformingDeck(), title: "Piraté" };
-    await expect(decks.upsertSkeleton(b.id, themeId, hostile)).rejects.toBeInstanceOf(NotFoundError);
-    const row = await db().deck.findFirstOrThrow({ where: { themeId, kind: "SKELETON" } });
-    expect(row.spec).toMatchObject({ title: makeConformingDeck().title });
+  it("devrait lever NotFoundError quand B lit, modifie ou supprime un squelette (version 1.0) de A", async () => {
+    const { a, b, programId, themeId } = await ownedSetup();
+    const deckId = await seedDeck(programId, themeId, "SKELETON");
+    await expect(decks.getDeck(b.id, deckId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(decks.updateDeckSlide(b.id, deckId, 1, editedSlide)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(decks.deleteDeck(b.id, deckId)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await decks.getDeck(a.id, deckId)).spec).toEqual(makeConformingDeck());
   });
 
   it("devrait lever NotFoundError quand B crée un deck final dans le programme de A", async () => {
@@ -87,7 +81,8 @@ describe("repo decks — autorisation", () => {
   it("devrait lever NotFoundError quand B demande le contexte de génération de A", async () => {
     const { b, programId, themeId } = await ownedSetup();
     await expect(decks.getGenerationContext(b.id, programId)).rejects.toBeInstanceOf(NotFoundError);
-    await expect(decks.getThemeGenerationContext(b.id, themeId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(decks.getFinalDeckContext(b.id, programId, themeId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(decks.getFinalDeckContext(b.id, programId, null)).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("ne devrait pas retrouver le deck récent de A pour B", async () => {
@@ -99,46 +94,31 @@ describe("repo decks — autorisation", () => {
   });
 });
 
-describe("repo decks — unicité du squelette par thème", () => {
-  it("devrait remplacer le squelette existant au lieu d'en créer un second", async () => {
-    const { a, themeId } = await ownedSetup();
-    const first = await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());
-    const second = await decks.upsertSkeleton(a.id, themeId, { ...makeConformingDeck(), title: "Version 2" });
-
-    expect(second.deckId).toBe(first.deckId);
-    expect(await db().deck.count({ where: { themeId, kind: "SKELETON" } })).toBe(1);
-    expect((await decks.getDeck(a.id, first.deckId)).spec.title).toBe("Version 2");
-  });
-
-  it("devrait garder un seul squelette quand plusieurs upserts arrivent en même temps", async () => {
-    const { a, themeId } = await ownedSetup();
-    const results = await Promise.all(
-      Array.from({ length: 6 }, (_, i) => decks.upsertSkeleton(a.id, themeId, { ...makeConformingDeck(), title: `V${i}` })),
-    );
-    expect(new Set(results.map((r) => r.deckId)).size).toBe(1);
-    expect(await db().deck.count({ where: { themeId, kind: "SKELETON" } })).toBe(1);
-  });
-
-  it("devrait être garanti par la base quand on insère un second squelette directement", async () => {
+describe("repo decks — squelettes de la version 1.0 (lecture seule)", () => {
+  it("devrait toujours garantir en base un seul squelette par sujet", async () => {
     const { programId, themeId } = await ownedSetup();
     await seedDeck(programId, themeId, "SKELETON");
     await expect(seedDeck(programId, themeId, "SKELETON")).rejects.toThrow();
     expect(await db().deck.count({ where: { themeId, kind: "SKELETON" } })).toBe(1);
   });
 
-  it("devrait accepter plusieurs decks finaux et un squelette sur le même thème", async () => {
+  it("devrait accepter plusieurs decks finaux et un ancien squelette sur le même sujet", async () => {
     const { a, programId, themeId } = await ownedSetup();
-    await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());
+    await seedDeck(programId, themeId, "SKELETON");
     await decks.createFinalDeck(a.id, { programId, themeId, problem: "Première", spec: makeConformingDeck() });
     await decks.createFinalDeck(a.id, { programId, themeId, problem: "Seconde", spec: makeConformingDeck() });
     expect(await db().deck.count({ where: { themeId } })).toBe(3);
   });
 
-  it("devrait exposer le squelette dans le contexte de génération du thème", async () => {
-    const { a, themeId, otherThemeId } = await ownedSetup();
-    await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());
-    expect((await decks.getThemeGenerationContext(a.id, themeId)).skeleton).toEqual(makeConformingDeck());
-    expect((await decks.getThemeGenerationContext(a.id, otherThemeId)).skeleton).toBeNull();
+  it("devrait relire, modifier et supprimer un ancien squelette", async () => {
+    const { a, programId, themeId } = await ownedSetup();
+    const deckId = await seedDeck(programId, themeId, "SKELETON");
+    const deck = await decks.getDeck(a.id, deckId);
+    expect(deck).toMatchObject({ kind: "SKELETON", themeId, themeName: "Un", problem: null });
+    await decks.updateDeckSlide(a.id, deckId, 3, editedSlide);
+    expect((await decks.getDeck(a.id, deckId)).spec.slides[3]).toEqual(editedSlide);
+    expect(await decks.deleteDeck(a.id, deckId)).toEqual({ programId, themeId });
+    expect(await db().deck.count({ where: { id: deckId } })).toBe(0);
   });
 });
 
@@ -180,13 +160,6 @@ describe("repo decks — modification d'une diapo", () => {
 });
 
 describe("repo decks — validation zod à l'écriture", () => {
-  it("devrait refuser un squelette hors schéma et ne rien écrire", async () => {
-    const { a, themeId } = await ownedSetup();
-    const oneSlide: DeckSpec = { ...makeConformingDeck(), slides: makeConformingDeck().slides.slice(0, 1) };
-    await expect(decks.upsertSkeleton(a.id, themeId, oneSlide)).rejects.toBeInstanceOf(DataIntegrityError);
-    expect(await db().deck.count({ where: { themeId } })).toBe(0);
-  });
-
   it("devrait refuser un deck final hors schéma et ne rien écrire", async () => {
     const { a, programId, themeId } = await ownedSetup();
     const badLayout = { ...makeConformingDeck(), slides: [{ ...editedSlide, layout: "inconnu" }, editedSlide] } as unknown as DeckSpec;
@@ -213,21 +186,9 @@ describe("repo decks — lectures et suppression", () => {
     expect(deck.program).toEqual({ id: programId, name: "Programme d'essai", brand: makeBrand(), template: makeTemplate() });
   });
 
-  it("devrait joindre au deck final le squelette de son thème (relecture : contrôle de recopie), et rien à un squelette", async () => {
-    const { a, programId, themeId, otherThemeId } = await ownedSetup();
-    const skeleton = makeConformingDeck();
-    skeleton.slides[1] = { ...skeleton.slides[1]!, title: "Diapo du squelette" };
-    const { deckId: skeletonId } = await decks.upsertSkeleton(a.id, themeId, skeleton);
-    const finalId = await seedDeck(programId, themeId, "FINAL");
-    const orphanId = await seedDeck(programId, otherThemeId, "FINAL");
-    expect((await decks.getDeck(a.id, finalId)).skeletonSpec).toEqual(skeleton);
-    expect((await decks.getDeck(a.id, orphanId)).skeletonSpec).toBeNull();
-    expect((await decks.getDeck(a.id, skeletonId)).skeletonSpec).toBeNull();
-  });
-
   it("devrait lister uniquement les decks finaux, du plus récent au plus ancien", async () => {
     const { a, programId, themeId, otherThemeId } = await ownedSetup();
-    await decks.upsertSkeleton(a.id, themeId, makeConformingDeck());
+    await seedDeck(programId, themeId, "SKELETON");
     const first = await decks.createFinalDeck(a.id, { programId, themeId, problem: "Première", spec: makeConformingDeck() });
     // Horodatage explicite : l'ordre ne doit pas dépendre de deux inserts dans la même milliseconde.
     await db().deck.update({ where: { id: first.deckId }, data: { createdAt: new Date(Date.now() - 60_000) } });
@@ -249,7 +210,7 @@ describe("repo decks — lectures et suppression", () => {
 });
 
 describe("repo decks — decks finaux sans sujet", () => {
-  it("devrait créer un deck final sans sujet et le relire sans nom de sujet ni squelette", async () => {
+  it("devrait créer un deck final sans sujet et le relire sans nom de sujet", async () => {
     const { a, programId } = await ownedSetup();
     const { deckId } = await decks.createFinalDeck(a.id, {
       programId,
@@ -262,7 +223,7 @@ describe("repo decks — decks finaux sans sujet", () => {
     const row = await db().deck.findUniqueOrThrow({ where: { id: deckId }, select: { themeId: true, kind: true } });
     expect(row).toEqual({ themeId: null, kind: "FINAL" });
     const deck = await decks.getDeck(a.id, deckId);
-    expect(deck).toMatchObject({ themeId: null, themeName: null, skeletonSpec: null, engine: "free" });
+    expect(deck).toMatchObject({ themeId: null, themeName: null, engine: "free" });
     expect((await decks.listFinalDecks(a.id, programId)).map((d) => [d.id, d.themeId, d.themeName])).toEqual([
       [deckId, null, null],
     ]);

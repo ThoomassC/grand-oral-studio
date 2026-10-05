@@ -6,8 +6,6 @@ import {
   RawClassificationSchema,
   RawDeckSpecSchema,
 } from "@/domain/normalize";
-import { RawTemplateDraftSchema, type RawTemplateDraft } from "@/domain/import/template-from-text";
-import { RawThemePromptDraftSchema, type RawThemePromptDraft } from "@/domain/import/themes-from-text";
 import { ClassificationSchema, DeckSpecSchema, type Classification, type DeckSpec, type PromptTemplate } from "@/domain/schemas";
 import { totalSlides } from "@/domain/slides";
 import { AiInvalidOutputError, AiUnavailableError } from "../errors";
@@ -44,7 +42,7 @@ const DEFAULT_QUEUE_WAIT_MS = 20_000;
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const TEMPERATURE = 0.4;
 const CLASSIFY_MAX_TOKENS = 2_000;
-/** Contexte : prompt (gabarit + thèmes) + sortie d'un deck complet. */
+/** Contexte : prompt (trame + sujet et ses notes) + sortie d'un deck complet. */
 const DEFAULT_NUM_CTX = 16_384;
 /** Plafond pour un gros deck (contexte natif des modèles 14B courants : qwen2.5, llama3.1). */
 const MAX_DECK_NUM_CTX = 32_768;
@@ -52,8 +50,8 @@ const MAX_DECK_NUM_CTX = 32_768;
 const CHARS_PER_TOKEN = 3;
 const OUTPUT_TOKENS_PER_SLIDE = 400;
 
-/** Longueurs successives des pistes de la trame du squelette quand le prompt déborde (0 = titres seuls). */
-const SKELETON_DETAIL_STEPS = [120, 60, 0] as const;
+/** Longueurs successives des notes du sujet quand le prompt déborde (0 = sans notes). */
+export const SUBJECT_NOTES_STEPS = [1500, 600, 0] as const;
 
 export interface DeckContext {
   /** num_ctx à demander : besoin estimé arrondi au Ki, entre le défaut et le plafond. */
@@ -66,8 +64,8 @@ export interface DeckContext {
 
 /**
  * Contexte d'une génération de deck : prompt + sortie attendue. Sans
- * agrandissement, un deck de 31 diapos dont le prompt transmet la trame du
- * squelette dépasse 16 k ; au-delà du plafond, `fits` est faux.
+ * agrandissement, un deck de 31 diapos dont le prompt transmet la trame et de
+ * longues notes de sujet dépasse 16 k ; au-delà du plafond, `fits` est faux.
  */
 export function deckContext(prompt: PromptPair, template: PromptTemplate | undefined, max: number = MAX_DECK_NUM_CTX): DeckContext {
   const promptTokens = Math.ceil((prompt.system.length + prompt.user.length) / CHARS_PER_TOKEN);
@@ -84,20 +82,20 @@ export function deckNumCtx(prompt: PromptPair, template: PromptTemplate | undefi
 const log = createLogger({ component: "ai.ollama" });
 
 /**
- * Prompt de deck ajusté au plafond de contexte : s'il déborde, les pistes de la
- * trame du squelette (le moins important : l'IA réécrit tout de toute façon)
- * sont raccourcies par paliers, puis omises. Journalise sans aucune donnée
- * utilisateur (tailles seulement).
+ * Prompt de deck ajusté au plafond de contexte : s'il déborde, les notes du
+ * sujet (seule partie de longueur libre ; la trame, la problématique et les
+ * règles sont indispensables) sont raccourcies par paliers, puis omises.
+ * Journalise sans aucune donnée utilisateur (tailles seulement).
  */
 function fitDeckPrompt(prompt: PromptPair, hints: DeckHints | undefined, max: number = MAX_DECK_NUM_CTX) {
   const initial = deckContext(prompt, hints?.template, max);
   if (initial.fits) return { prompt, context: initial };
   if (hints?.compactPrompt) {
-    for (const skeletonDetailMax of SKELETON_DETAIL_STEPS) {
-      const candidate = hints.compactPrompt(skeletonDetailMax);
+    for (const subjectNotesMax of SUBJECT_NOTES_STEPS) {
+      const candidate = hints.compactPrompt(subjectNotesMax);
       const context = deckContext(candidate, hints.template, max);
       if (context.fits) {
-        log.warn("ollama.context_reduced", { neededTokens: initial.neededTokens, maxCtx: max, skeletonDetailMax, reducedTokens: context.neededTokens });
+        log.warn("ollama.context_reduced", { neededTokens: initial.neededTokens, maxCtx: max, subjectNotesMax, reducedTokens: context.neededTokens });
         return { prompt: candidate, context };
       }
     }
@@ -111,13 +109,6 @@ function fitDeckPrompt(prompt: PromptPair, hints: DeckHints | undefined, max: nu
 
 const DECK_SCHEMA = z.toJSONSchema(RawDeckSpecSchema, { io: "input", unrepresentable: "any" });
 const CLASSIFY_SCHEMA = z.toJSONSchema(RawClassificationSchema, { io: "input", unrepresentable: "any" });
-const TEMPLATE_SCHEMA = z.toJSONSchema(RawTemplateDraftSchema, { io: "input", unrepresentable: "any" });
-const THEMES_SCHEMA = z.toJSONSchema(RawThemePromptDraftSchema, { io: "input", unrepresentable: "any" });
-/** Brouillon de gabarit : court, mais un modèle local est lent. */
-const DRAFT_TIMEOUT_MS = 120_000;
-/** ~30 sections avec consigne + contraintes : ~3 000 jetons observés sur un prompt de 31 diapos ; marge ×2. */
-const DRAFT_MAX_TOKENS = 6_000;
-const THEMES_MAX_TOKENS = 6_000;
 
 const ChatResponseSchema = z.object({
   message: z.object({ content: z.string() }),
@@ -455,16 +446,6 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
       const text = await chat("generateDeck", fitted.prompt, DECK_SCHEMA, deckMaxTokens(hints?.template), deckTimeoutMs, numCtx, true);
       const raw = parseStructured("generateDeck", text, RawDeckSpecSchema);
       return strict("generateDeck", DeckSpecSchema, normalizeDeckSpec(raw));
-    },
-
-    async draftTemplate(prompt: PromptPair): Promise<RawTemplateDraft> {
-      const text = await chat("draftTemplate", prompt, TEMPLATE_SCHEMA, DRAFT_MAX_TOKENS, DRAFT_TIMEOUT_MS);
-      return parseStructured("draftTemplate", text, RawTemplateDraftSchema);
-    },
-
-    async draftThemes(prompt: PromptPair): Promise<RawThemePromptDraft> {
-      const text = await chat("draftThemes", prompt, THEMES_SCHEMA, THEMES_MAX_TOKENS, DRAFT_TIMEOUT_MS);
-      return parseStructured("draftThemes", text, RawThemePromptDraftSchema);
     },
 
     async classify(prompt: PromptPair): Promise<Classification> {

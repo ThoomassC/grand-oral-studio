@@ -45,7 +45,7 @@ export function normalizeClassification(
       themeId: hinted.id,
       themeName: hinted.name,
       confidence: 0,
-      rationale: "Thème annoncé avec la problématique.",
+      rationale: "Sujet annoncé avec la problématique.",
     };
     ranked = [head, ...ranked.filter((r) => r.themeId !== hinted.id)];
   }

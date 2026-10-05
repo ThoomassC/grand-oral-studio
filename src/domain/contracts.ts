@@ -44,23 +44,17 @@ export interface ClassificationResult {
 export type DomainFns = {
   /** src/domain/slides.ts — nombre de diapos conseillé pour une durée d'oral (≈ 1 diapo / 1,5 min, borné 5..30). */
   suggestSlideCount(durationMinutes: number): number;
-  /** src/domain/slides.ts — total de diapos produit par le gabarit : 1 couverture + somme des sections. */
+  /** src/domain/slides.ts — total de diapos produit par la trame : 1 couverture + somme des lignes. */
   totalSlides(template: PromptTemplate): number;
-  /** src/domain/prompts.ts */
-  buildSkeletonPrompt(ctx: ProgramContext, theme: ThemeRef): PromptPair;
-  /** src/domain/prompts.ts */
-  buildFinalDeckPrompt(
-    ctx: ProgramContext,
-    theme: ThemeRef,
-    skeleton: DeckSpec | null,
-    problem: string,
-    options?: { skeletonDetailMax?: number },
-  ): PromptPair;
+  /** src/domain/prompts.ts — deck final du jour J ; `subject` null = sans sujet (problématique et trame seules). */
+  buildFinalDeckPrompt(ctx: ProgramContext, subject: ThemeRef | null, problem: string, options?: { subjectNotesMax?: number }): PromptPair;
+  /** src/domain/free/outline.ts — deck du jour J sans IA : la trame remplie avec le sujet et ses notes, rien d'inventé. */
+  buildFreeFinalDeck(ctx: ProgramContext, subject: ThemeRef | null, problem: string): DeckSpec;
   /** src/domain/prompts.ts */
   buildClassificationPrompt(ctx: ProgramContext, problem: string): PromptPair;
   /** src/domain/classification.ts — filtre les ids inconnus, dédoublonne, borne [0,1], trie, garde 3. */
   normalizeClassification(raw: Classification, themes: ThemeRef[], hintedThemeId?: string | null): ClassificationResult;
-  /** src/domain/deck.ts — vérifie qu'un deck respecte le gabarit (une couverture en tête, sections présentes). Retourne la liste des écarts. */
+  /** src/domain/deck.ts — vérifie qu'un deck respecte la trame (une couverture en tête, lignes présentes). Retourne la liste des écarts. */
   checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplate): string[];
   /** src/domain/canva.ts — texte prêt à coller dans l'IA de Canva (charte + contenu diapo par diapo). */
   buildCanvaPrompt(deck: DeckSpec, brand: Brand, template: PromptTemplate): string;

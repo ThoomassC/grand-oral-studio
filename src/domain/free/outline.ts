@@ -1,33 +1,35 @@
 import type { ProgramContext, ThemeRef } from "../contracts";
-import { checkDeckAgainstTemplate, COVER_SECTION_ID } from "../deck";
+import { COVER_SECTION_ID } from "../deck";
 import { truncateText } from "../normalize";
 import { DeckSpecSchema, LIMITS, stripControlChars, type DeckSpec, type PromptTemplate, type Section, type Slide, type SlideLayout } from "../schemas";
-import { totalSlides } from "../slides";
+import { formatSeconds, templateTimings } from "../slides";
 import { cleanProblem } from "./classifier";
 import { deaccent, extractTerms, normalizeText } from "./text";
 
 /**
- * Decks gratuits et déterministes, sans IA : une trame conforme au gabarit,
- * construite uniquement à partir des données saisies (sections du gabarit,
- * nom, description et mots-clés du thème, problématique). Rien n'est inventé :
- * chaque puce est soit une donnée du thème, soit une consigne de travail
- * marquée « À compléter ».
+ * Deck du jour J sans IA (moteur gratuit), pur et déterministe : la trame
+ * remplie, construite uniquement à partir des données saisies (lignes de la
+ * trame et leur contenu type, nom, description, mots-clés et notes du sujet,
+ * problématique). Rien n'est inventé : chaque puce est soit une donnée de
+ * l'utilisateur, soit une consigne de travail marquée « À compléter ».
  */
 
 type Lang = "fr" | "en";
 type SectionKind = "intro" | "problem" | "plan" | "part" | "conclusion";
 
-const T = {
+/** Textes fixes du moteur gratuit (exportés pour vérifier qu'aucune puce n'est inventée). */
+export const OUTLINE_TEXTS = {
   fr: {
     todo: "À compléter",
     and: "et",
-    leads: "Pistes du thème",
+    leads: "Pistes du sujet",
     keyTerms: "Notions clés à définir",
     problemTerms: "Termes de la problématique à définir",
-    frame: "Cadre du thème",
+    frame: "Cadre du sujet",
+    yourNotes: "Vos notes",
     hook: "À compléter : une accroche (fait daté, chiffre sourcé ou situation concrète)",
     posedProblem: "Problématique posée",
-    formulate: (theme: string) => `À compléter : la problématique, formulée comme une question sur « ${theme} »`,
+    formulate: (subject: string) => `À compléter : la problématique, formulée comme une question sur « ${subject} »`,
     stake: "À compléter : l'enjeu, pourquoi cette question se pose aujourd'hui",
     tension: "À compléter : la tension, les réponses possibles qui s'opposent",
     planEmpty: "À compléter : annoncer 2 ou 3 parties, une phrase chacune",
@@ -44,13 +46,14 @@ const T = {
     opening: "À compléter : une ouverture (question connexe, perspective)",
     defaultColumns: ["Points forts", "Points de vigilance"] as const,
     comparisonColumns: ["Premier terme", "Second terme"] as const,
-    subtitleSkeleton: (program: string) => `Grand oral — ${program}`,
-    notesCover: (theme: string, minutes: number, final: boolean) =>
-      `Se présenter, annoncer le thème « ${theme} » et la durée de l'oral (${minutes} min).` +
-      (final ? " Lire la problématique lentement." : ""),
+    subtitleProgram: (program: string) => `Grand oral — ${program}`,
+    notesCover: (subject: string, minutes: number) =>
+      subject
+        ? `Se présenter, annoncer le sujet « ${subject} » et la durée de l'oral (${minutes} min). Lire la problématique lentement.`
+        : `Se présenter, annoncer la durée de l'oral (${minutes} min), puis lire la problématique lentement.`,
     notesGoal: (goal: string) => `Objectif de la diapo : ${goal}.`,
     notesTodo:
-      "Trame gratuite : remplacez chaque « À compléter » par vos propres éléments ; ne citez que des faits et des chiffres vérifiés et sourcés.",
+      "Trame sans IA : remplacez chaque « À compléter » par vos propres éléments ; ne citez que des faits et des chiffres vérifiés et sourcés.",
     notesKind: {
       intro: "Capter l'attention, poser le contexte, définir les termes.",
       problem: "Énoncer la question clairement, puis en montrer l'enjeu.",
@@ -62,13 +65,14 @@ const T = {
   en: {
     todo: "To complete",
     and: "and",
-    leads: "Theme leads",
+    leads: "Subject leads",
     keyTerms: "Key notions to define",
     problemTerms: "Terms of the question to define",
-    frame: "Theme scope",
+    frame: "Subject scope",
+    yourNotes: "Your notes",
     hook: "To complete: a hook (dated fact, sourced figure or concrete situation)",
     posedProblem: "Question addressed",
-    formulate: (theme: string) => `To complete: the research question, phrased as a question about "${theme}"`,
+    formulate: (subject: string) => `To complete: the research question, phrased as a question about "${subject}"`,
     stake: "To complete: the stakes, why this question matters today",
     tension: "To complete: the tension, the competing possible answers",
     planEmpty: "To complete: announce 2 or 3 parts, one sentence each",
@@ -85,13 +89,14 @@ const T = {
     opening: "To complete: an opening (related question, outlook)",
     defaultColumns: ["Strengths", "Points of attention"] as const,
     comparisonColumns: ["First option", "Second option"] as const,
-    subtitleSkeleton: (program: string) => `Oral exam — ${program}`,
-    notesCover: (theme: string, minutes: number, final: boolean) =>
-      `Introduce yourself, announce the theme "${theme}" and the length of the talk (${minutes} min).` +
-      (final ? " Read the question slowly." : ""),
+    subtitleProgram: (program: string) => `Oral exam — ${program}`,
+    notesCover: (subject: string, minutes: number) =>
+      subject
+        ? `Introduce yourself, announce the subject "${subject}" and the length of the talk (${minutes} min). Read the question slowly.`
+        : `Introduce yourself, announce the length of the talk (${minutes} min), then read the question slowly.`,
     notesGoal: (goal: string) => `Goal of the slide: ${goal}.`,
     notesTodo:
-      "Free outline: replace every \"To complete\" with your own material; only quote verified, sourced facts and figures.",
+      "Outline without AI: replace every \"To complete\" with your own material; only quote verified, sourced facts and figures.",
     notesKind: {
       intro: "Catch attention, set the context, define the terms.",
       problem: "State the question clearly, then show what is at stake.",
@@ -101,6 +106,8 @@ const T = {
     },
   },
 } as const;
+
+const T = OUTLINE_TEXTS;
 
 type Texts = (typeof T)[Lang];
 
@@ -124,15 +131,10 @@ function lowerFirst(value: string): string {
   return /^[A-Z\u00c0-\u00d6\u00d8-\u00de]{2}/.test(value) ? value : value.charAt(0).toLowerCase() + value.slice(1);
 }
 
-function mmss(totalSeconds: number): string {
-  const s = Math.round(totalSeconds);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
 /** Texte de comparaison : minuscules, sans accents ni ponctuation. */
 const flat = (value: string) => deaccent(normalizeText(value));
 
-/** Phrases d'une consigne (séparées par . ; ! ?). */
+/** Phrases d'un contenu type (séparées par . ; ! ?). */
 function sentences(value: string): string[] {
   return clean(value)
     .split(/[.;!?]+(?:\s+|$)/)
@@ -140,7 +142,7 @@ function sentences(value: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** « À compléter : x », ou « À compléter — x » si la consigne contient déjà un deux-points. */
+/** « À compléter : x », ou « À compléter — x » si le texte contient déjà un deux-points. */
 function todo(t: Texts, colon: string, text: string): string {
   const body = lowerFirst(text);
   return body.includes(":") ? `${t.todo} — ${body}` : `${t.todo}${colon}${body}`;
@@ -176,10 +178,10 @@ function uniqueCaseless(values: readonly string[]): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Lecture du gabarit
+// Lecture de la trame
 // ---------------------------------------------------------------------------
 
-/** Nature d'une section, d'après son id et son titre (la consigne peut citer d'autres sections). */
+/** Nature d'une ligne de trame, d'après son id et son titre (le contenu type peut citer d'autres lignes). */
 export function sectionKind(section: Pick<Section, "id" | "title">): SectionKind {
   const label = flat(`${section.id} ${section.title}`);
   if (/\b(conclusion|conclure|synthese|bilan|closing|wrap)\b/.test(label)) return "conclusion";
@@ -196,7 +198,7 @@ const NEGATIVE = /^(limites?|inconvenients?|faiblesses?|menaces?|risques?|freins
 const COMPARISON = /^(versus|vs|comparaison|comparer|compare|comparison|confronter)$/;
 
 /**
- * Colonnes d'une diapo deux colonnes, si la consigne oppose deux notions
+ * Colonnes d'une diapo deux colonnes, si le contenu type oppose deux notions
  * (avantages/limites, enjeux/risques, leviers/freins…) ou demande une comparaison.
  */
 export function twoColumnLabels(section: Pick<Section, "title" | "guidance">, lang: Lang = "fr"): readonly [string, string] | null {
@@ -243,21 +245,25 @@ function planSlides(template: PromptTemplate): PlannedSlide[] {
   return planned;
 }
 
-/** Répartit les mots-clés du thème, à tour de rôle, sur les diapos de développement. */
-function distributeKeywords(planned: PlannedSlide[], keywords: string[]): Map<number, string[]> {
+/**
+ * Répartit des éléments (mots-clés, éléments de notes du sujet), à tour de rôle,
+ * sur les diapos de développement (« content » des lignes de partie), sinon sur
+ * les diapos « content » des autres lignes, sinon sur toutes les diapos.
+ */
+function distribute(planned: PlannedSlide[], items: readonly string[]): Map<number, string[]> {
   const isSlot = (p: PlannedSlide, kinds: SectionKind[]) => p.layout === "content" && kinds.includes(p.kind);
   let slots = planned.map((p, i) => (isSlot(p, ["part"]) ? i : -1)).filter((i) => i >= 0);
   if (slots.length === 0) slots = planned.map((p, i) => (isSlot(p, ["part", "intro", "problem", "plan"]) ? i : -1)).filter((i) => i >= 0);
   if (slots.length === 0) slots = planned.map((_, i) => i);
   const bySlide = new Map<number, string[]>();
-  keywords.forEach((keyword, k) => {
-    const slot = slots[k % slots.length];
-    bySlide.set(slot, [...(bySlide.get(slot) ?? []), keyword]);
+  items.forEach((item, k) => {
+    const slot = slots[k % slots.length]!;
+    bySlide.set(slot, [...(bySlide.get(slot) ?? []), item]);
   });
   return bySlide;
 }
 
-/** Parties du plan : titres des sections de développement, regroupés en 3 blocs au plus. */
+/** Parties du plan : titres des lignes de développement, regroupés en 3 blocs au plus. */
 function planGroups(template: PromptTemplate): string[] {
   const parts = template.sections.filter((s) => sectionKind(s) === "part").map((s) => clean(s.title));
   const groups = Math.min(3, parts.length);
@@ -270,82 +276,91 @@ function planGroups(template: PromptTemplate): string[] {
   return out;
 }
 
-/** « Thème — Projet », sans répéter le thème quand le nom du projet le contient déjà (« Green IT — Gratuit »). */
-function coverSubtitle(themeName: string, programName: string): string {
-  const theme = clean(themeName);
+/** « Sujet — Projet », sans répéter le sujet quand le nom du projet le contient déjà (« Green IT — Gratuit »). */
+function coverSubtitle(subjectName: string, programName: string): string {
+  const subject = clean(subjectName);
   const program = clean(programName);
-  if (!program) return theme;
-  // Comparaison par mots entiers : le thème « IT » n'est pas contenu dans « Audit ».
-  if (!theme || ` ${flat(program)} `.includes(` ${flat(theme)} `)) return program;
-  return `${theme} — ${program}`;
+  if (!program) return subject;
+  // Comparaison par mots entiers : le sujet « IT » n'est pas contenu dans « Audit ».
+  if (!subject || ` ${flat(program)} `.includes(` ${flat(subject)} `)) return program;
+  return `${subject} — ${program}`;
 }
+
+/** Puce (« - », « * », « • ») ou numéro (« 1. », « 12) ») en tête d'une ligne de notes. Une année (« 2022. ») n'en est pas un. */
+const NOTE_MARKER = /^(?:[-*•‣◦·]+|\d{1,3}[.)])\s+/;
+const MAX_NOTE_ITEMS = 30;
+
+/**
+ * Notes du sujet → éléments : une ligne = un élément ; puces et numéros de tête
+ * retirés ; lignes vides ignorées ; chaque élément tronqué à la longueur d'une
+ * puce ; 30 éléments au plus.
+ */
+export function splitSubjectNotes(notes: string): string[] {
+  const items: string[] = [];
+  for (const line of notes.split(/\r\n?|\n/)) {
+    const item = clean(clean(line).replace(NOTE_MARKER, ""));
+    if (!item) continue;
+    items.push(truncateText(item, LIMITS.bullet));
+    if (items.length === MAX_NOTE_ITEMS) break;
+  }
+  return items;
+}
+
+/** Éléments de notes posés en puces sur une diapo ; au-delà, ils vont dans les notes d'orateur. */
+const MAX_NOTE_BULLETS = 3;
 
 interface BuildInput {
   ctx: ProgramContext;
-  theme: ThemeRef;
-  /** Problématique nettoyée (deck final), ou null (squelette). */
+  /** Sujet retenu, ou null (deck sans sujet). */
+  subject: ThemeRef | null;
+  /** Problématique nettoyée, ou null si vide. */
   problem: string | null;
-  /** Squelette conforme au gabarit dont on reprend les diapos de développement. */
-  base: DeckSpec | null;
 }
 
-function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
+function buildDeck({ ctx, subject, problem }: BuildInput): DeckSpec {
   const template = ctx.template;
   const lang: Lang = template.language;
   const t = T[lang];
   const colon = lang === "fr" ? " : " : ": ";
   const planned = planSlides(template);
-  const keywords = uniqueCaseless(theme.keywords);
-  const keywordSlots = distributeKeywords(planned, keywords);
+  const subjectName = subject ? clean(subject.name) : "";
+  const keywords = uniqueCaseless(subject?.keywords ?? []);
+  const keywordSlots = distribute(planned, keywords);
+  const noteSlots = distribute(planned, subject ? splitSubjectNotes(subject.notes) : []);
   const groups = planGroups(template);
   const problemTerms = problem ? uniqueCaseless(extractTerms(problem).map((term) => term.surface)).slice(0, 5) : [];
 
-  // Minutage identique à celui annoncé à l'IA (src/domain/prompts.ts).
-  const total = totalSlides(template);
-  const totalSeconds = template.durationMinutes * 60;
-  const coverSeconds = Math.min(30, totalSeconds / total);
-  const perSlide = (totalSeconds - coverSeconds) / Math.max(1, total - 1);
-  const timing = (i: number) => `[${mmss(coverSeconds + i * perSlide)}–${mmss(coverSeconds + (i + 1) * perSlide)}]`;
+  // Minutage identique à celui annoncé à l'IA (src/domain/prompts.ts) : durées fixées, sinon part égale.
+  const timings = templateTimings(template);
+  const span = (start: number, end: number) => `[${formatSeconds(start)}–${formatSeconds(end)}]`;
+  const timing = (i: number) => {
+    const slot = timings.slides[i] ?? { start: 0, end: 0 };
+    return span(slot.start, slot.end);
+  };
 
+  const title = problem || subjectName || clean(ctx.name);
   const cover: Slide = {
     layout: "title",
     sectionId: COVER_SECTION_ID,
-    title: bounded(problem || theme.name, LIMITS.slideTitle),
-    subtitle: bounded(problem ? coverSubtitle(theme.name, ctx.name) : t.subtitleSkeleton(ctx.name), LIMITS.slideSubtitle),
+    title: bounded(title, LIMITS.slideTitle),
+    subtitle: bounded(
+      !problem ? t.subtitleProgram(ctx.name) : subject ? coverSubtitle(subject.name, ctx.name) : clean(ctx.name),
+      LIMITS.slideSubtitle,
+    ),
     bullets: [],
-    notes: `[0:00–${mmss(coverSeconds)}] ${t.notesCover(clean(theme.name), template.durationMinutes, problem !== null)}`,
+    notes: `${span(timings.cover.start, timings.cover.end)} ${t.notesCover(subjectName, template.durationMinutes)}`,
   };
-
-  const baseSlides = base ? base.slides.filter((s) => s.sectionId !== COVER_SECTION_ID) : null;
 
   const slides = planned.map((p, i): Slide => {
     const { section, kind } = p;
     const sectionTitle = clean(section.title);
     const guidance = sentences(section.guidance);
     const assigned = keywordSlots.get(i) ?? [];
+    const noteItems = noteSlots.get(i) ?? [];
     const leads = packList(t.leads, assigned, colon);
     const goal = clean(section.guidance) || sectionTitle;
-    const notes = (spoken: string) =>
-      truncateText(`${timing(i)} ${t.notesGoal(goal.replace(/[.\s]+$/, ""))} ${spoken} ${t.notesTodo}`, LIMITS.notes);
-
-    // Deck final avec squelette : les diapos de développement du squelette sont reprises.
-    const candidate = kind === "part" && baseSlides ? baseSlides[i] : undefined;
-    const reused = candidate && candidate.sectionId === section.id ? candidate : undefined;
-    if (reused) {
-      const spoken = reused.notes.replace(/^\s*\[[^\]]*\]\s*/, "").trim() || t.notesKind.part;
-      const own = reused.bullets.map((b) => bounded(b, LIMITS.bullet)).filter((b) => b.length > 0).slice(0, LIMITS.bullets);
-      // La consigne de lien ne prend jamais la place d'une puce de l'utilisateur : sans place, elle va dans les notes.
-      const linkAsBullet = reused.layout !== "two-columns" && own.length < LIMITS.bullets;
-      const linkInNotes = reused.layout !== "two-columns" && !linkAsBullet;
-      return {
-        layout: reused.layout === "title" ? "content" : reused.layout,
-        sectionId: section.id,
-        title: bounded(reused.title, LIMITS.slideTitle),
-        subtitle: bounded(reused.subtitle, LIMITS.slideSubtitle),
-        bullets: linkAsBullet ? [bounded(t.link, LIMITS.bullet), ...own] : own,
-        notes: truncateText(`${timing(i)} ${linkInNotes ? `${t.link}. ` : ""}${spoken}`, LIMITS.notes),
-      };
-    }
+    // Les éléments de notes passent en tête des puces (3 au plus), sauf sur une diapo deux colonnes (puces appariées).
+    const noteBullets = p.layout === "two-columns" ? [] : noteItems.slice(0, MAX_NOTE_BULLETS);
 
     let title = section.slides > 1 ? `${sectionTitle} (${p.index + 1}/${section.slides})` : sectionTitle;
     let subtitle = "";
@@ -354,23 +369,23 @@ function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
     switch (kind) {
       case "intro":
         if (p.index === 0) {
-          // L'accroche générique ne sert que si la consigne de la section ne dit rien.
+          // L'accroche générique ne sert que si le contenu type de la ligne ne dit rien.
           bullets = guidance.length === 0 ? [t.hook] : [];
-          if (theme.description) bullets.push(`${t.frame}${colon}${clean(theme.description)}`);
+          if (subject?.description) bullets.push(`${t.frame}${colon}${clean(subject.description)}`);
           if (problem) bullets.push(`${t.posedProblem}${colon}${problem}`);
           const terms = problem && problemTerms.length > 0 ? problemTerms : keywords.slice(0, 4);
           if (terms.length > 0) bullets.push(...packList(problem && problemTerms.length > 0 ? t.problemTerms : t.keyTerms, terms, colon).slice(0, 1));
           title = sectionTitle;
         }
-        bullets.push(...guidance.map((g) => todo(t, colon, g)), ...leads);
+        bullets.push(...noteBullets, ...guidance.map((g) => todo(t, colon, g)), ...leads);
         break;
       case "problem":
         if (p.index === 0) {
-          bullets = problem ? [problem, t.stake, t.tension] : [t.formulate(clean(theme.name)), t.stake, t.tension];
-          if (problem) subtitle = clean(theme.name);
+          bullets = problem ? [problem, t.stake, t.tension] : [t.formulate(subjectName || clean(ctx.name)), t.stake, t.tension];
+          if (problem && subjectName) subtitle = subjectName;
           title = sectionTitle;
         }
-        bullets.push(...guidance.map((g) => todo(t, colon, g)), ...leads);
+        bullets.push(...noteBullets, ...guidance.map((g) => todo(t, colon, g)), ...leads);
         break;
       case "plan":
         if (p.index === 0) {
@@ -378,7 +393,7 @@ function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
           if (problem) subtitle = problem;
           title = sectionTitle;
         }
-        bullets.push(...guidance.map((g) => todo(t, colon, g)), ...leads);
+        bullets.push(...noteBullets, ...guidance.map((g) => todo(t, colon, g)), ...leads);
         break;
       case "conclusion": {
         const last = p.index === section.slides - 1;
@@ -388,14 +403,14 @@ function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
           bullets.push(t.opening);
           title = sectionTitle;
         }
-        bullets.push(...guidance.map((g) => todo(t, colon, g)), ...leads);
+        bullets.push(...noteBullets, ...guidance.map((g) => todo(t, colon, g)), ...leads);
         break;
       }
       case "part":
         if (p.layout === "section") {
           title = sectionTitle;
           subtitle = clean(section.guidance);
-          bullets = [t.opener];
+          bullets = [...noteBullets, t.opener];
           if (problem) bullets.push(t.link);
         } else if (p.layout === "two-columns" && p.columns) {
           const [left, right] = p.columns;
@@ -404,42 +419,46 @@ function buildDeck({ ctx, theme, problem, base }: BuildInput): DeckSpec {
           bullets = [t.column(left), t.columnExample, t.column(right), t.columnExample];
           subtitle = assigned.length > 0 ? `${t.leads}${colon}${assigned.join(", ")}` : clean(section.guidance);
         } else {
-          if (assigned.length > 0) title = `${sectionTitle}${colon}${capitalize(assigned[0])}`;
-          bullets = [...leads, ...guidance.map((g) => todo(t, colon, g))];
+          if (assigned.length > 0) title = `${sectionTitle}${colon}${capitalize(assigned[0]!)}`;
+          bullets = [...noteBullets, ...leads, ...guidance.map((g) => todo(t, colon, g))];
           if (problem) bullets.push(t.link);
           bullets.push(t.example, t.figure);
         }
         break;
     }
 
+    const finalBullets = bullets.map((b) => bounded(b, LIMITS.bullet)).filter((b) => b.length > 0).slice(0, LIMITS.bullets);
+    // Aucun élément de notes n'est perdu : ce qui n'a pas trouvé place en puce va dans les notes d'orateur.
+    const overflow = noteItems.filter((item) => !finalBullets.includes(item));
+    const yours = overflow.length > 0 ? ` ${t.yourNotes}${colon}${overflow.join(" ; ")}.` : "";
+    const notes = truncateText(
+      `${timing(i)} ${t.notesGoal(goal.replace(/[.\s]+$/, ""))}${yours} ${t.notesKind[kind]} ${t.notesTodo}`,
+      LIMITS.notes,
+    );
+
     return {
       layout: p.layout,
       sectionId: section.id,
       title: bounded(title, LIMITS.slideTitle),
       subtitle: bounded(subtitle, LIMITS.slideSubtitle),
-      bullets: bullets.map((b) => bounded(b, LIMITS.bullet)).filter((b) => b.length > 0).slice(0, LIMITS.bullets),
-      notes: notes(t.notesKind[kind]),
+      bullets: finalBullets,
+      notes,
     };
   });
 
   return DeckSpecSchema.parse({
-    title: bounded(problem || theme.name, LIMITS.deckTitle),
+    title: bounded(title, LIMITS.deckTitle),
     subtitle: cover.subtitle,
     slides: [cover, ...slides],
   });
 }
 
-/** Squelette générique d'un thème : une trame conforme au gabarit, sans problématique. */
-export function buildFreeSkeleton(ctx: ProgramContext, theme: ThemeRef): DeckSpec {
-  return buildDeck({ ctx, theme, problem: null, base: null });
-}
-
 /**
- * Deck du jour J : la problématique en titre, posée en introduction, rappelée
- * en conclusion. Si le squelette fourni est conforme au gabarit, ses diapos de
- * développement sont reprises (minutage recalculé) ; sinon tout est généré.
+ * Deck du jour J sans IA : la problématique en titre, posée en introduction,
+ * rappelée en conclusion ; le contenu type de chaque ligne devient des
+ * consignes « À compléter » ; les mots-clés et les notes du sujet sont répartis
+ * sur les diapos de développement. Sans sujet : problématique et trame seules.
  */
-export function buildFreeFinalDeck(ctx: ProgramContext, theme: ThemeRef, skeleton: DeckSpec | null, problem: string): DeckSpec {
-  const base = skeleton && checkDeckAgainstTemplate(skeleton, ctx.template).length === 0 ? skeleton : null;
-  return buildDeck({ ctx, theme, problem: cleanProblem(problem) || null, base });
+export function buildFreeFinalDeck(ctx: ProgramContext, subject: ThemeRef | null, problem: string): DeckSpec {
+  return buildDeck({ ctx, subject, problem: cleanProblem(problem) || null });
 }

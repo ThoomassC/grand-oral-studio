@@ -76,84 +76,9 @@ export async function getFinalDeckContext(
   return { programId, ctx, brand, subject };
 }
 
-/** Contexte complet d'un thème possédé : programme, thème ciblé et squelette existant. */
-export async function getThemeGenerationContext(
-  userId: string,
-  themeId: string,
-): Promise<GenerationContext & { theme: ThemeRef; skeleton: DeckSpec | null }> {
-  const theme = await db().theme.findFirst({
-    where: { id: themeId, program: ownedProgram(userId) },
-    select: { programId: true },
-  });
-  if (!theme) throw new NotFoundError("thème");
-  const base = await getGenerationContext(userId, theme.programId);
-  const target = base.themes.find((t) => t.id === themeId);
-  if (!target) throw new NotFoundError("thème"); // supprimé entre les deux lectures
-  const skeleton = await db().deck.findFirst({
-    where: { themeId, programId: theme.programId, kind: "SKELETON" },
-    select: { id: true, spec: true },
-  });
-  return {
-    ...base,
-    theme: target,
-    skeleton: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Écritures
 // ---------------------------------------------------------------------------
-
-/**
- * Crée ou remplace LE squelette du thème. L'unicité est garantie par l'index
- * unique partiel `Deck_one_skeleton_per_theme` (themeId WHERE kind='SKELETON') ;
- * le code tente une mise à jour, sinon une insertion, et si une insertion
- * concurrente a gagné (P2002) il retombe sur la mise à jour. Jamais deux
- * squelettes, jamais d'erreur visible pour une double génération.
- */
-export async function upsertSkeleton(
-  userId: string,
-  themeId: string,
-  spec: DeckSpec,
-  /** Toujours fourni par le service ; null = inconnu. */
-  engine: DeckEngine | null = null,
-): Promise<{ deckId: string }> {
-  const json = specJson(spec);
-  const owned = { themeId, kind: "SKELETON" as const, program: ownedProgram(userId) };
-
-  const update = async (): Promise<{ deckId: string } | null> => {
-    const existing = await db().deck.findFirst({ where: owned, select: { id: true } });
-    if (!existing) return null;
-    const { count } = await db().deck.updateMany({ where: { id: existing.id, ...owned }, data: { spec: json, engine } });
-    return count === 1 ? { deckId: existing.id } : null;
-  };
-
-  const updated = await update();
-  if (updated) return updated;
-
-  const theme = await db().theme.findFirst({
-    where: { id: themeId, program: ownedProgram(userId) },
-    select: { programId: true },
-  });
-  if (!theme) throw new NotFoundError("thème");
-
-  try {
-    const created = await db().deck.create({
-      data: { programId: theme.programId, themeId, kind: "SKELETON", spec: json, engine },
-      select: { id: true },
-    });
-    return { deckId: created.id };
-  } catch (error) {
-    const code = prismaErrorCode(error);
-    if (code === "P2002") {
-      const retried = await update();
-      if (retried) return retried;
-    }
-    // P2003 : le thème a été supprimé pendant la génération.
-    if (code === "P2003") throw new NotFoundError("thème");
-    throw error;
-  }
-}
 
 /**
  * Crée un deck final. Autorisation revérifiée dans la transaction (programme
@@ -219,13 +144,13 @@ export async function findRecentFinalDeck(
 }
 
 export const DECK_CHANGED_MESSAGE =
-  "Ce diaporama a changé entre-temps (régénération ou autre onglet). Rechargez la page pour voir la dernière version.";
+  "Ce diaporama a changé entre-temps (autre onglet). Rechargez la page pour voir la dernière version.";
 
 /**
  * Remplace une diapo. read → modify → write sous verrou de ligne (FOR UPDATE).
  *
  * Concurrence optimiste : si `expectedUpdatedAt` (ISO) est fourni et que le deck
- * a été modifié depuis (autre onglet, régénération du squelette), l'écriture
+ * a été modifié depuis (autre onglet), l'écriture
  * est refusée (ConflictError) au lieu d'écraser silencieusement l'autre version.
  */
 export async function updateDeckSlide(
@@ -257,16 +182,6 @@ export async function updateDeckSlide(
   });
 }
 
-/** Thèmes du programme (possédé) qui ont déjà un squelette. */
-export async function listSkeletonThemeIds(userId: string, programId: string): Promise<Set<string>> {
-  const rows = await db().deck.findMany({
-    where: { programId, kind: "SKELETON", program: ownedProgram(userId) },
-    select: { themeId: true },
-  });
-  // Un squelette a toujours un sujet (CHECK) : le filtre ne sert qu'au typage.
-  return new Set(rows.flatMap((r) => (r.themeId === null ? [] : [r.themeId])));
-}
-
 export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string | null }> {
   return db().$transaction(async (tx) => {
     const deck = await tx.deck.findFirst({
@@ -288,24 +203,16 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   const row = await db().deck.findFirst({
     where: { id: deckId, program: ownedProgram(userId) },
     include: {
-      theme: {
-        select: {
-          name: true,
-          // Au plus un squelette par thème (index unique partiel) : lu pour la relecture d'un deck final.
-          decks: { where: { kind: "SKELETON" }, select: { id: true, spec: true }, take: 1 },
-        },
-      },
+      theme: { select: { name: true } },
       program: { select: { id: true, name: true, brand: true, template: true } },
     },
   });
   if (!row) throw new NotFoundError("deck");
   const view: DeckView = toDeckView(row);
-  const skeleton = view.kind === "FINAL" ? row.theme?.decks[0] : undefined;
   return {
     ...view,
     updatedAt: view.updatedAt.toISOString(),
     themeName: row.theme?.name ?? null,
-    skeletonSpec: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
     program: {
       id: row.program.id,
       name: row.program.name,

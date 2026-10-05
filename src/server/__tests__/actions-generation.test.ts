@@ -21,79 +21,86 @@ const getEngineForUser = vi.fn<(userId: string) => Promise<Resolved>>(async () =
 vi.mock("@/server/ai", () => ({ getEngineForUser: (userId: string) => getEngineForUser(userId) }));
 
 const service = {
-  generateSkeleton: vi.fn(),
-  generateAllSkeletons: vi.fn(),
+  generateFinalDeck: vi.fn(),
   classifyProblem: vi.fn(),
 };
 vi.mock("@/server/services/generation", () => ({
-  generateSkeleton: (...args: unknown[]) => service.generateSkeleton(...args),
-  generateAllSkeletons: (...args: unknown[]) => service.generateAllSkeletons(...args),
+  generateFinalDeck: (...args: unknown[]) => service.generateFinalDeck(...args),
   classifyProblem: (...args: unknown[]) => service.classifyProblem(...args),
 }));
 
 const actions = await import("@/server/actions/generation");
 
+const PROBLEM = "Comment concilier mobilité et sobriété en ville ?";
+
 beforeEach(() => {
   revalidatePath.mockReset();
-  service.generateSkeleton.mockReset();
-  service.generateAllSkeletons.mockReset();
+  service.generateFinalDeck.mockReset();
   service.classifyProblem.mockReset();
 });
 
-describe("action generateSkeleton", () => {
-  it("devrait revalider les pages du programme du thème régénéré", async () => {
-    service.generateSkeleton.mockResolvedValue({ deckId: "deck-1", warnings: [], programId: "prog-1" });
-    const result = await actions.generateSkeleton("theme-1");
-    expect(result).toEqual({ ok: true, data: { deckId: "deck-1", warnings: [] } });
+describe("action generateFinalDeck", () => {
+  it("devrait transmettre le sujet et revalider les pages du projet", async () => {
+    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-1", warnings: [], reused: false });
+    const result = await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
+    expect(result).toEqual({ ok: true, data: { deckId: "deck-1" } });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({ programId: "prog-1", themeId: "theme-1", problem: PROBLEM });
     expect(revalidatePath).toHaveBeenCalledWith("/projets/prog-1", "layout");
   });
-});
 
-describe("action generateAllSkeletons", () => {
-  it("devrait transmettre le mode « missing » par défaut", async () => {
-    service.generateAllSkeletons.mockResolvedValue([]);
-    await actions.generateAllSkeletons("prog-1");
-    expect(service.generateAllSkeletons.mock.calls[0]![3]).toBe("missing");
+  it("devrait accepter un deck sans sujet (themeId null)", async () => {
+    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-2", warnings: [], reused: false });
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM);
+    expect(result).toEqual({ ok: true, data: { deckId: "deck-2" } });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({ programId: "prog-1", themeId: null, problem: PROBLEM });
   });
 
-  it("devrait transmettre le mode « all » quand il est demandé", async () => {
-    service.generateAllSkeletons.mockResolvedValue([]);
-    await actions.generateAllSkeletons("prog-1", "all");
-    expect(service.generateAllSkeletons.mock.calls[0]![3]).toBe("all");
-  });
-
-  it("devrait refuser un mode inconnu", async () => {
-    const result = await actions.generateAllSkeletons("prog-1", "tout" as "all");
+  it.each([
+    { label: "un chemin", themeId: "../x" },
+    { label: "une chaîne vide", themeId: "" },
+    { label: "undefined (ni sujet ni null explicite)", themeId: undefined },
+  ])("devrait refuser un identifiant de sujet invalide : $label", async ({ themeId }) => {
+    const result = await actions.generateFinalDeck("prog-1", themeId as unknown as string | null, PROBLEM);
     expect(result.ok).toBe(false);
-    expect(service.generateAllSkeletons).not.toHaveBeenCalled();
+    expect(service.generateFinalDeck).not.toHaveBeenCalled();
+  });
+
+  it("devrait refuser une problématique trop courte sans appeler le service", async () => {
+    const result = await actions.generateFinalDeck("prog-1", null, "Ok ?");
+    expect(result.ok).toBe(false);
+    expect(service.generateFinalDeck).not.toHaveBeenCalled();
+  });
+
+  it("ne devrait plus exposer la génération de squelettes", () => {
+    expect(Object.keys(actions).sort()).toEqual(["classifyProblem", "generateFinalDeck"]);
   });
 });
 
 describe("choix du moteur et de la facturation", () => {
   it("devrait résoudre le moteur de l'utilisateur connecté et transmettre fournisseur et facturation", async () => {
     getEngineForUser.mockResolvedValueOnce({ engine: "claude", provider: { name: "anthropic:x" }, billing: "user" });
-    service.generateSkeleton.mockResolvedValue({ deckId: "d", warnings: [], programId: "p" });
-    await actions.generateSkeleton("theme-1");
+    service.generateFinalDeck.mockResolvedValue({ deckId: "d", warnings: [], reused: false });
+    await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
     expect(getEngineForUser).toHaveBeenCalledWith("user-1");
-    expect(service.generateSkeleton.mock.calls[0]![2]).toMatchObject({ billing: "user", ai: { name: "anthropic:x" } });
+    expect(service.generateFinalDeck.mock.calls[0]![2]).toMatchObject({ billing: "user", ai: { name: "anthropic:x" } });
   });
 
   it("devrait passer en mode gratuit quand le moteur gratuit est retenu", async () => {
     getEngineForUser.mockResolvedValueOnce({ engine: "free" });
-    service.generateSkeleton.mockResolvedValue({ deckId: "d", warnings: [], programId: "p" });
-    await actions.generateSkeleton("theme-1");
-    expect(service.generateSkeleton.mock.calls[0]![2]).toMatchObject({ mode: "free" });
+    service.generateFinalDeck.mockResolvedValue({ deckId: "d", warnings: [], reused: false });
+    await actions.generateFinalDeck("prog-1", null, PROBLEM);
+    expect(service.generateFinalDeck.mock.calls[0]![2]).toMatchObject({ mode: "free" });
   });
 
   it("devrait renvoyer le message Configuration IA quand le moteur choisi est indisponible (pas de bascule)", async () => {
     const { AiKeyRequiredError } = await import("@/server/errors");
     getEngineForUser.mockRejectedValueOnce(new AiKeyRequiredError());
-    const result = await actions.generateSkeleton("theme-1");
+    const result = await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
     expect(result).toEqual({
       ok: false,
       error: "Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.",
     });
-    expect(service.generateSkeleton).not.toHaveBeenCalled();
+    expect(service.generateFinalDeck).not.toHaveBeenCalled();
   });
 
   it("devrait reconnaître sans IA (avec la raison) quand le moteur choisi est indisponible le jour J", async () => {

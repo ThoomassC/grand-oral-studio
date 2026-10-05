@@ -70,7 +70,7 @@ export interface ProgramDetail {
 }
 
 /**
- * Deck accompagné de ce qu'il faut pour l'exporter (charte et gabarit du
+ * Deck accompagné de ce qu'il faut pour l'exporter (apparence et trame du
  * programme). `updatedAt` en ISO : c'est la version à renvoyer à updateDeckSlide.
  */
 export interface DeckWithProgram extends Omit<DeckView, "updatedAt"> {
@@ -78,8 +78,6 @@ export interface DeckWithProgram extends Omit<DeckView, "updatedAt"> {
   /** null : deck final sans sujet. */
   themeName: string | null;
   program: { id: string; name: string; brand: Brand; template: PromptTemplate };
-  /** Deck final : squelette actuel de son sujet (relecture, contrôle de recopie) ; null pour un squelette, sans sujet ou sans squelette. */
-  skeletonSpec: DeckSpec | null;
 }
 
 export interface FinalDeckSummary {
