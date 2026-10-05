@@ -17,8 +17,8 @@ const LIST_LIMIT = 200;
 
 /**
  * Liste des projets avec leur avancement. Deux requêtes, quel que soit le nombre
- * de projets : la liste (compteurs de thèmes et de squelettes agrégés), puis un
- * GROUP BY des decks finaux pour ces projets. Pas de N+1.
+ * de projets : la liste (compteur de sujets agrégé), puis un GROUP BY des decks
+ * finaux pour ces projets. Pas de N+1.
  */
 export async function listPrograms(userId: string, client: Db = db()): Promise<ProgramSummary[]> {
   const rows = await client.program.findMany({
@@ -33,7 +33,7 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
       templateSavedAt: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { themes: true, decks: { where: { kind: "SKELETON" } } } },
+      _count: { select: { themes: true } },
     },
   });
   if (rows.length === 0) return [];
@@ -48,10 +48,9 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
 
   return rows.map((r) => {
     const { doneCount, total, nextStep } = computeProjectProgress({
-      themeCount: r._count.themes,
+      subjectCount: r._count.themes,
       brandSavedAt: r.brandSavedAt?.toISOString() ?? null,
       templateSavedAt: r.templateSavedAt?.toISOString() ?? null,
-      skeletonCount: r._count.decks,
       finalDeckCount: finalsByProgram.get(r.id) ?? 0,
     });
     return {
@@ -61,14 +60,12 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       themeCount: r._count.themes,
-      // Un squelette au plus par thème (index unique partiel) : compter les decks SKELETON = compter les thèmes couverts.
-      skeletonCount: r._count.decks,
       progress: { doneCount, total, nextStep },
     };
   });
 }
 
-/** Programme avec ses thèmes ordonnés et le squelette de chaque thème (une seule requête). */
+/** Programme avec ses sujets ordonnés et l'ancien squelette (version 1.0) de chacun, listé dans Decks (une seule requête). */
 export async function getProgram(userId: string, programId: string): Promise<ProgramDetail> {
   const row = await db().program.findFirst({
     where: { id: programId, ...ownedProgram(userId) },
@@ -106,10 +103,9 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     themes,
     finalDeckCount,
     progress: computeProjectProgress({
-      themeCount: themes.length,
+      subjectCount: themes.length,
       brandSavedAt,
       templateSavedAt,
-      skeletonCount: themes.filter((t) => t.skeleton !== null).length,
       finalDeckCount,
       template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),

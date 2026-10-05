@@ -1,105 +1,57 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makePrepare, makeSteps } from "./fixtures";
 
-let pathname = "/projets/p1/charte";
+let pathname = "/projets/p1/apparence";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => ({ push: vi.fn() }) }));
 
-const { StepNav, StepBlockedNotice } = await import("@/components/projects/StepNav");
-const { PrepareNav } = await import("@/components/projects/PrepareNav");
+const { StepNav } = await import("@/components/projects/StepNav");
 
 afterEach(cleanup);
 
 describe("StepNav", () => {
-  it("devrait enchaîner Thèmes → Charte → Gabarit → Squelettes", () => {
-    pathname = "/projets/p1/charte";
-    render(<StepNav programId="p1" prepare={makePrepare()} steps={makeSteps([])} />);
-    expect(screen.getByRole("link", { name: /Étape précédente\s?: Thèmes/ })).toHaveAttribute("href", "/projets/p1");
-    expect(screen.getByRole("link", { name: /Étape suivante : Gabarit/ })).toHaveAttribute("href", "/projets/p1/gabarit");
-  });
-
-  it("ne devrait pas proposer d'étape précédente sur les thèmes", () => {
-    pathname = "/projets/p1";
-    render(<StepNav programId="p1" prepare={makePrepare()} steps={makeSteps([])} />);
+  it("devrait mener de l'apparence à la trame, sans étape précédente, avec le raccourci vers le Jour J", () => {
+    pathname = "/projets/p1/apparence";
+    render(<StepNav programId="p1" />);
     expect(screen.queryByRole("link", { name: /Étape précédente/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Étape suivante : Charte/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Étape suivante : Trame$/ })).toHaveAttribute("href", "/projets/p1/trame");
+    expect(screen.getByRole("link", { name: /^Passer au Jour J$/ })).toHaveAttribute("href", "/projets/p1/jour-j");
   });
 
-  it("devrait proposer de passer aux squelettes dès qu'il y a un thème", () => {
-    pathname = "/projets/p1";
-    const { rerender } = render(<StepNav programId="p1" prepare={makePrepare()} steps={makeSteps([])} />);
-    expect(screen.queryByRole("link", { name: /Passer aux squelettes/ })).not.toBeInTheDocument();
-    rerender(<StepNav programId="p1" prepare={makePrepare({ themes: true })} steps={makeSteps(["prepare"])} />);
-    expect(screen.getByRole("link", { name: /Passer aux squelettes/ })).toHaveAttribute("href", "/projets/p1/squelettes");
+  it("devrait enchaîner Apparence → Trame → Sujets depuis la trame", () => {
+    pathname = "/projets/p1/trame";
+    render(<StepNav programId="p1" />);
+    expect(screen.getByRole("link", { name: /Étape précédente\s?: Apparence/ })).toHaveAttribute("href", "/projets/p1/apparence");
+    expect(screen.getByRole("link", { name: /^Étape suivante : Sujets$/ })).toHaveAttribute("href", "/projets/p1/trame/sujets");
+    expect(screen.getByRole("link", { name: /^Passer au Jour J$/ })).toHaveAttribute("href", "/projets/p1/jour-j");
   });
 
-  it("devrait nommer la vraie destination de l'étape précédente des squelettes (le gabarit)", () => {
-    pathname = "/projets/p1/squelettes";
-    render(<StepNav programId="p1" prepare={makePrepare({ themes: true })} steps={makeSteps(["prepare", "skeletons"])} />);
-    expect(screen.getByRole("link", { name: /Étape précédente\s?: Gabarit/ })).toHaveAttribute("href", "/projets/p1/gabarit");
-    expect(screen.getByRole("link", { name: /^Étape suivante : Jour J$/ })).toBeInTheDocument();
-  });
-
-  it("devrait dire que l'étape suivante est bloquée, et pourquoi", () => {
-    pathname = "/projets/p1/squelettes";
-    render(<StepNav programId="p1" prepare={makePrepare({ themes: true })} steps={makeSteps(["prepare"], { day: "skeletons" })} />);
-    expect(screen.getByRole("link", { name: /Étape suivante : Jour J.*bloquée : Générez d'abord les squelettes/ })).toHaveAttribute(
-      "href",
-      "/projets/p1/jour-j",
-    );
+  it("devrait mener des sujets au Jour J, sans raccourci redondant", () => {
+    pathname = "/projets/p1/trame/sujets";
+    render(<StepNav programId="p1" />);
+    expect(screen.getByRole("link", { name: /Étape précédente\s?: Trame/ })).toHaveAttribute("href", "/projets/p1/trame");
+    expect(screen.getByRole("link", { name: /^Étape suivante : Jour J$/ })).toHaveAttribute("href", "/projets/p1/jour-j");
+    expect(screen.queryByRole("link", { name: /Passer au Jour J/ })).not.toBeInTheDocument();
   });
 
   it("devrait mener aux diaporamas depuis le Jour J", () => {
     pathname = "/projets/p1/jour-j";
-    render(<StepNav programId="p1" prepare={makePrepare()} steps={makeSteps([])} />);
+    render(<StepNav programId="p1" />);
+    expect(screen.getByRole("link", { name: /Étape précédente\s?: Sujets/ })).toHaveAttribute("href", "/projets/p1/trame/sujets");
     expect(screen.getByRole("link", { name: /Voir les diaporamas/ })).toHaveAttribute("href", "/projets/p1/decks");
+    expect(screen.queryByRole("link", { name: /Passer au Jour J/ })).not.toBeInTheDocument();
   });
 
-  it("ne devrait rien afficher hors des pages d'étape", () => {
-    pathname = "/projets/p1/decks";
-    const { container } = render(<StepNav programId="p1" prepare={makePrepare()} steps={makeSteps([])} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe("PrepareNav", () => {
-  it("devrait proposer Thèmes, Charte et Gabarit avec leur état, la page courante marquée", () => {
-    pathname = "/projets/p1/charte";
-    render(<PrepareNav programId="p1" items={makePrepare({ themes: true, template: true })} />);
-    const nav = screen.getByRole("navigation", { name: /Préparer/ });
-    expect(nav.querySelectorAll("a")).toHaveLength(3);
-    expect(screen.getByRole("link", { name: /Thèmes.*2 thèmes/ })).toHaveAttribute("href", "/projets/p1");
-    expect(screen.getByRole("link", { name: /Charte.*Par défaut/ })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: /Gabarit.*Personnalisé/ })).toHaveAttribute("href", "/projets/p1/gabarit");
+  it("ne devrait jamais dire une étape bloquée : l'étape suivante reste l'action principale", () => {
+    pathname = "/projets/p1/trame/sujets";
+    render(<StepNav programId="p1" />);
+    const next = screen.getByRole("link", { name: /Étape suivante/ });
+    expect(next).toHaveClass("opale-button--primary");
+    expect(next).not.toHaveTextContent(/bloquée/);
   });
 
-  it("devrait signaler les thèmes obligatoires et ne proposer de sauter qu'avec un thème", () => {
-    pathname = "/projets/p1";
-    const { rerender } = render(<PrepareNav programId="p1" items={makePrepare()} />);
-    expect(screen.getByRole("link", { name: /Thèmes.*Obligatoire/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Passer aux squelettes/ })).not.toBeInTheDocument();
-    rerender(<PrepareNav programId="p1" items={makePrepare({ themes: true })} />);
-    expect(screen.getByRole("link", { name: /Passer aux squelettes/ })).toHaveAttribute("href", "/projets/p1/squelettes");
-  });
-
-  it("ne devrait rien afficher hors de Préparer", () => {
-    pathname = "/projets/p1/squelettes";
-    const { container } = render(<PrepareNav programId="p1" items={makePrepare()} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe("StepBlockedNotice", () => {
-  it("devrait expliquer le prérequis manquant avec un lien vers son étape", () => {
-    pathname = "/projets/p1/squelettes";
-    render(<StepBlockedNotice programId="p1" steps={makeSteps([], { skeletons: "prepare" })} />);
-    expect(screen.getByText(/Ajoutez d'abord des thèmes/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Étape 1 · Préparer/ })).toHaveAttribute("href", "/projets/p1");
-  });
-
-  it("ne devrait rien afficher si l'étape n'est pas bloquée", () => {
-    pathname = "/projets/p1/charte";
-    const { container } = render(<StepBlockedNotice programId="p1" steps={makeSteps([])} />);
+  it.each(["/projets/p1/decks", "/projets/p1/decks/d1", "/projets/p1"])("ne devrait rien afficher hors des pages d'étape (%s)", (path) => {
+    pathname = path;
+    const { container } = render(<StepNav programId="p1" />);
     expect(container).toBeEmptyDOMElement();
   });
 });

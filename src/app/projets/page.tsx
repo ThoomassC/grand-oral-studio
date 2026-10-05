@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
 import { ProgramActions } from "@/components/programs/ProgramActions";
 import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
+import { projectHomeHref } from "@/components/projects/steps";
 import { formatDate, plural } from "@/components/ui/format";
 import { listPrograms } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -21,7 +22,7 @@ export default async function ProgramsPage() {
         <CreateProgramDialog />
       </div>
       <p className="mt-2 max-w-2xl text-muted">
-        Un projet regroupe les thèmes d&apos;une formation, sa charte graphique et son gabarit de présentation.
+        Un projet réunit l&apos;apparence de vos diaporamas, leur trame et, si besoin, les sujets possibles de l&apos;oral.
       </p>
 
       <section aria-labelledby="liste-programmes" className="mt-8">
@@ -31,7 +32,7 @@ export default async function ProgramsPage() {
         {programs.length === 0 ? (
           <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
             <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
-            <p className="text-muted">Créez votre premier projet, puis ajoutez ses thèmes.</p>
+            <p className="text-muted">Créez votre premier projet, puis choisissez son apparence et sa trame.</p>
             <div className="mt-2">
               <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
             </div>
@@ -52,7 +53,7 @@ export default async function ProgramsPage() {
                       <h3 className="text-xl">
                         <Link
                           id={`programme-${p.id}`}
-                          href={`/projets/${p.id}`}
+                          href={projectHomeHref(p.id)}
                           className="underline-offset-4 hover:underline"
                         >
                           {p.name}
@@ -61,7 +62,7 @@ export default async function ProgramsPage() {
                       {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                         <div className="flex gap-1 whitespace-nowrap">
-                          <dt className="text-muted">Thèmes :</dt>
+                          <dt className="text-muted">Sujets :</dt>
                           <dd className="num font-bold">{p.themeCount}</dd>
                         </div>
                         <div className="flex gap-1 whitespace-nowrap">

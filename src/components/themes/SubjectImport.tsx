@@ -1,9 +1,9 @@
 import type { Brand, PromptTemplate } from "@/domain/schemas";
+import { IMPORT_ANCHORS } from "@/components/projects/steps";
 import { SubjectPromptImport } from "./SubjectPromptImport";
 
-/** Ancre du bloc (contrat `IMPORT_ANCHORS.subjects` de steps.ts). */
-const ANCHOR = "importer-sujets";
-const TITLE_ID = "importer-sujets-titre";
+const ANCHOR = IMPORT_ANCHORS.subjects;
+const TITLE_ID = `${ANCHOR}-titre`;
 
 /**
  * Bloc « Importer des sujets depuis un texte » de la page Sujets : la liste des

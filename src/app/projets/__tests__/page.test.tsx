@@ -26,7 +26,6 @@ function program(id: string, name: string, nextStep: ProgramSummary["progress"][
     name,
     description: "",
     themeCount: 3,
-    skeletonCount: 0,
     createdAt: new Date("2026-09-01"),
     updatedAt: new Date("2026-09-02"),
     progress: { doneCount, total: 3, nextStep },
@@ -39,7 +38,7 @@ async function renderPage() {
 
 describe("Page /projets", () => {
   it("devrait placer « Nouveau projet » à côté du titre, sans formulaire latéral", async () => {
-    list.mockResolvedValue([program("p1", "BTS SIO", "prepare", 0)]);
+    list.mockResolvedValue([program("p1", "BTS SIO", "appearance", 0)]);
     await renderPage();
     expect(list).toHaveBeenCalledWith("u1");
     expect(screen.getByRole("heading", { name: "Projets", level: 1 })).toBeInTheDocument();
@@ -49,7 +48,7 @@ describe("Page /projets", () => {
   });
 
   it("devrait ouvrir la modale de création depuis l'en-tête", async () => {
-    list.mockResolvedValue([program("p1", "BTS SIO", "prepare", 0)]);
+    list.mockResolvedValue([program("p1", "BTS SIO", "appearance", 0)]);
     await renderPage();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Nouveau projet" }));
@@ -58,14 +57,14 @@ describe("Page /projets", () => {
   });
 
   it("devrait garder le bouton d'avancement et ajouter le menu « ⋮ » sur chaque ligne", async () => {
-    list.mockResolvedValue([program("p1", "BTS SIO", "skeletons", 1), program("p2", "Master MIAGE", "day", 2)]);
+    list.mockResolvedValue([program("p1", "BTS SIO", "template", 1), program("p2", "Master MIAGE", "day", 2)]);
     await renderPage();
     const rows = within(screen.getByRole("region", { name: "Liste des projets" })).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
 
     const [first, second] = rows as [HTMLElement, HTMLElement];
     // jsdom perd l'espace en tête du texte masqué (« — nom ») ; un navigateur le garde.
-    expect(within(first).getByRole("link", { name: /^Reprendre : Squelettes\s*— BTS SIO$/ })).toHaveAttribute("href", "/projets/p1/squelettes");
+    expect(within(first).getByRole("link", { name: /^Reprendre : Trame\s*— BTS SIO$/ })).toHaveAttribute("href", "/projets/p1/trame");
     expect(within(first).getByRole("button", { name: "Actions du projet BTS SIO" })).toHaveAttribute("aria-haspopup", "menu");
     expect(within(second).getByRole("link", { name: /^Commencer le Jour J\s*— Master MIAGE$/ })).toHaveAttribute("href", "/projets/p2/jour-j");
     expect(within(second).getByRole("button", { name: "Actions du projet Master MIAGE" })).toBeInTheDocument();
@@ -74,6 +73,15 @@ describe("Page /projets", () => {
     expect(screen.queryByRole("button", { name: /^Dupliquer/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Supprimer/ })).not.toBeInTheDocument();
     expect(screen.getByText("2 projets")).toBeInTheDocument();
+  });
+
+  it("devrait ouvrir un projet sur son apparence et compter ses sujets", async () => {
+    list.mockResolvedValue([program("p1", "BTS SIO", "appearance", 0)]);
+    await renderPage();
+    expect(screen.getByRole("link", { name: "BTS SIO" })).toHaveAttribute("href", "/projets/p1/apparence");
+    expect(screen.getByRole("link", { name: /^Reprendre : Apparence/ })).toHaveAttribute("href", "/projets/p1/apparence");
+    expect(screen.getByText("Sujets :").nextElementSibling).toHaveTextContent("3");
+    expect(screen.queryByText(/Thèmes/)).not.toBeInTheDocument();
   });
 
   it("devrait proposer de créer le premier projet quand la liste est vide", async () => {

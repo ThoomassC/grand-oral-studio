@@ -14,12 +14,11 @@ export interface ProgramSummary {
   id: string;
   name: string;
   description: string;
+  /** Nombre de sujets (les « thèmes » du code). */
   themeCount: number;
-  /** Thèmes disposant d'un squelette. */
-  skeletonCount: number;
   createdAt: Date;
   updatedAt: Date;
-  /** Avancement du parcours en 5 étapes (résumé, sans le détail des étapes). */
+  /** Avancement du parcours en 3 étapes : Apparence, Trame, Jour J (résumé, sans le détail des étapes). */
   progress: ProjectProgressSummary;
 }
 
@@ -65,7 +64,7 @@ export interface ProgramDetail {
   themes: ThemeWithSkeleton[];
   /** Tous les decks finaux du projet, sujet ou non (le compteur par sujet ne voit pas les decks sans sujet). */
   finalDeckCount: number;
-  /** Parcours du projet (cf. src/domain/progress.ts). */
+  /** Parcours du projet en 3 étapes, avec les onglets de la Trame (cf. src/domain/progress.ts). */
   progress: ProjectProgress;
 }
 

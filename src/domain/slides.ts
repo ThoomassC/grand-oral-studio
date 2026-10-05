@@ -41,7 +41,7 @@ export function slideBudgetWarning(total: number, durationMinutes: number): stri
   return (
     `${verdict} : ${total} diapos pour ${durationMinutes} min, soit ${pace((durationMinutes * 60) / total)} ` +
     `(repère conseillé : ${suggested} diapos, ~1 min 30 chacune ; écart ${percent}). ` +
-    "Vous pouvez enregistrer tel quel si vos consignes imposent ce rythme ; sinon, ajustez la durée ou le nombre de diapos par section."
+    "Vous pouvez enregistrer tel quel si vos consignes imposent ce rythme ; sinon, ajustez la durée ou le nombre de diapos par ligne."
   );
 }
 
@@ -70,7 +70,7 @@ const MAX_COVER_SECONDS = 30;
  * Minutage de la trame. cover = min(30, total / nbDiapos). Les lignes avec `seconds` prennent leur durée
  * (répartie à parts égales entre leurs diapos) ; le temps restant (total − cover − Σ seconds, borné à 0)
  * est réparti à parts égales entre les DIAPOS des lignes sans durée. Sans aucune durée : strictement
- * identique au calcul v1.0.1 de prompts.ts (`templateLines`) et de free/skeleton.ts (`buildDeck`).
+ * identique au calcul v1.0.1 de prompts.ts (`templateLines`) et du moteur gratuit (`buildDeck`, free/outline.ts).
  */
 export function templateTimings(template: PromptTemplate): TemplateTimings {
   const totalSeconds = template.durationMinutes * 60;

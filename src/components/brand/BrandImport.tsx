@@ -2,11 +2,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@thomascaron/opale-ui"
 import type { Brand, PromptTemplate } from "@/domain/schemas";
 import { CurrentLogoProvider } from "@/components/themes/current-logo";
 import { SubjectPromptImport } from "@/components/themes/SubjectPromptImport";
+import { IMPORT_ANCHORS } from "@/components/projects/steps";
 import { BrandFileImport } from "./BrandFileImport";
 
-/** Ancre du bloc (contrat `IMPORT_ANCHORS.brand` de steps.ts). */
-const ANCHOR = "importer-apparence";
-const TITLE_ID = "importer-apparence-titre";
+const ANCHOR = IMPORT_ANCHORS.brand;
+const TITLE_ID = `${ANCHOR}-titre`;
 
 /**
  * Bloc « Partir d'un exemple » de la page Apparence, en deux modes (`Tabs`

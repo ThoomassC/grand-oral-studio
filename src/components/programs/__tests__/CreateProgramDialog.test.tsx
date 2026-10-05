@@ -100,7 +100,7 @@ describe("Modale de création d'un projet", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("devrait créer le projet puis ouvrir sa page", async () => {
+  it("devrait créer le projet puis ouvrir son apparence (étape 1)", async () => {
     create.mockResolvedValue({ ok: true, data: { id: "p42" } });
     const user = userEvent.setup();
     render(<CreateProgramDialog />);
@@ -109,7 +109,7 @@ describe("Modale de création d'un projet", () => {
     await user.type(within(dialog).getByLabelText(/^Description/), "Grand oral");
     await user.click(within(dialog).getByRole("button", { name: "Créer le projet" }));
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: "Master Management 2027", description: "Grand oral" }));
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/projets/p42"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projets/p42/apparence"));
     expect(await within(dialog).findByText("Projet créé. Ouverture…")).toBeInTheDocument();
   });
 

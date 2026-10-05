@@ -36,7 +36,7 @@ interface SlidePreviewProps {
   number?: number;
   /** Titre du deck, rappelé en pied de page comme dans le .pptx. */
   deckTitle?: string;
-  /** Tronque les textes (petites miniatures uniquement, ex. grille des squelettes). */
+  /** Tronque les textes (petites miniatures uniquement). */
   clamp?: boolean;
   /**
    * Masque l'aperçu aux technologies d'assistance quand le même texte est déjà

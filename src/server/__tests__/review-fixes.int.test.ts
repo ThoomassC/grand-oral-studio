@@ -58,13 +58,13 @@ describe("updateDeckSlide — concurrence optimiste", () => {
 });
 
 describe("compteurs de lecture", () => {
-  it("devrait exposer themeCount et skeletonCount dans listPrograms", async () => {
+  it("devrait exposer themeCount (sujets) dans listPrograms, sans compteur de squelettes", async () => {
     const { a, programId, themeIds } = await setup();
     await seedDeck(programId, themeIds[0], "SKELETON");
-    await seedDeck(programId, themeIds[1], "SKELETON");
     await seedDeck(programId, themeIds[1], "FINAL");
     const [summary] = await programs.listPrograms(a.id);
-    expect(summary).toMatchObject({ id: programId, themeCount: 3, skeletonCount: 2 });
+    expect(summary).toMatchObject({ id: programId, themeCount: 3 });
+    expect(summary).not.toHaveProperty("skeletonCount");
   });
 
   it("devrait exposer finalDeckCount par thème dans getProgram", async () => {

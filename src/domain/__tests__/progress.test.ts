@@ -1,185 +1,159 @@
 import { describe, expect, it } from "vitest";
-import { computeProjectProgress, type PrepareItemId, type ProjectProgress, type StepId } from "@/domain/progress";
+import {
+  computeProjectProgress,
+  STEP_ORDER,
+  type ProjectProgress,
+  type StepId,
+  type TemplateTabId,
+} from "@/domain/progress";
 
-const EMPTY = { themeCount: 0, brandSavedAt: null, templateSavedAt: null, skeletonCount: 0, finalDeckCount: 0 };
+const EMPTY = { subjectCount: 0, brandSavedAt: null, templateSavedAt: null, finalDeckCount: 0 };
 const SAVED = "2026-10-01T10:00:00.000Z";
 const TPL = { slides: 13, durationMinutes: 20 };
-const FULL = { themeCount: 9, brandSavedAt: SAVED, templateSavedAt: SAVED, skeletonCount: 9, finalDeckCount: 2, template: TPL };
+const FULL = { subjectCount: 9, brandSavedAt: SAVED, templateSavedAt: SAVED, finalDeckCount: 2, template: TPL };
 
 function step(p: ProjectProgress, id: StepId) {
   const s = p.steps.find((x) => x.id === id);
   if (!s) throw new Error(`étape ${id} absente`);
   return s;
 }
-function item(p: ProjectProgress, id: PrepareItemId) {
-  const i = p.prepare.find((x) => x.id === id);
-  if (!i) throw new Error(`élément ${id} absent`);
-  return i;
+function tab(p: ProjectProgress, id: TemplateTabId) {
+  const t = p.templateTabs.find((x) => x.id === id);
+  if (!t) throw new Error(`onglet ${id} absent`);
+  return t;
 }
 
 describe("computeProjectProgress — structure", () => {
-  it("devrait renvoyer les 3 étapes dans l'ordre, indexées de 1 à 3", () => {
+  it("devrait renvoyer les 3 étapes Apparence, Trame, Jour J, indexées de 1 à 3", () => {
     const p = computeProjectProgress(EMPTY);
     expect(p.steps.map((s) => [s.id, s.index])).toEqual([
-      ["prepare", 1],
-      ["skeletons", 2],
+      ["appearance", 1],
+      ["template", 2],
       ["day", 3],
     ]);
+    expect(STEP_ORDER).toEqual(["appearance", "template", "day"]);
     expect(p.total).toBe(3);
   });
 
-  it("devrait détailler la préparation : thèmes (requis), charte et gabarit (facultatifs), dans cet ordre", () => {
-    const p = computeProjectProgress(EMPTY);
-    expect(p.prepare.map((i) => [i.id, i.required])).toEqual([
-      ["themes", true],
-      ["brand", false],
-      ["template", false],
-    ]);
+  it("devrait détailler la trame en deux onglets : diapos puis sujets", () => {
+    expect(computeProjectProgress(EMPTY).templateTabs.map((t) => t.id)).toEqual(["slides", "subjects"]);
   });
 
-  it("devrait tout marquer à faire pour un projet neuf, l'étape suivante étant la préparation", () => {
+  it("ne devrait plus porter de blocage ni de détail « Préparer »", () => {
+    const p = computeProjectProgress(EMPTY);
+    for (const s of p.steps) expect(s).not.toHaveProperty("blockedBy");
+    expect(p).not.toHaveProperty("prepare");
+  });
+
+  it("devrait tout marquer à faire pour un projet neuf, l'étape suivante étant l'apparence", () => {
     const p = computeProjectProgress(EMPTY);
     expect(p.steps.every((s) => s.status === "todo")).toBe(true);
-    expect(p).toMatchObject({ doneCount: 0, nextStep: "prepare" });
+    expect(p).toMatchObject({ doneCount: 0, nextStep: "appearance" });
   });
 
   it("devrait tout marquer fait, sans étape suivante, pour un projet complet", () => {
     const p = computeProjectProgress(FULL);
     expect(p.steps.every((s) => s.status === "done")).toBe(true);
     expect(p).toMatchObject({ doneCount: 3, nextStep: null });
-    expect(p.steps.every((s) => s.blockedBy === null)).toBe(true);
-    expect(p.prepare.every((i) => i.status === "done")).toBe(true);
+    expect(p.templateTabs.every((t) => t.status === "done")).toBe(true);
   });
 });
 
-describe("computeProjectProgress — préparation", () => {
-  it("devrait être faite dès 1 thème, même avec la charte et le gabarit par défaut", () => {
-    const p = computeProjectProgress({ ...EMPTY, themeCount: 1 });
-    expect(step(p, "prepare").status).toBe("done");
-    expect(item(p, "brand").status).toBe("default");
-    expect(item(p, "template").status).toBe("default");
+describe("computeProjectProgress — apparence", () => {
+  it("devrait être faite dès qu'elle a été enregistrée", () => {
+    const p = computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED });
+    expect(step(p, "appearance")).toMatchObject({ status: "done", summary: "Personnalisée" });
   });
 
-  it("ne devrait jamais être faite sans thème, même avec charte et gabarit enregistrés", () => {
-    const p = computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED, templateSavedAt: SAVED });
-    expect(step(p, "prepare").status).toBe("todo");
-    expect(item(p, "themes").status).toBe("todo");
-    expect(item(p, "brand").status).toBe("done");
-    expect(item(p, "template").status).toBe("done");
+  it("devrait rester à faire, « Par défaut », tant qu'elle n'a jamais été enregistrée", () => {
+    expect(step(computeProjectProgress(EMPTY), "appearance")).toMatchObject({ status: "todo", summary: "Par défaut" });
   });
 
-  it("thèmes : done dès 1 thème, sinon todo (jamais default)", () => {
-    expect(item(computeProjectProgress({ ...EMPTY, themeCount: 2 }), "themes").status).toBe("done");
-    expect(item(computeProjectProgress(EMPTY), "themes").status).toBe("todo");
-  });
-
-  it.each([
-    [{}, "9 thèmes · charte et gabarit par défaut"],
-    [{ brandSavedAt: SAVED }, "9 thèmes · charte personnalisée"],
-    [{ templateSavedAt: SAVED }, "9 thèmes · gabarit personnalisé"],
-    [{ brandSavedAt: SAVED, templateSavedAt: SAVED }, "9 thèmes · charte et gabarit personnalisés"],
-  ])("résumé de la préparation (%o) → %s", (over, summary) => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 9, ...over }), "prepare").summary).toBe(summary);
-  });
-
-  it("résumé de la préparation sans thème : « Aucun thème »", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED }), "prepare").summary).toBe("Aucun thème");
-  });
-
-  it("résumé au singulier pour 1 thème", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 1 }), "prepare").summary).toBe("1 thème · charte et gabarit par défaut");
-  });
-
-  it.each([
-    [0, "Aucun thème"],
-    [1, "1 thème"],
-    [9, "9 thèmes"],
-  ])("élément thèmes : %i → %s", (themeCount, summary) => {
-    expect(item(computeProjectProgress({ ...EMPTY, themeCount }), "themes").summary).toBe(summary);
-  });
-
-  it("élément charte : personnalisée ou par défaut", () => {
-    expect(item(computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED }), "brand").summary).toBe("Charte personnalisée");
-    expect(item(computeProjectProgress(EMPTY), "brand").summary).toBe("Charte par défaut");
-  });
-
-  it("élément gabarit : diapos et durée, préfixé « Gabarit par défaut » s'il n'a jamais été enregistré", () => {
-    expect(item(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED, template: TPL }), "template").summary).toBe("13 diapos · 20 min");
-    expect(item(computeProjectProgress({ ...EMPTY, template: TPL }), "template").summary).toBe("Gabarit par défaut · 13 diapos · 20 min");
-    expect(
-      item(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED, template: { slides: 1, durationMinutes: 5 } }), "template").summary,
-    ).toBe("1 diapo · 5 min");
-  });
-
-  it("élément gabarit sans détail fourni (liste des projets)", () => {
-    expect(item(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED }), "template").summary).toBe("Gabarit personnalisé");
-    expect(item(computeProjectProgress(EMPTY), "template").summary).toBe("Gabarit par défaut");
+  it("ne devrait pas dépendre des sujets", () => {
+    expect(step(computeProjectProgress({ ...EMPTY, subjectCount: 4 }), "appearance").status).toBe("todo");
   });
 });
 
-describe("computeProjectProgress — squelettes et jour J", () => {
-  it("squelettes : faits seulement quand chaque thème en a un", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 9, skeletonCount: 7 }), "skeletons").status).toBe("todo");
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 9, skeletonCount: 9 }), "skeletons").status).toBe("done");
+describe("computeProjectProgress — trame", () => {
+  it("devrait être faite dès qu'elle a été enregistrée, même sans sujet", () => {
+    expect(step(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED }), "template").status).toBe("done");
   });
 
-  it("squelettes : jamais faits sans thème (même avec un compteur incohérent)", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, skeletonCount: 3 }), "skeletons").status).toBe("todo");
-  });
-
-  it("jour J : fait dès 1 deck final", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 1, finalDeckCount: 1 }), "day").status).toBe("done");
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 1 }), "day").status).toBe("todo");
+  it("ne devrait pas être faite par les seuls sujets", () => {
+    expect(step(computeProjectProgress({ ...EMPTY, subjectCount: 3 }), "template").status).toBe("todo");
   });
 
   it.each([
-    [9, 7, "7/9 squelettes"],
-    [1, 0, "0/1 squelette"],
-    [2, 5, "2/2 squelettes"],
-    [0, 0, "Ajoutez d'abord des thèmes"],
-  ])("résumé squelettes : %i thèmes, %i squelettes → %s", (themeCount, skeletonCount, summary) => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount, skeletonCount }), "skeletons").summary).toBe(summary);
+    [{ templateSavedAt: SAVED, template: TPL }, "13 diapos · 20 min"],
+    [{ template: TPL }, "Par défaut · 13 diapos · 20 min"],
+    [{ templateSavedAt: SAVED, template: { slides: 1, durationMinutes: 5 } }, "1 diapo · 5 min"],
+    [{ templateSavedAt: SAVED }, "Personnalisée"],
+    [{}, "Par défaut"],
+    [{ templateSavedAt: SAVED, template: TPL, subjectCount: 3 }, "13 diapos · 20 min · 3 sujets"],
+    [{ template: TPL, subjectCount: 1 }, "Par défaut · 13 diapos · 20 min · 1 sujet"],
+    [{ subjectCount: 2 }, "Par défaut · 2 sujets"],
+  ])("résumé de la trame (%o) → %s", (over, summary) => {
+    expect(step(computeProjectProgress({ ...EMPTY, ...over }), "template").summary).toBe(summary);
+  });
+
+  it("onglet diapos : détail si enregistrée, « Par défaut » sinon", () => {
+    expect(tab(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED, template: TPL }), "slides")).toEqual({
+      id: "slides",
+      status: "done",
+      summary: "13 diapos · 20 min",
+    });
+    expect(tab(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED }), "slides").summary).toBe("Personnalisée");
+    expect(tab(computeProjectProgress({ ...EMPTY, template: TPL }), "slides")).toEqual({
+      id: "slides",
+      status: "default",
+      summary: "Par défaut",
+    });
+  });
+
+  it.each([
+    [0, "optional", "Facultatif"],
+    [1, "done", "1 sujet"],
+    [3, "done", "3 sujets"],
+  ])("onglet sujets : %i sujet(s) → %s, %s", (subjectCount, status, summary) => {
+    expect(tab(computeProjectProgress({ ...EMPTY, subjectCount }), "subjects")).toEqual({ id: "subjects", status, summary });
+  });
+});
+
+describe("computeProjectProgress — jour J", () => {
+  it("devrait être fait dès 1 diaporama, sans sujet ni personnalisation", () => {
+    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount: 1 }), "day").status).toBe("done");
+    expect(step(computeProjectProgress(EMPTY), "day").status).toBe("todo");
   });
 
   it.each([
     [0, "Aucun diaporama"],
     [1, "1 diaporama"],
     [2, "2 diaporamas"],
-  ])("résumé jour J : %i → %s", (finalDeckCount, summary) => {
-    expect(step(computeProjectProgress({ ...EMPTY, themeCount: 1, finalDeckCount }), "day").summary).toBe(summary);
+  ])("résumé du jour J : %i → %s", (finalDeckCount, summary) => {
+    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount }), "day").summary).toBe(summary);
   });
 });
 
-describe("computeProjectProgress — blockedBy et nextStep", () => {
-  it("devrait bloquer squelettes et jour J par la préparation tant qu'il n'y a aucun thème", () => {
-    const p = computeProjectProgress(EMPTY);
-    expect(p.steps.map((s) => [s.id, s.blockedBy])).toEqual([
-      ["prepare", null],
-      ["skeletons", "prepare"],
-      ["day", "prepare"],
-    ]);
-  });
-
-  it("ne devrait jamais bloquer à cause de la charte ou du gabarit", () => {
-    const p = computeProjectProgress({ ...EMPTY, themeCount: 1 });
-    expect(p.steps.map((s) => s.blockedBy)).toEqual([null, null, null]);
-    expect(p.nextStep).toBe("skeletons");
-  });
-
+describe("computeProjectProgress — nextStep et doneCount", () => {
   it("devrait désigner la première étape non faite, même si une suivante est faite", () => {
-    const p = computeProjectProgress({ ...EMPTY, themeCount: 3, skeletonCount: 1, finalDeckCount: 1 });
-    expect(p).toMatchObject({ nextStep: "skeletons", doneCount: 2 });
+    const p = computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED, finalDeckCount: 1 });
+    expect(p).toMatchObject({ nextStep: "template", doneCount: 2 });
   });
 
-  it("devrait désigner le jour J quand préparation et squelettes sont faits", () => {
-    expect(computeProjectProgress({ ...FULL, finalDeckCount: 0 }).nextStep).toBe("day");
+  it("devrait désigner le jour J quand apparence et trame sont enregistrées", () => {
+    expect(computeProjectProgress({ ...FULL, finalDeckCount: 0 })).toMatchObject({ nextStep: "day", doneCount: 2 });
+  });
+
+  it("devrait désigner l'apparence même quand seul le jour J est fait", () => {
+    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 3 })).toMatchObject({ nextStep: "appearance", doneCount: 1 });
   });
 });
 
 describe("computeProjectProgress — entrées hors bornes", () => {
   it("devrait traiter des compteurs négatifs ou NaN comme 0", () => {
-    const p = computeProjectProgress({ ...EMPTY, themeCount: -2, skeletonCount: -1, finalDeckCount: Number.NaN });
-    expect(step(p, "prepare").summary).toBe("Aucun thème");
-    expect(step(p, "day").status).toBe("todo");
+    const p = computeProjectProgress({ ...EMPTY, subjectCount: -2, finalDeckCount: Number.NaN, template: { slides: -1, durationMinutes: Number.NaN } });
+    expect(step(p, "template").summary).toBe("Par défaut · 0 diapo · 0 min");
+    expect(tab(p, "subjects").summary).toBe("Facultatif");
+    expect(step(p, "day")).toMatchObject({ status: "todo", summary: "Aucun diaporama" });
   });
 });

@@ -5,28 +5,29 @@ import { Duration, PREP_MINUTES, PrepDial, PrepTimeBadge } from "@/components/da
 import { SlidePreview, type SlideBrand, type SlidePreviewData } from "@/components/slides/SlidePreview";
 import { getUser } from "@/server/session";
 
+/** Le parcours d'un projet : Apparence, Trame, Jour J. L'IA n'intervient qu'à la troisième étape. */
 const STEPS = [
   {
-    title: "Configurer le projet",
-    text: "Listez les thèmes de votre projet, puis réglez la charte graphique et le gabarit : format, durée de l'oral, sections attendues.",
+    title: "Apparence",
+    text: "Couleurs, polices et logo de vos diaporamas : à la main, depuis un prompt ou depuis une présentation d'exemple. Sans IA.",
   },
   {
-    title: "Réviser les squelettes",
-    text: "L'IA prépare un diaporama squelette par thème. Vous les relisez et les complétez avant le jour J.",
+    title: "Trame",
+    text: "La suite des diapos et ce que chacune contient, et si besoin les sujets possibles avec vos notes. Sans IA : rien à générer avant le jour J.",
   },
   {
-    title: "Le jour J",
-    text: "Saisissez la problématique tirée au sort : l'IA reconnaît le thème, vous confirmez, et le deck complet avec notes d'orateur est prêt à exporter vers PowerPoint ou Canva.",
+    title: "Jour J",
+    text: "Saisissez la problématique tirée au sort : l'IA reconnaît le sujet et rédige le diaporama à partir de votre trame et de vos notes, avec les notes d'orateur, prêt à exporter vers PowerPoint ou Canva.",
   },
 ] as const;
 
 const DAY_TIMELINE = [
   { at: "0:00", text: "Vous recopiez la problématique tirée au sort." },
-  { at: "0:01", text: "L'IA reconnaît le thème du projet ; vous confirmez d'un clic." },
+  { at: "0:01", text: "L'IA reconnaît le sujet de la problématique ; vous confirmez d'un clic." },
   { at: "0:03", text: "Le deck complet, notes d'orateur comprises, est prêt à relire et à exporter." },
 ] as const;
 
-/** Charte d'exemple dans la palette d'Opale, pour les miniatures de l'accueil. */
+/** Apparence d'exemple dans la palette d'Opale, pour les miniatures de l'accueil. */
 const SAMPLE_BRAND: SlideBrand = {
   colors: { primary: "#23457A", secondary: "#5C574D", accent: "#F4AD15", background: "#FFFFFF", text: "#14100B" },
   fonts: { heading: "Georgia", body: "Arial" },
@@ -68,8 +69,9 @@ export default async function HomePage() {
             <span className="marker">prêt</span> en quelques minutes.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted">
-            Grand Oral Studio vous aide à préparer chaque thème à l&apos;avance, puis à produire le jour J un support
-            fidèle à votre charte, que vous relisez et ajustez pendant votre temps de préparation.
+            Grand Oral Studio vous aide à préparer l&apos;apparence et la trame de vos diaporamas à l&apos;avance, puis à
+            produire le jour J un support fidèle à votre trame, que vous relisez et ajustez pendant votre temps de
+            préparation.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <ButtonLink href="/inscription" size="large">
@@ -114,7 +116,7 @@ export default async function HomePage() {
       </section>
 
       <section aria-labelledby="etapes" className="border-t border-border py-12 sm:py-16">
-        <p className="eyebrow">Avant le jour J, puis le jour J</p>
+        <p className="eyebrow">L&apos;IA seulement le jour J</p>
         <h2 id="etapes" className="mt-2 text-2xl sm:text-3xl">
           En trois étapes
         </h2>
@@ -163,7 +165,7 @@ export default async function HomePage() {
             Il vous reste environ <Duration minutes={87} className="num" /> pour vous approprier le support et répéter.
           </p>
           <p className="mt-2 text-sm text-muted">
-            Sans clé API : une trame gratuite à compléter. Avec Claude : un diaporama rédigé.
+            Sans IA : votre trame remplie avec vos notes, à compléter. Avec Claude : un diaporama rédigé.
           </p>
         </div>
       </section>

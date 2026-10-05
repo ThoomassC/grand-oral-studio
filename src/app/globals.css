@@ -572,10 +572,6 @@
     border-color: var(--opale-success-on-surface);
     color: var(--opale-success-on-surface);
   }
-  .project-step[data-state="blocked"] .project-step__dot {
-    border-style: dashed;
-    color: var(--opale-warning-on-surface);
-  }
   .project-step[aria-current="step"] {
     background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
     color: var(--opale-primary-on-surface);
@@ -607,7 +603,7 @@
   }
   .project-step__summary {
     display: inline-flex;
-    /* Trois étapes : la place permet le résumé complet (« 9 thèmes · charte et gabarit par défaut »). */
+    /* Trois étapes : la place permet le résumé complet (« Par défaut · 13 diapos · 20 min · 9 sujets »). */
     max-width: 20rem;
     align-items: center;
     gap: var(--opale-space-2xs);
@@ -615,25 +611,6 @@
     font-size: var(--opale-text-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .project-step__summary--blocked {
-    color: var(--opale-warning-on-surface);
-  }
-
-  /* Cadenas de « Étape suivante » bloquée (StepNav) : à la taille du texte du bouton. */
-  .step-nav__lock {
-    display: inline-grid;
-    width: 1em;
-    height: 1em;
-    min-width: 0;
-    min-height: 0;
-    place-items: center;
-    color: inherit;
-    font-size: inherit;
-  }
-  .step-nav__lock svg {
-    width: 100%;
-    height: 100%;
   }
 
   /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */

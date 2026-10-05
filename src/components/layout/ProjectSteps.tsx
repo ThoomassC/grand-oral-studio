@@ -5,30 +5,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import type { ProjectStep } from "@/domain/progress";
-import { blockedMessage, decksHref, stepHref, stepMeta, stepOfPath } from "@/components/projects/steps";
+import { decksHref, stepHref, stepMeta, stepOfPath } from "@/components/projects/steps";
 import { TAB_LINK_CLASS } from "./MainNav";
 import { useGuardedNavigation } from "./useGuardedNavigation";
-
-type Visual = "done" | "todo" | "blocked";
-
-function visualOf(step: ProjectStep): Visual {
-  if (step.status === "done") return "done";
-  return step.blockedBy ? "blocked" : "todo";
-}
 
 /** Marge laissée à gauche de l'étape courante quand on la ramène en vue (≈ `scroll-padding-inline`). */
 const SCROLL_MARGIN = 16;
 
 /**
- * Le fil d'étapes d'un projet (1. Préparer → 2. Squelettes → 3. Jour J) et, à part, l'accès aux
- * diaporamas produits. Liens vers les pages existantes, sans verrou : une
- * étape dont le prérequis manque le dit (« bloquée : … ») mais reste ouverte.
+ * Le fil d'étapes d'un projet (1. Apparence → 2. Trame → 3. Jour J) et, à part, l'accès aux
+ * diaporamas produits. Liens vers les pages des étapes, sans verrou ni blocage :
+ * l'apparence et la trame par défaut sont utilisables, les sujets facultatifs.
  *
- * - `aria-current="step"` sur l'étape de la page affichée (Préparer couvre
- *   Thèmes, Charte et Gabarit ; un squelette ouvert reste dans Squelettes) ;
+ * - `aria-current="step"` sur l'étape de la page affichée (la Trame couvre
+ *   ses diapos et ses sujets) ;
  * - l'état de chaque étape est dit en texte (masqué à l'œil, lu à l'oreille),
- *   et montré par une coche, un cadenas ou le numéro dans la pastille, à
- *   toutes les largeurs : jamais par la couleur seule ;
+ *   et montré par une coche ou le numéro dans la pastille, à toutes les
+ *   largeurs : jamais par la couleur seule ;
  * - sous 768 px, version compacte : numéros, libellé de l'étape courante,
  *   défilement horizontal interne. L'étape courante est ramenée en vue en
  *   faisant défiler le seul conteneur (`scrollTo({ left })`) : `scrollIntoView`
@@ -64,10 +57,8 @@ export function ProjectSteps({ programId, steps, deckCount }: { programId: strin
           {steps.map((step, i) => {
             const meta = stepMeta(step.id);
             const href = stepHref(programId, step.id);
-            const visual = visualOf(step);
+            const done = step.status === "done";
             const isCurrent = current === step.id;
-            const stateText =
-              visual === "done" ? "faite" : visual === "blocked" ? `bloquée : ${blockedMessage(step.blockedBy!)}` : "à faire";
             return (
               <li key={step.id} className="project-steps__item">
                 {i > 0 ? <span aria-hidden="true" className="project-steps__connector" data-done={steps[i - 1]!.status === "done" || undefined} /> : null}
@@ -75,36 +66,24 @@ export function ProjectSteps({ programId, steps, deckCount }: { programId: strin
                   ref={isCurrent ? currentRef : undefined}
                   href={href}
                   aria-current={isCurrent ? "step" : undefined}
-                  data-state={visual}
+                  data-state={step.status}
                   className="project-step"
                   onClick={(e) => onLinkClick(e, href)}
                 >
                   <span aria-hidden="true" className="project-step__dot">
-                    {visual === "done" ? (
-                      <Icon name="check" />
-                    ) : visual === "blocked" ? (
-                      <Icon name="lock" />
-                    ) : (
-                      <span className="num">{meta.index}</span>
-                    )}
+                    {done ? <Icon name="check" /> : <span className="num">{meta.index}</span>}
                   </span>
                   <span className={`project-step__text ${isCurrent ? "" : "max-md:sr-only"}`}>
                     <span className="project-step__label">
                       <span className="sr-only">Étape {meta.index} : </span>
                       {meta.label}
                     </span>
-                    {visual === "blocked" ? (
-                      <span aria-hidden="true" className="project-step__summary project-step__summary--blocked max-lg:hidden">
-                        {blockedMessage(step.blockedBy!)}
-                      </span>
-                    ) : (
-                      <span className="project-step__summary max-lg:hidden">
-                        <span className="sr-only">, </span>
-                        {step.summary}
-                      </span>
-                    )}
+                    <span className="project-step__summary max-lg:hidden">
+                      <span className="sr-only">, </span>
+                      {step.summary}
+                    </span>
                   </span>
-                  <span className="sr-only"> — {stateText}</span>
+                  <span className="sr-only"> — {done ? "faite" : "à faire"}</span>
                 </Link>
               </li>
             );

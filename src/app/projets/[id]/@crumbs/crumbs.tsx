@@ -11,14 +11,14 @@ export async function ProjectCrumbs({ programId }: { programId: string }) {
   return <ProjectBreadcrumb programId={program.id} programName={program.name} />;
 }
 
-/** Variante d'un deck ouvert (final ou squelette) : le fil finit par son titre. */
+/** Variante d'un deck ouvert (final ou ancien squelette) : « … / Decks / {titre} ». */
 export async function DeckCrumbs({ programId, deckId }: { programId: string; deckId: string }) {
   const deck = await loadDeck(programId, deckId);
   return (
     <ProjectBreadcrumb
       programId={programId}
       programName={deck.program.name}
-      deck={{ kind: deck.kind === "SKELETON" ? "skeleton" : "final", title: deck.spec.title }}
+      deck={{ title: deck.spec.title }}
     />
   );
 }

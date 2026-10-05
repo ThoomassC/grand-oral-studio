@@ -5,12 +5,13 @@ import { EngineBadge } from "@/components/decks/EngineBadge";
 import { FocusOnMount } from "@/components/ui/FocusOnMount";
 import { formatDateTime } from "@/components/ui/format";
 import { finalDeckReview } from "@/domain/deck-quality";
+import { decksHref } from "@/components/projects/steps";
 import { loadDeck } from "../../../_lib/load";
 
 const toIso = (value: Date | string): string => (typeof value === "string" ? value : value.toISOString());
 const normalize = (s: string) => s.trim().toLocaleLowerCase("fr");
 
-/** Écran de relecture d'un deck (final ou squelette), partagé par les deux routes. */
+/** Écran de relecture d'un deck : final (jour J) ou ancien squelette (version 1.0), tous deux sous Decks. */
 export async function DeckPageContent({
   programId: id,
   deckId,
@@ -23,7 +24,7 @@ export async function DeckPageContent({
   const deck = await loadDeck(id, deckId);
   const isSkeleton = deck.kind === "SKELETON";
   const isNew = isNewParam && !isSkeleton;
-  const backHref = `/projets/${id}/decks`;
+  const backHref = decksHref(id);
   const updatedAt = toIso(deck.updatedAt);
   const showSubtitle = deck.spec.subtitle && normalize(deck.spec.subtitle) !== normalize(deck.program.name);
   const showProblem = deck.problem && !normalize(deck.spec.title).includes(normalize(deck.problem));
@@ -38,7 +39,7 @@ export async function DeckPageContent({
     <div className="flex flex-col gap-6">
       <div>
         <p className="eyebrow text-accent-strong">
-          {isSkeleton ? "Squelette" : "Deck final"} · {deck.themeName ?? "Sans sujet"}
+          {isSkeleton ? "Squelette (version 1.0)" : "Deck final"} · {deck.themeName ?? "Sans sujet"}
         </p>
         <h2
           id="titre-deck"
@@ -64,9 +65,17 @@ export async function DeckPageContent({
         <p className="mt-1 text-sm text-muted">Mis à jour le {formatDateTime(new Date(updatedAt))}</p>
       </div>
 
-      {deck.engine === "free" ? (
-        <Feedback tone="neutral" title="Trame sans IA">
-          Cette trame a été construite sans IA à partir de vos thèmes et de votre gabarit. Les puces{" "}
+      {isSkeleton ? (
+        <Feedback tone="info" title="Ancien squelette">
+          Ce squelette date de la version 1.0 : il n&apos;est plus utilisé le jour J. Vous pouvez encore le relire,
+          l&apos;exporter ou le supprimer.
+        </Feedback>
+      ) : null}
+
+      {deck.engine === "free" && !isSkeleton ? (
+        <Feedback tone="neutral" title="Construit sans IA">
+          Ce diaporama a été construit sans IA, à partir de votre trame
+          {deck.themeName ? " et des notes du sujet" : " et de la problématique"} : rien n&apos;a été inventé. Les puces{" "}
           <mark className="rounded-sm bg-highlight-soft px-1 text-text">« À compléter »</mark> sont à remplacer par vos
           contenus.
         </Feedback>
@@ -78,7 +87,7 @@ export async function DeckPageContent({
           tone="success"
           title={
             deck.engine === "free"
-              ? `Votre trame est prête : ${deck.spec.slides.length} diapos à compléter.`
+              ? `Votre diaporama est prêt : ${deck.spec.slides.length} diapos à compléter.`
               : `Votre diaporama est prêt : ${deck.spec.slides.length} diapos avec notes d'orateur.`
           }
         >
@@ -107,17 +116,15 @@ export async function DeckPageContent({
         template={deck.program.template}
       />
 
-      {!isSkeleton ? (
-        <section aria-labelledby="zone-suppression" className="border-t border-border pt-6">
-          <h2 id="zone-suppression" className="text-lg font-semibold">
-            Supprimer ce deck
-          </h2>
-          <p className="mt-1 text-sm text-muted">Le diaporama et ses notes seront définitivement effacés.</p>
-          <div className="mt-3">
-            <DeleteDeckButton deckId={deck.id} label={deck.spec.title} redirectTo={backHref} />
-          </div>
-        </section>
-      ) : null}
+      <section aria-labelledby="zone-suppression" className="border-t border-border pt-6">
+        <h2 id="zone-suppression" className="text-lg font-semibold">
+          {isSkeleton ? "Supprimer ce squelette" : "Supprimer ce deck"}
+        </h2>
+        <p className="mt-1 text-sm text-muted">Le diaporama et ses notes seront définitivement effacés.</p>
+        <div className="mt-3">
+          <DeleteDeckButton deckId={deck.id} label={deck.spec.title} redirectTo={backHref} />
+        </div>
+      </section>
     </div>
   );
 }
