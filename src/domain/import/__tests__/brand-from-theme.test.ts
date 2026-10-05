@@ -67,7 +67,7 @@ describe("brandFromTheme — polices et nom", () => {
 
   it("devrait utiliser le nom du thème, borné, ou un nom par défaut", () => {
     expect(brandFromTheme(theme({ name: "x".repeat(200) })).brand.name).toHaveLength(80);
-    expect(brandFromTheme(theme({ name: null })).brand.name).toBe("Charte importée");
+    expect(brandFromTheme(theme({ name: null })).brand.name).toBe("Apparence importée");
   });
 
   it("devrait reprendre le logo", () => {

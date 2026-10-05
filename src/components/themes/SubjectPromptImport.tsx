@@ -1,13 +1,13 @@
 "use client";
 
-import { Badge, Button, Checkbox, Dropzone, FileCard } from "@thomascaron/opale-ui";
+import { Button, Checkbox, Dropzone, FileCard } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import type { Brand, PromptTemplate, ThemeInput } from "@/domain/schemas";
 import { analyzeThemePrompt, importThemeList } from "@/server/actions/imports";
 import { updateBrand } from "@/server/actions/programs";
 import { BrandPreview, mergeImportedBrand } from "@/components/brand/BrandPreview";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
-import { pageHref } from "@/components/projects/steps";
+import { stepHref } from "@/components/projects/steps";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { TextArea } from "@/components/ui/Field";
@@ -21,12 +21,8 @@ import { THEME_PROMPT_MAX_CHARS as PROMPT_MAX_CHARS, ThemePromptTextSchema } fro
 
 type ThemePromptData = Extract<Awaited<ReturnType<typeof analyzeThemePrompt>>, { ok: true }>["data"];
 
-type Outcome = {
-  /** Null quand aucun thème n'était coché (charte seule). */
-  themes: { created: number; skipped: number } | null;
-  /** `true` appliquée, une chaîne : la raison de l'échec, `null` : pas demandée. */
-  brand: true | string | null;
-};
+/** Ce que l'import retient du texte : les sujets (page Sujets) ou l'apparence (page Apparence). */
+export type ImportScope = "subjects" | "appearance";
 
 type Phase =
   | { kind: "idle" }
@@ -34,57 +30,67 @@ type Phase =
   | { kind: "preview"; result: ThemePromptData }
   | { kind: "done"; outcome: Outcome };
 
+type Outcome = { scope: "subjects"; created: number; skipped: number } | { scope: "appearance" };
+
 type LoadedFile = { name: string; size: number };
 
 /** Un fichier texte de 20 000 caractères pèse au plus ~80 Ko (UTF-8) : au-delà, inutile de le lire. */
 const TEXT_FILE_MAX_BYTES = 256 * 1024;
 
-const SOURCE_TEXT: Record<ThemePromptData["source"], string> = {
-  ai: "Analysé par l'IA",
-  free: "Analyse sans IA (mots-clés)",
+const COPY: Record<
+  ImportScope,
+  { label: string; hint: string; example: string; previewTitle: string }
+> = {
+  subjects: {
+    label: "Vos sujets ou vos consignes",
+    hint:
+      "Collez la liste de vos sujets, l'énoncé du grand oral ou les consignes de votre établissement : les sujets " +
+      "sont repérés (numérotés, un par ligne, ou après « Sujets : »). Rien n'est envoyé à une IA.",
+    example: "Grand oral de master. Sujets : 1. Cybersécurité 2. Transformation numérique 3. Intelligence artificielle.",
+    previewTitle: "Sujets proposés",
+  },
+  appearance: {
+    label: "Description de l'apparence",
+    hint:
+      "Collez un texte qui décrit vos couleurs (#1F3A5F, « bleu marine »…) et vos polices : elles sont repérées et " +
+      "proposées dans un aperçu. Rien n'est envoyé à une IA.",
+    example: "Couleurs : bleu marine #1F3A5F et jaune #F4AD15, fond blanc. Police des titres : Georgia, police du texte : Verdana.",
+    previewTitle: "Apparence proposée",
+  },
 };
 
-const EXAMPLE =
-  "Grand oral de master. Thèmes : 1. Cybersécurité 2. Transformation numérique 3. Intelligence artificielle. Couleurs : bleu marine #1F3A5F et jaune #F4AD15, police Georgia.";
-
-function themesWord(n: number): string {
-  return `${n} thème${n > 1 ? "s" : ""}`;
+function subjectsWord(n: number): string {
+  return `${n} sujet${n > 1 ? "s" : ""}`;
 }
 
-/** « 9 thèmes importés, 1 déjà présent. Charte appliquée. » */
-function outcomeSentence({ themes, brand }: Outcome): string {
-  const parts: string[] = [];
-  if (themes) {
-    const { created, skipped } = themes;
-    let sentence = created === 0 ? "Aucun nouveau thème importé" : `${themesWord(created)} importé${created > 1 ? "s" : ""}`;
-    if (skipped > 0) sentence += `, ${skipped} déjà présent${skipped > 1 ? "s" : ""}`;
-    parts.push(`${sentence}.`);
-  }
-  if (brand === true) parts.push("Charte appliquée.");
-  return parts.join(" ");
-}
-
-function submitLabel(count: number, withBrand: boolean): string {
-  if (count > 0 && withBrand) return `Importer ${themesWord(count)} et appliquer la charte`;
-  if (count > 0) return `Importer ${themesWord(count)}`;
-  if (withBrand) return "Appliquer la charte";
-  return "Importer les thèmes";
+/** « 9 sujets importés, 1 déjà présent. » */
+function subjectsSentence(created: number, skipped: number): string {
+  let sentence = created === 0 ? "Aucun nouveau sujet importé" : `${subjectsWord(created)} importé${created > 1 ? "s" : ""}`;
+  if (skipped > 0) sentence += `, ${skipped} déjà présent${skipped > 1 ? "s" : ""}`;
+  return `${sentence}.`;
 }
 
 /**
- * Mode « Depuis un prompt » : un texte (collé, ou lu d'un .txt / .md côté
- * client) → `analyzeThemePrompt` → aperçu (thèmes à cocher, charte déduite)
- * → `importThemeList` avec les thèmes cochés, puis `updateBrand` si la charte
- * est retenue. Les thèmes déjà présents sont ignorés par le serveur.
+ * « Depuis un prompt » : un texte (collé, ou lu d'un .txt / .md côté client)
+ * → `analyzeThemePrompt` (lecture sans IA) → aperçu restreint au `scope` :
+ *
+ * - `subjects` : les sujets repérés, à cocher → `importThemeList` (les sujets
+ *   déjà présents sont ignorés par le serveur) ;
+ * - `appearance` : l'apparence repérée (couleurs, polices) → `updateBrand`,
+ *   logo actuel conservé.
+ *
+ * Ce qui sort du `scope` n'est ni montré ni importé.
  */
 export function SubjectPromptImport({
   programId,
   format,
+  scope,
 }: {
   programId: string;
   format: PromptTemplate["format"];
+  scope: ImportScope;
 }) {
-  const currentLogo = useCurrentLogo();
+  const copy = COPY[scope];
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState<LoadedFile | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -158,9 +164,7 @@ export function SubjectPromptImport({
           textRef.current?.focus();
           return;
         }
-        next = result.ok
-          ? { kind: "preview", result: result.data }
-          : { kind: "error", message: result.error };
+        next = result.ok ? { kind: "preview", result: result.data } : { kind: "error", message: result.error };
       } catch {
         next = { kind: "error", message: "La connexion a été interrompue. Votre texte est conservé : réessayez." };
       }
@@ -182,12 +186,10 @@ export function SubjectPromptImport({
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
           <div>
             <label htmlFor={ids.text} className="opale-field__label">
-              Votre sujet ou vos consignes
+              {copy.label}
             </label>
             <p id={ids.hint} className="opale-field__helper mb-1.5">
-              Collez la liste des thèmes, l&apos;énoncé du grand oral ou les consignes de votre établissement : les thèmes,
-              les couleurs (#1F3A5F…) et les polices sont repérés. Analyse par l&apos;IA si votre moteur le permet, sinon
-              par mots-clés (gratuit).
+              {copy.hint}
             </p>
             <TextArea
               ref={textRef}
@@ -198,7 +200,7 @@ export function SubjectPromptImport({
                 setLoaded(null);
                 changeText(e.target.value);
               }}
-              placeholder={`Ex. ${EXAMPLE}`}
+              placeholder={`Ex. ${copy.example}`}
               {...errorProps(fieldErrors, "text", `${ids.text}-err`, `${ids.hint} ${ids.count}`)}
             />
             <p id={ids.count} className={`opale-field__helper num ${tooLong ? "font-semibold text-danger" : ""}`}>
@@ -241,7 +243,7 @@ export function SubjectPromptImport({
             aria-disabled={text !== "" || undefined}
             aria-describedby={text !== "" ? `${ids.text}-example-hint` : undefined}
             onClick={() => {
-              if (text === "") changeText(EXAMPLE);
+              if (text === "") changeText(copy.example);
             }}
           >
             Insérer un exemple
@@ -259,15 +261,28 @@ export function SubjectPromptImport({
       </form>
 
       {phase.kind === "preview" ? (
-        <ThemePromptPreview
-          titleId={ids.preview}
-          programId={programId}
-          currentLogo={currentLogo}
-          format={format}
-          result={phase.result}
-          onBack={backToText}
-          onDone={(outcome) => setPhase({ kind: "done", outcome })}
-        />
+        <section aria-labelledby={ids.preview} className="border-t border-border pt-5">
+          <FocusOnMount targetId={ids.preview} />
+          <h3 id={ids.preview} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
+            {copy.previewTitle}
+          </h3>
+          {scope === "subjects" ? (
+            <SubjectsPreview
+              programId={programId}
+              themes={phase.result.themes}
+              onBack={backToText}
+              onDone={(created, skipped) => setPhase({ kind: "done", outcome: { scope, created, skipped } })}
+            />
+          ) : (
+            <AppearancePreview
+              programId={programId}
+              format={format}
+              result={phase.result}
+              onBack={backToText}
+              onDone={() => setPhase({ kind: "done", outcome: { scope: "appearance" } })}
+            />
+          )}
+        </section>
       ) : null}
 
       <LiveRegion>
@@ -277,251 +292,237 @@ export function SubjectPromptImport({
   );
 }
 
-function ThemePromptPreview({
-  titleId,
-  programId,
-  currentLogo,
-  format,
-  result,
-  onBack,
-  onDone,
-}: {
-  titleId: string;
-  programId: string;
-  currentLogo: string | null;
-  format: PromptTemplate["format"];
-  result: ThemePromptData;
-  onBack: () => void;
-  onDone: (outcome: Outcome) => void;
-}) {
-  const { themes, brand, brandNotes, found, source, fallbackReason } = result;
-  const [selected, setSelected] = useState<boolean[]>(() => themes.map(() => true));
-  const [withBrand, setWithBrand] = useState(brand !== null);
-  const [error, setError] = useState<{ message: string; details: string[] } | null>(null);
-  const [pending, startTransition] = useTransition();
-  const baseId = useId();
-  const blockedHintId = `${baseId}-blocked`;
-  const chosen: ThemeInput[] = themes.filter((_, i) => selected[i]);
-  const applyBrand = brand !== null && withBrand;
-  const nothingFound = themes.length === 0 && brand === null;
-  const blocked = chosen.length === 0 && !applyBrand;
-
-  function run() {
-    if (pending || blocked) return;
-    setError(null);
-    startTransition(async () => {
-      let themesOutcome: Outcome["themes"] = null;
-      if (chosen.length > 0) {
-        try {
-          const imported = await importThemeList(programId, { themes: chosen });
-          if (!imported.ok) {
-            setError({ message: imported.error, details: Object.values(imported.fieldErrors ?? {}).flat() });
-            return;
-          }
-          themesOutcome = { created: imported.data.created, skipped: imported.data.skipped };
-        } catch {
-          setError({ message: "La connexion a été interrompue. Rien n'a été importé : réessayez.", details: [] });
-          return;
-        }
-      }
-      let brandOutcome: Outcome["brand"] = null;
-      if (applyBrand && brand) {
-        try {
-          const saved = await updateBrand(programId, mergeImportedBrand(brand, currentLogo));
-          brandOutcome = saved.ok ? true : saved.error;
-        } catch {
-          brandOutcome = "la connexion a été interrompue.";
-        }
-        // Charte seule refusée : on reste sur l'aperçu pour réessayer.
-        if (brandOutcome !== true && !themesOutcome) {
-          setError({ message: `La charte n'a pas été appliquée : ${brandOutcome}`, details: [] });
-          return;
-        }
-      }
-      onDone({ themes: themesOutcome, brand: brandOutcome });
-    });
-  }
-
+function NothingFound({ title, help, onBack }: { title: string; help: string; onBack: () => void }) {
   return (
-    <section aria-labelledby={titleId} className="border-t border-border pt-5">
-      <FocusOnMount targetId={titleId} />
-      <div className="flex flex-wrap items-center gap-3">
-        <h3 id={titleId} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
-          Ce que nous avons trouvé
-        </h3>
-        <Badge tone={source === "ai" ? "info" : "neutral"} size="small">
-          {SOURCE_TEXT[source]}
-        </Badge>
-      </div>
-      {fallbackReason ? (
-        <Notice tone="warning" className="mt-3">
-          L&apos;IA n&apos;a pas été utilisée : {fallbackReason} Le résultat vient de l&apos;analyse par mots-clés.
-        </Notice>
-      ) : null}
-
-      {nothingFound ? (
-        <div className="mt-3">
-          <p className="font-semibold">Aucun thème ni charte reconnus dans ce texte.</p>
-          <p className="mt-1 text-sm text-muted">
-            Listez les thèmes (« Thèmes : 1. Cybersécurité 2. … », un par ligne ou numérotés), et indiquez les couleurs
-            en hexadécimal (#1F3A5F) ou les polices, puis relancez l&apos;analyse. Vous pouvez aussi ajouter les thèmes
-            à la main ci-dessous.
-          </p>
-          <div className="mt-4">
-            <Button type="button" variant="ghost" onClick={onBack}>
-              Modifier le texte
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <p className="mt-1 text-sm text-muted">Rien n&apos;est encore importé ni enregistré.</p>
-          {found.length > 0 ? (
-            <div className="mt-4">
-              <h4 className="opale-field__label">Éléments reconnus</h4>
-              <ul className="flex flex-wrap gap-1.5" aria-label="Éléments reconnus">
-                {found.map((item) => (
-                  <li key={item} className="rounded-sm bg-surface-2 px-2 py-0.5 text-sm ring-1 ring-inset ring-border">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {themes.length > 0 ? (
-            <fieldset className="mt-5">
-              <legend className="opale-field__label">
-                Thèmes trouvés <span className="num font-normal text-muted">({chosen.length} cochés sur {themes.length})</span>
-              </legend>
-              <p className="mb-2 text-sm text-muted">Décochez ceux à ne pas importer. Les thèmes déjà présents seront ignorés.</p>
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {themes.map((theme, i) => (
-                  <li key={`${theme.name}-${i}`} className="rounded-md border border-border p-2.5">
-                    <Checkbox
-                      label={theme.name}
-                      description={theme.description || undefined}
-                      checked={selected[i] ?? false}
-                      onChange={(e) => {
-                        const value = e.target.checked;
-                        setSelected((prev) => prev.map((v, j) => (j === i ? value : v)));
-                      }}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-          ) : (
-            <p className="mt-5 text-sm">
-              <strong>Aucun thème reconnu</strong> : ajoutez-les à la main ci-dessous, ou complétez le texte.
-            </p>
-          )}
-
-          {brand ? (
-            <BrandSection
-              brand={brand}
-              notes={brandNotes}
-              format={format}
-              withBrand={withBrand}
-              onToggle={setWithBrand}
-            />
-          ) : (
-            <p className="mt-5 text-sm text-muted">
-              Aucune couleur ni police reconnue : la charte actuelle ne change pas.
-            </p>
-          )}
-
-          <LiveRegion role="alert" className="mt-4">
-            {error ? (
-              <Notice tone="error">
-                <p>{error.message}</p>
-                {error.details.length > 0 ? (
-                  <ul className="mt-1 list-disc pl-5">
-                    {error.details.map((d) => (
-                      <li key={d}>{d}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </Notice>
-            ) : null}
-          </LiveRegion>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              onClick={run}
-              aria-disabled={pending || blocked || undefined}
-              aria-describedby={blocked ? blockedHintId : undefined}
-            >
-              <ButtonLabel idle={submitLabel(chosen.length, applyBrand)} busy="Import…" isBusy={pending} />
-            </Button>
-            <Button type="button" variant="text" onClick={onBack} aria-disabled={pending || undefined}>
-              Annuler
-            </Button>
-            {blocked ? (
-              <p id={blockedHintId} className="text-sm text-muted">
-                Cochez au moins un thème{brand ? ", ou la charte," : ""} pour importer.
-              </p>
-            ) : null}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function BrandSection({
-  brand,
-  notes,
-  format,
-  withBrand,
-  onToggle,
-}: {
-  brand: Brand;
-  notes: string[];
-  format: PromptTemplate["format"];
-  withBrand: boolean;
-  onToggle: (value: boolean) => void;
-}) {
-  return (
-    <div className="mt-6 border-t border-border pt-5">
-      <h4 className="text-base font-semibold">Charte déduite</h4>
-      <p className="mb-4 text-sm text-muted">Les éléments non précisés reprennent la charte par défaut.</p>
-      <BrandPreview brand={brand} format={format} notes={notes} headingLevel={5} />
+    <div className="mt-3">
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 text-sm text-muted">{help}</p>
       <div className="mt-4">
-        <Checkbox
-          label="Appliquer aussi la charte"
-          description="Elle remplace la charte actuelle et reste modifiable dans l'onglet Charte."
-          checked={withBrand}
-          onChange={(e) => onToggle(e.target.checked)}
-        />
+        <Button type="button" variant="ghost" onClick={onBack}>
+          Modifier le texte
+        </Button>
       </div>
     </div>
   );
 }
 
+function ErrorNotice({ error }: { error: { message: string; details: string[] } | null }) {
+  return (
+    <LiveRegion role="alert" className="mt-4">
+      {error ? (
+        <Notice tone="error">
+          <p>{error.message}</p>
+          {error.details.length > 0 ? (
+            <ul className="mt-1 list-disc pl-5">
+              {error.details.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          ) : null}
+        </Notice>
+      ) : null}
+    </LiveRegion>
+  );
+}
+
+function SubjectsPreview({
+  programId,
+  themes,
+  onBack,
+  onDone,
+}: {
+  programId: string;
+  themes: ThemeInput[];
+  onBack: () => void;
+  onDone: (created: number, skipped: number) => void;
+}) {
+  const [selected, setSelected] = useState<boolean[]>(() => themes.map(() => true));
+  const [error, setError] = useState<{ message: string; details: string[] } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const baseId = useId();
+  const blockedHintId = `${baseId}-blocked`;
+  const chosen = themes.filter((_, i) => selected[i]);
+  const blocked = chosen.length === 0;
+
+  if (themes.length === 0) {
+    return (
+      <NothingFound
+        title="Aucun sujet reconnu dans ce texte."
+        help="Listez les sujets (« Sujets : 1. Cybersécurité 2. … », un par ligne ou numérotés), puis relancez l'analyse. Vous pouvez aussi les ajouter à la main ci-dessous."
+        onBack={onBack}
+      />
+    );
+  }
+
+  function run() {
+    if (pending || blocked) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const imported = await importThemeList(programId, { themes: chosen });
+        if (!imported.ok) {
+          setError({ message: imported.error, details: Object.values(imported.fieldErrors ?? {}).flat() });
+          return;
+        }
+        onDone(imported.data.created, imported.data.skipped);
+      } catch {
+        setError({ message: "La connexion a été interrompue. Rien n'a été importé : réessayez.", details: [] });
+      }
+    });
+  }
+
+  return (
+    <>
+      <p className="mt-1 text-sm text-muted">Rien n&apos;est encore importé.</p>
+      <fieldset className="mt-4">
+        <legend className="opale-field__label">
+          Sujets trouvés <span className="num font-normal text-muted">({chosen.length} cochés sur {themes.length})</span>
+        </legend>
+        <p className="mb-2 text-sm text-muted">Décochez ceux à ne pas importer. Les sujets déjà présents seront ignorés.</p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {themes.map((theme, i) => (
+            <li key={`${theme.name}-${i}`} className="rounded-md border border-border p-2.5">
+              <Checkbox
+                label={theme.name}
+                description={theme.description || undefined}
+                checked={selected[i] ?? false}
+                onChange={(e) => {
+                  const value = e.target.checked;
+                  setSelected((prev) => prev.map((v, j) => (j === i ? value : v)));
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+
+      <ErrorNotice error={error} />
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          onClick={run}
+          aria-disabled={pending || blocked || undefined}
+          aria-describedby={blocked ? blockedHintId : undefined}
+        >
+          <ButtonLabel idle={blocked ? "Importer les sujets" : `Importer ${subjectsWord(chosen.length)}`} busy="Import…" isBusy={pending} />
+        </Button>
+        <Button type="button" variant="text" onClick={onBack} aria-disabled={pending || undefined}>
+          Annuler
+        </Button>
+        {blocked ? (
+          <p id={blockedHintId} className="text-sm text-muted">
+            Cochez au moins un sujet pour importer.
+          </p>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function AppearancePreview({
+  programId,
+  format,
+  result,
+  onBack,
+  onDone,
+}: {
+  programId: string;
+  format: PromptTemplate["format"];
+  result: ThemePromptData;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const currentLogo = useCurrentLogo();
+  const [error, setError] = useState<{ message: string; details: string[] } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const { brand, brandNotes, brandFound } = result;
+
+  if (brand === null) {
+    return (
+      <NothingFound
+        title="Aucune couleur ni police reconnue dans ce texte."
+        help="Indiquez les couleurs en hexadécimal (#1F3A5F) ou par leur nom (« bleu marine »), et les polices (« Police des titres : Georgia »), puis relancez l'analyse."
+        onBack={onBack}
+      />
+    );
+  }
+
+  function run(target: Brand) {
+    if (pending) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const saved = await updateBrand(programId, mergeImportedBrand(target, currentLogo));
+        if (!saved.ok) {
+          setError({ message: `L'apparence n'a pas été appliquée : ${saved.error}`, details: [] });
+          return;
+        }
+        onDone();
+      } catch {
+        setError({ message: "L'apparence n'a pas été appliquée : la connexion a été interrompue. Réessayez.", details: [] });
+      }
+    });
+  }
+
+  return (
+    <>
+      <p className="mt-1 text-sm text-muted">
+        Les éléments non précisés reprennent l&apos;apparence actuelle. Rien n&apos;est encore enregistré.
+      </p>
+      {brandFound.length > 0 ? (
+        <div className="mt-4">
+          <h4 className="opale-field__label">
+            Éléments reconnus
+          </h4>
+          <ul className="flex flex-wrap gap-1.5" aria-label="Éléments reconnus">
+            {brandFound.map((item) => (
+              <li key={item} className="rounded-sm bg-surface-2 px-2 py-0.5 text-sm ring-1 ring-inset ring-border">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="mt-5">
+        <BrandPreview brand={brand} format={format} notes={brandNotes} />
+      </div>
+
+      <ErrorNotice error={error} />
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button type="button" onClick={() => run(brand)} aria-disabled={pending || undefined}>
+          <ButtonLabel idle="Appliquer l'apparence" busy="Application…" isBusy={pending} />
+        </Button>
+        <Button type="button" variant="text" onClick={onBack} aria-disabled={pending || undefined}>
+          Annuler
+        </Button>
+      </div>
+    </>
+  );
+}
+
 function ImportOutcome({ id, programId, outcome }: { id: string; programId: string; outcome: Outcome }) {
-  const sentence = outcomeSentence(outcome);
-  const brandFailed = typeof outcome.brand === "string" ? outcome.brand : null;
-  const hasThemes = outcome.themes !== null && outcome.themes.created + outcome.themes.skipped > 0;
   return (
     <div id={id} tabIndex={-1} className="flex flex-col gap-3 focus:outline-none">
       <FocusOnMount targetId={id} />
-      <Notice tone="success">
-        <p className="font-semibold text-success">{sentence}</p>
-        {hasThemes ? (
-          <p className="mt-3">
-            <ButtonLink href={pageHref(programId, "skeletons")} size="small">
-              Passer aux squelettes<span aria-hidden="true"> →</span>
-            </ButtonLink>
-          </p>
-        ) : null}
-      </Notice>
-      {brandFailed ? (
-        <Notice tone="warning">
-          La charte n&apos;a pas été appliquée : {brandFailed} Vous pouvez la régler dans l&apos;onglet Charte.
+      {outcome.scope === "subjects" ? (
+        <Notice tone="success">
+          <p className="font-semibold text-success">{subjectsSentence(outcome.created, outcome.skipped)}</p>
+          {outcome.created + outcome.skipped > 0 ? (
+            <p className="mt-3">
+              <ButtonLink href={stepHref(programId, "day")} size="small">
+                Passer au Jour J<span aria-hidden="true"> →</span>
+              </ButtonLink>
+            </p>
+          ) : null}
         </Notice>
-      ) : null}
+      ) : (
+        <Notice tone="success">
+          <p className="font-semibold text-success">Apparence appliquée et enregistrée.</p>
+          <p className="mt-1">Elle reste modifiable dans l&apos;éditeur ci-dessous.</p>
+        </Notice>
+      )}
     </div>
   );
 }

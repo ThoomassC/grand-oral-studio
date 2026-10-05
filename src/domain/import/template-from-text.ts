@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { deaccent } from "../free/text";
 import {
   LIMITS,
@@ -8,19 +7,18 @@ import {
   type PromptTemplate,
   type Section,
 } from "../schemas";
+import { formatSeconds, parseDurationText } from "../slides";
 
 /**
- * Gabarit prérempli à partir d'un texte libre (consignes d'oral, prompt).
+ * Trame préremplie à partir d'un texte libre (consignes d'oral, prompt), lue
+ * SANS IA : heuristiques FR/EN déterministes ; lit aussi les prompts Markdown
+ * structurés (tableau de diapos avec plages « 2-3 » et colonne Durée, blocs
+ * « Entrées », « Règles de contenu »).
  *
- * `parseTemplateText` : heuristiques FR/EN, sans IA (moteur gratuit) ; lit aussi
- * les prompts Markdown structurés (tableau de diapos, blocs « Entrées »,
- * « Règles de contenu »).
- * `normalizeTemplateDraft` : ramène une sortie IA permissive dans les bornes.
- *
- * Les deux renvoient TOUJOURS un gabarit valide (PromptTemplateSchema), `found`
- * (libellés de ce qui a été repris), `recognized` (champs repris du texte ; les
- * autres gardent la valeur de base) et `warnings` : tout ce qui a été écarté,
- * coupé ou ignoré est signalé — jamais de coupe silencieuse.
+ * Renvoie TOUJOURS une trame valide (PromptTemplateSchema, durées comprises),
+ * `found` (libellés de ce qui a été repris), `recognized` (champs repris du
+ * texte ; les autres gardent la valeur de base) et `warnings` : tout ce qui a
+ * été écarté, coupé ou ignoré est signalé — jamais de coupe silencieuse.
  */
 
 const BOUNDS = {
@@ -32,7 +30,12 @@ const BOUNDS = {
   guidance: 600,
   tone: 200,
   constraints: 2000,
+  /** Cellule de durée citée dans un avertissement. */
+  durationCell: 40,
 } as const;
+
+/** Couverture ajoutée par l'application : 30 s au plus (cf. `templateTimings`). */
+const APP_COVER_SECONDS = 30;
 
 export const RECOGNIZED_FIELDS = [
   "durationMinutes",
@@ -47,7 +50,7 @@ export type RecognizedField = (typeof RECOGNIZED_FIELDS)[number];
 export interface TemplateImport {
   template: PromptTemplate;
   found: string[];
-  /** Champs effectivement trouvés dans le texte ; les autres sont ceux du gabarit de base. */
+  /** Champs effectivement trouvés dans le texte ; les autres sont ceux de la trame de base. */
   recognized: RecognizedField[];
   /** Ce qui a été écarté, tronqué ou ignoré, en français, affichable tel quel. */
   warnings: string[];
@@ -103,13 +106,25 @@ interface DraftSection {
   title: string;
   guidance: string;
   slides: number;
+  /** Cellule de la colonne « Durée » d'un tableau de diapos, telle qu'écrite ("" si absente). */
+  duration?: string;
 }
 
 interface BoundedSections {
   sections: Section[];
   warnings: string[];
-  /** Consignes des sections « Couverture » écartées (la couverture est ajoutée par l'application). */
+  /** Contenus des lignes « Couverture » écartées (la couverture est ajoutée par l'application). */
   coverGuidance: string[];
+  /** Durée lue sur la ligne de couverture écartée, en secondes ; null si aucune. */
+  coverSeconds: number | null;
+}
+
+/** Durée d'une cellule de tableau → secondes dans les bornes d'une ligne de trame, ou la raison du refus. */
+function readCellDuration(cell: string): { seconds: number } | { problem: "illisible" | "hors limites" } {
+  const seconds = parseDurationText(cell);
+  if (seconds === null) return { problem: "illisible" };
+  if (seconds < LIMITS.minSectionSeconds || seconds > LIMITS.maxSectionSeconds) return { problem: "hors limites" };
+  return { seconds };
 }
 
 const COVER_TITLE =
@@ -117,10 +132,11 @@ const COVER_TITLE =
 const CLOSING_TITLE = /\b(?:conclusion|conclure|ouverture|synthese|bilan|perspectives?|closing|wrap|outlook)\b/;
 
 /**
- * Sections bornées : la couverture est écartée (l'application l'ajoute), 30
- * sections au plus (au-delà, la FIN du plan est gardée et le milieu coupé),
- * 1..8 diapos chacune, 59 au total (+ couverture = 60), ids uniques. Chaque
- * écart produit un avertissement.
+ * Lignes bornées : la couverture est écartée (l'application l'ajoute), 30
+ * lignes au plus (au-delà, la FIN du plan est gardée et le milieu coupé),
+ * 1..8 diapos chacune, 59 au total (+ couverture = 60), ids uniques, durée
+ * lue dans les bornes d'une ligne (10 s à 90 min). Chaque écart produit un
+ * avertissement.
  */
 function boundSections(drafts: DraftSection[]): BoundedSections {
   const warnings: string[] = [];
@@ -130,16 +146,23 @@ function boundSections(drafts: DraftSection[]): BoundedSections {
       title: clean(stripMarkdown(d.title), BOUNDS.sectionTitle),
       guidance: clean(stripMarkdown(d.guidance), BOUNDS.guidance),
       requested: Math.round(Number.isFinite(d.slides) ? d.slides : 1),
+      duration: clean(d.duration ?? "", BOUNDS.durationCell),
     }))
     .filter((d) => d.title.length > 0);
 
   const covers = kept.filter((d) => COVER_TITLE.test(flat(d.title)));
+  let coverSeconds: number | null = null;
   if (covers.length > 0) {
     kept = kept.filter((d) => !covers.includes(d));
     coverGuidance.push(...covers.map((c) => c.guidance).filter(Boolean));
+    // Sa durée ne fait pas une ligne de la trame, mais compte dans celle de l'oral.
+    for (const c of covers) {
+      const read = c.duration ? readCellDuration(c.duration) : null;
+      if (coverSeconds === null && read && "seconds" in read) coverSeconds = read.seconds;
+    }
     warnings.push(
-      `Section ${quoteList(covers.map((c) => c.title))} non reprise : l'application ajoute déjà la couverture en tête du deck` +
-        (coverGuidance.length > 0 ? " (sa consigne est reprise dans les contraintes)." : "."),
+      `Ligne ${quoteList(covers.map((c) => c.title))} non reprise : l'application ajoute déjà la couverture en tête du deck` +
+        (coverGuidance.length > 0 ? " (son contenu est repris dans les contraintes)." : "."),
     );
   }
 
@@ -151,8 +174,8 @@ function boundSections(drafts: DraftSection[]): BoundedSections {
     const dropped = kept.slice(headLength, n - tailLength);
     kept = [...kept.slice(0, headLength), ...kept.slice(n - tailLength)];
     warnings.push(
-      `Le gabarit compte au plus ${BOUNDS.maxSections} sections : ${dropped.length} ${dropped.length > 1 ? "sections non reprises" : "section non reprise"} ` +
-        `(${quoteList(dropped.map((d) => d.title))}). La fin du plan est conservée ; fusionnez des sections si besoin.`,
+      `La trame compte au plus ${BOUNDS.maxSections} lignes : ${dropped.length} ${dropped.length > 1 ? "lignes non reprises" : "ligne non reprise"} ` +
+        `(${quoteList(dropped.map((d) => d.title))}). La fin du plan est conservée ; fusionnez des lignes si besoin.`,
     );
   }
 
@@ -160,10 +183,20 @@ function boundSections(drafts: DraftSection[]): BoundedSections {
     const slides = clamp(d.requested, 1, BOUNDS.maxSlidesPerSection);
     if (d.requested > BOUNDS.maxSlidesPerSection) {
       warnings.push(
-        `« ${d.title} » : ${d.requested} diapos demandées, ramenées à ${BOUNDS.maxSlidesPerSection} (maximum par section) ; scindez la section si besoin.`,
+        `« ${d.title} » : ${d.requested} diapos demandées, ramenées à ${BOUNDS.maxSlidesPerSection} (maximum par ligne) ; scindez la ligne si besoin.`,
       );
     }
-    return { title: d.title, guidance: d.guidance, slides, initial: slides };
+    let seconds: number | undefined;
+    if (d.duration) {
+      const read = readCellDuration(d.duration);
+      if ("seconds" in read) seconds = read.seconds;
+      else if (read.problem === "illisible") {
+        warnings.push(`Durée « ${d.duration} » illisible pour « ${d.title} » : calculée automatiquement.`);
+      } else {
+        warnings.push(`Durée « ${d.duration} » hors limites pour « ${d.title} » (10 s à 90 min) : calculée automatiquement.`);
+      }
+    }
+    return { title: d.title, guidance: d.guidance, slides, initial: slides, seconds };
   });
 
   const budget = MAX_TEMPLATE_SLIDES - 1;
@@ -184,19 +217,43 @@ function boundSections(drafts: DraftSection[]): BoundedSections {
     let id = root;
     for (let n = 2; used.has(id); n += 1) id = `${root}-${n}`;
     used.add(id);
-    return { id: id.slice(0, LIMITS.sectionId), title: d.title, guidance: d.guidance, slides: d.slides };
+    const section: Section = { id: id.slice(0, LIMITS.sectionId), title: d.title, guidance: d.guidance, slides: d.slides };
+    return d.seconds === undefined ? section : { ...section, seconds: d.seconds };
   });
-  return { sections, warnings, coverGuidance };
+  return { sections, warnings, coverGuidance, coverSeconds };
+}
+
+/** La ligne sans sa durée (calculée automatiquement). Pas de clé `seconds: undefined`. */
+function withoutSeconds(section: Section): Section {
+  const copy = { ...section };
+  delete copy.seconds;
+  return copy;
+}
+
+/** Durée de la couverture selon l'application (même calcul que `templateTimings`). */
+function appCoverSeconds(durationMinutes: number, sections: readonly Section[]): number {
+  const total = durationMinutes * 60;
+  return Math.min(APP_COVER_SECONDS, total / (1 + sections.reduce((sum, s) => sum + s.slides, 0)));
 }
 
 function languageLabel(lang: "fr" | "en"): string {
   return lang === "en" ? "anglais" : "français";
 }
 
-function finish(base: PromptTemplate, patch: Partial<PromptTemplate>, found: string[], warnings: string[]): TemplateImport {
+/**
+ * `inherited` : champs du patch qui ne viennent pas du texte (lignes de la base
+ * dont seules les durées ont été retirées) — jamais annoncés comme reconnus.
+ */
+function finish(
+  base: PromptTemplate,
+  patch: Partial<PromptTemplate>,
+  found: string[],
+  warnings: string[],
+  inherited: ReadonlySet<RecognizedField> = new Set(),
+): TemplateImport {
   const candidate = { ...base, ...patch };
   const checked = PromptTemplateSchema.safeParse(candidate);
-  const recognized = RECOGNIZED_FIELDS.filter((f) => patch[f] !== undefined);
+  const recognized = RECOGNIZED_FIELDS.filter((f) => patch[f] !== undefined && !inherited.has(f));
   // Défense en profondeur : les bornes ci-dessus rendent l'échec impossible ; sinon, la base intacte.
   return checked.success
     ? { template: checked.data, found, recognized, warnings }
@@ -290,14 +347,12 @@ function parsePace(text: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-function durationWarning(base: PromptTemplate, totalSlides: number, pace: number | null, aiDuration: number | null = null): string {
+function durationWarning(base: PromptTemplate, totalSlides: number, pace: number | null): string {
   const hint =
     pace !== null && totalSlides > 0
       ? ` À ~${pace} s par diapo, ${totalSlides} diapos représentent environ ${Math.max(1, Math.round((pace * totalSlides) / 60))} min.`
       : "";
-  const lead =
-    aiDuration === null ? "Durée non précisée dans le texte" : `L'IA a proposé ${aiDuration} min, mais le texte ne fixe aucune durée`;
-  return `${lead} : la durée actuelle du gabarit (${base.durationMinutes} min) est conservée — vérifiez-la.${hint}`;
+  return `Durée non précisée dans le texte : la durée actuelle de la trame (${base.durationMinutes} min) est conservée — vérifiez-la.${hint}`;
 }
 
 const TONE_FR: Readonly<Record<string, string>> = {
@@ -358,7 +413,7 @@ function isPlaceholder(value: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Découpage des lignes (moteur gratuit)
+// Découpage des lignes
 // ---------------------------------------------------------------------------
 
 const SLIDES_PATTERN = /\(?\s*(\d{1,2})\s*(?:diapositives?|diapos?|slides?)\s*\)?/i;
@@ -502,27 +557,33 @@ function findTables(lines: readonly string[], code: ReadonlySet<number>): Table[
 }
 
 const SLIDE_NUMBER = /^(\d{1,2})(?:\s*(?:-|–|—|à|to|a)\s*(\d{1,2}))?$/;
+/** En-tête aplati d'une colonne de durées (« Durée », « Temps », « Minutage »…). */
+const DURATION_HEADER = /\b(?:durees?|temps|timing|minutage|duration|time)\b/;
 const NUMBER_HEADER = /^(?:#|n°|no|num(?:ero)?|nb|n)$/;
 const TITLE_HEADER = /\b(?:diapos?|diapositives?|slides?|titre|title|sections?|parties?|etapes?|sequences?)\b/;
 const ROLE_HEADER = /\b(?:roles?|objectifs?|consignes?|contenus?|descriptions?|buts?|guidance|purpose|content|notes?|attendus?)\b/;
 
 /**
  * Tableau de diapos : une colonne de numéros (« 1 », « 9-12 ») sur la plupart
- * des lignes, une colonne de titre et, si elle existe, une colonne de rôle.
- * Chaque ligne devient une section ; une plage « 9-12 » vaut 4 diapos.
+ * des lignes, une colonne de titre et, si elles existent, une colonne de
+ * contenu et une colonne de durée (« 3:30 »). Chaque ligne devient une ligne de
+ * trame ; une plage « 9-12 » vaut 4 diapos.
  */
 function slidesFromTable(table: Table): { drafts: DraftSection[]; warnings: string[] } | null {
   if (table.rows.length < 2) return null;
   const width = table.header.length;
+  const all = Array.from({ length: width }, (_, c) => c);
+  const durationCol = all.find((c) => DURATION_HEADER.test(flat(table.header[c] ?? "")));
   const numericShare = (c: number) =>
     table.rows.filter((r) => SLIDE_NUMBER.test((r[c] ?? "").trim())).length / table.rows.length;
   const headerKeys = table.header.map((h) => h.trim().toLowerCase());
   let numCol = headerKeys.findIndex((h) => NUMBER_HEADER.test(h));
   if (numCol < 0 || numericShare(numCol) < 0.6) {
-    numCol = Array.from({ length: width }, (_, c) => c).find((c) => numericShare(c) >= 0.6) ?? -1;
+    numCol = all.find((c) => c !== durationCol && numericShare(c) >= 0.6) ?? -1;
   }
   if (numCol < 0) return null;
-  const columns = Array.from({ length: width }, (_, c) => c).filter((c) => c !== numCol);
+  // La colonne des durées n'est jamais un titre ni un contenu.
+  const columns = all.filter((c) => c !== numCol && c !== durationCol);
   const titleCol = columns.find((c) => TITLE_HEADER.test(flat(table.header[c] ?? ""))) ?? columns[0];
   if (titleCol === undefined) return null;
   const roleCol =
@@ -545,7 +606,12 @@ function slidesFromTable(table: Table): { drafts: DraftSection[]; warnings: stri
     if (!m && number) warnings.push(`Tableau : numéro « ${number} » illisible pour « ${title} », compté pour 1 diapo.`);
     else if (m && a > b) warnings.push(`Tableau : plage « ${number} » inversée pour « ${title} », lue comme ${from}-${to} (${slides} diapos).`);
     if (m && from === 0) warnings.push(`Tableau : numéro « 0 » pour « ${title} » (les diapos sont numérotées à partir de 1), compté pour ${slides} diapo${slides > 1 ? "s" : ""}.`);
-    drafts.push({ title, guidance: roleCol === undefined ? "" : (row[roleCol] ?? "").trim(), slides });
+    drafts.push({
+      title,
+      guidance: roleCol === undefined ? "" : (row[roleCol] ?? "").trim(),
+      slides,
+      duration: durationCol === undefined ? "" : (row[durationCol] ?? "").trim(),
+    });
   });
   return drafts.length >= 2 ? { drafts, warnings } : null;
 }
@@ -710,7 +776,7 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
     if (METADATA_LINE.test(line) || LIST_HEADER.test(line) || RULE_LINE.test(line)) consumed.add(i);
   });
   if (rawTone) {
-    // Même règle que pour l'IA : le ton est rédigé dans la langue du deck.
+    // Le ton est rédigé dans la langue du deck (un ton anglais est traduit ou écarté).
     const tone = normalizeTone(rawTone, language ?? base.language);
     if (tone) {
       patch.tone = tone;
@@ -769,9 +835,11 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
   warnings.push(...bounded.warnings);
   if (bounded.sections.length > 0) {
     patch.sections = bounded.sections;
-    found.push(`${bounded.sections.length} ${bounded.sections.length > 1 ? "sections" : "section"}`);
+    found.push(`${bounded.sections.length} ${bounded.sections.length > 1 ? "lignes" : "ligne"}`);
   }
   const coverLead = bounded.coverGuidance.map((g) => `Couverture : ${g}`);
+  const inherited = new Set<RecognizedField>();
+  fitDurations(base, patch, found, warnings, inherited, bounded.coverSeconds);
 
   const usable = (i: number) => !consumed.has(i) && !code.has(i) && !ignored.has(i) && (lines[i] ?? "").trim() !== "";
   let constraints: string;
@@ -795,136 +863,52 @@ export function parseTemplateText(text: string, base: PromptTemplate): TemplateI
     found.push("Contraintes");
   }
 
-  if (patch.durationMinutes === undefined && patch.sections) {
+  if (patch.durationMinutes === undefined && patch.sections && !inherited.has("sections")) {
     warnings.push(durationWarning(base, 1 + patch.sections.reduce((s, d) => s + d.slides, 0), parsePace(source)));
   }
-  return finish(base, patch, found, warnings);
-}
-
-// ---------------------------------------------------------------------------
-// Sortie IA permissive → gabarit borné
-// ---------------------------------------------------------------------------
-
-/** Schéma PERMISSIF envoyé au modèle (forme seule) ; tout champ est facultatif. */
-export const RawTemplateDraftSchema = z.object({
-  durationMinutes: z.number().optional(),
-  format: z.string().optional(),
-  language: z.string().optional(),
-  sections: z
-    .array(z.object({ title: z.string().optional(), guidance: z.string().optional(), slides: z.number().optional() }))
-    .optional(),
-  tone: z.string().optional(),
-  constraints: z.string().optional(),
-});
-export type RawTemplateDraft = z.infer<typeof RawTemplateDraftSchema>;
-
-/** Même découpage : même nombre de sections, mêmes nombres de diapos, dans l'ordre (les titres peuvent être reformulés). */
-function sameStructure(a: readonly Section[], b: readonly Section[]): boolean {
-  return a.length === b.length && a.every((s, i) => s.slides === b[i]?.slides);
-}
-
-/** « 16 sections / 31 diapos » (couverture comprise). */
-function structureLabel(sections: readonly Section[]): string {
-  const total = 1 + sections.reduce((sum, s) => sum + s.slides, 0);
-  return `${sections.length} ${sections.length > 1 ? "sections" : "section"} / ${total} diapos`;
+  return finish(base, patch, found, warnings, inherited);
 }
 
 /**
- * `sourceText` (le texte analysé) sert à vérifier que l'IA n'invente pas : une
- * durée ou un format absents du texte ne sont pas repris (valeur de base gardée,
- * signalée), et un tableau de diapos du texte fixe la structure (l'écart de l'IA
- * est signalé). Sans `sourceText`, la réponse est prise telle quelle.
+ * Durées des lignes et durée de l'oral, rendues cohérentes (le refine de
+ * PromptTemplateSchema) :
+ *  - sans durée d'oral dans le texte, des lignes TOUTES minutées la donnent :
+ *    somme + couverture (celle du tableau, 30 s au moins : la couverture de
+ *    l'application), arrondie à la minute supérieure, bornée à 3..90 min ;
+ *  - des durées qui ne tiennent pas dans l'oral (couverture de l'application
+ *    comprise) sont toutes retirées, avec un avertissement : elles redeviennent
+ *    automatiques. Vaut aussi pour les durées de la trame actuelle quand le
+ *    texte change seulement la durée de l'oral (`inherited` reçoit alors
+ *    « sections » : ces lignes ne viennent pas du texte).
  */
-export function normalizeTemplateDraft(raw: RawTemplateDraft, base: PromptTemplate, sourceText?: string): TemplateImport {
-  const found: string[] = [];
-  const warnings: string[] = [];
-  const patch: Partial<PromptTemplate> = {};
-  const source = sourceText === undefined ? undefined : stripControlChars(sourceText);
+function fitDurations(
+  base: PromptTemplate,
+  patch: Partial<PromptTemplate>,
+  found: string[],
+  warnings: string[],
+  inherited: Set<RecognizedField>,
+  coverSeconds: number | null,
+): void {
+  const fromText = patch.sections !== undefined;
+  const sections = patch.sections ?? base.sections;
+  const fixed = sections.reduce((sum, s) => sum + (s.seconds ?? 0), 0);
+  if (fixed === 0) return;
 
-  const aiDuration =
-    typeof raw.durationMinutes === "number" && Number.isFinite(raw.durationMinutes)
-      ? clamp(Math.round(raw.durationMinutes), BOUNDS.minDuration, BOUNDS.maxDuration)
-      : null;
-  // Le texte fait foi : sa durée l'emporte sur celle de l'IA, qui peut l'inventer ou la recopier.
-  let duration = aiDuration;
-  if (source !== undefined) {
-    const stated = readDuration(scanText(source));
-    warnings.push(...stated.warnings);
-    duration = stated.minutes;
-    if (stated.minutes !== null && aiDuration !== null && aiDuration !== stated.minutes) {
-      warnings.push(`L'IA a proposé ${aiDuration} min, mais le texte indique ${stated.minutes} min : la durée du texte est retenue.`);
-    }
-  }
-  if (duration !== null) {
-    patch.durationMinutes = duration;
-    found.push(`Durée : ${duration} min`);
+  if (fromText && patch.durationMinutes === undefined && sections.every((s) => s.seconds !== undefined)) {
+    const cover = Math.max(coverSeconds ?? APP_COVER_SECONDS, APP_COVER_SECONDS);
+    const minutes = clamp(Math.ceil((fixed + cover) / 60), BOUNDS.minDuration, BOUNDS.maxDuration);
+    patch.durationMinutes = minutes;
+    found.unshift(`Durée : ${minutes} min (somme des diapos)`);
   }
 
-  const aiFormat =
-    raw.format && /16\s*[:/x×]\s*9/.test(raw.format) ? "16:9" : raw.format && /4\s*[:/x×]\s*3/.test(raw.format) ? "4:3" : null;
-  // Le texte fait foi : un format qui n'y est pas écrit n'est pas « reconnu ».
-  const format = aiFormat === null || source === undefined ? aiFormat : parseFormat(source);
-  if (format) {
-    patch.format = format;
-    found.push(`Format : ${format}`);
+  const minutes = patch.durationMinutes ?? base.durationMinutes;
+  const cover = appCoverSeconds(minutes, sections);
+  if (fixed <= minutes * 60 - cover) {
+    if (fromText) found.push("Durées des diapos");
+    return;
   }
-
-  const lang = raw.language ? deaccent(raw.language.trim().toLowerCase()) : "";
-  const language = /^(en|anglais|english)/.test(lang) ? "en" : /^(fr|francais|french)/.test(lang) ? "fr" : null;
-  if (language) {
-    patch.language = language;
-    found.push(`Langue : ${languageLabel(language)}`);
-  }
-
-  let coverLead: string[] = [];
-  const aiBounded = raw.sections
-    ? boundSections(raw.sections.map((s) => ({ title: s.title ?? "", guidance: s.guidance ?? "", slides: s.slides ?? 1 })))
-    : null;
-  // Le texte fait foi : un tableau de diapos lu sans IA fixe la structure (sections, nombre de diapos),
-  // reproductible d'une analyse à l'autre ; l'IA ne fait que compléter les consignes vides.
-  const table = source === undefined ? undefined : findSlideTable(scanText(source));
-  if (table) {
-    const fromTable = boundSections(table.drafts.drafts);
-    warnings.push(...table.drafts.warnings, ...fromTable.warnings);
-    coverLead = fromTable.coverGuidance.map((g) => `Couverture : ${g}`);
-    const aiGuidance = new Map((aiBounded?.sections ?? []).filter((s) => s.guidance).map((s) => [flat(s.title), s.guidance]));
-    const sections = fromTable.sections.map((s) => (s.guidance ? s : { ...s, guidance: aiGuidance.get(flat(s.title)) ?? "" }));
-    if (aiBounded && aiBounded.sections.length > 0 && !sameStructure(aiBounded.sections, sections)) {
-      warnings.push(
-        `L'IA proposait ${structureLabel(aiBounded.sections)} ; le tableau de diapos du texte (${structureLabel(sections)}) est retenu tel quel.`,
-      );
-    }
-    if (sections.length > 0) {
-      patch.sections = sections;
-      found.push(`${sections.length} ${sections.length > 1 ? "sections" : "section"}`);
-    }
-  } else if (aiBounded) {
-    warnings.push(...aiBounded.warnings);
-    coverLead = aiBounded.coverGuidance.map((g) => `Couverture : ${g}`);
-    if (aiBounded.sections.length > 0) {
-      patch.sections = aiBounded.sections;
-      found.push(`${aiBounded.sections.length} ${aiBounded.sections.length > 1 ? "sections" : "section"}`);
-    }
-  }
-
-  const rawTone = raw.tone ? clean(raw.tone, BOUNDS.tone) : "";
-  const tone = rawTone ? normalizeTone(rawTone, language ?? base.language) : "";
-  if (tone) {
-    patch.tone = tone;
-    found.push("Ton");
-  } else if (rawTone) {
-    warnings.push(`Ton proposé par l'IA (« ${rawTone} ») non repris : il n'est pas rédigé en français.`);
-  }
-
-  const constraints = clean([...coverLead, raw.constraints ?? ""].filter((c) => c.trim()).join("\n"), BOUNDS.constraints);
-  if (constraints) {
-    patch.constraints = constraints;
-    found.push("Contraintes");
-  }
-
-  if (patch.durationMinutes === undefined && (aiDuration !== null || patch.sections)) {
-    const total = patch.sections ? 1 + patch.sections.reduce((s, d) => s + d.slides, 0) : 0;
-    warnings.push(durationWarning(base, total, source ? parsePace(source) : null, aiDuration));
-  }
-  return finish(base, patch, found, warnings);
+  const label = fromText ? "Durées des diapos ignorées" : "Durées des lignes actuelles ignorées";
+  warnings.push(`${label} : leur total (${formatSeconds(fixed + cover)}) dépasse la durée de l'oral (${minutes} min).`);
+  patch.sections = sections.map(withoutSeconds);
+  if (!fromText) inherited.add("sections");
 }

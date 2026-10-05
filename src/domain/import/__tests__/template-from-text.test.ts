@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultTemplate } from "@/domain/defaults";
-import { normalizeTemplateDraft, parseTemplateText } from "@/domain/import/template-from-text";
+import { parseTemplateText } from "@/domain/import/template-from-text";
 import { MAX_TEMPLATE_SLIDES, PromptTemplateSchema, type PromptTemplate } from "@/domain/schemas";
 import { totalSlides } from "@/domain/slides";
 
@@ -73,7 +73,7 @@ describe("parseTemplateText — sections", () => {
       ["Conclusion", 1],
     ]);
     expect(r.template.sections[2]!.guidance).toBe("forces et faiblesses");
-    expect(r.found).toContain("4 sections");
+    expect(r.found).toContain("4 lignes");
     expect(new Set(r.template.sections.map((s) => s.id)).size).toBe(4);
   });
 
@@ -122,33 +122,6 @@ describe("parseTemplateText — contraintes et cas limites", () => {
   });
 });
 
-describe("normalizeTemplateDraft (sortie IA permissive)", () => {
-  it("devrait normaliser une sortie IA approximative en gabarit valide", () => {
-    const { template, found } = normalizeTemplateDraft(
-      {
-        durationMinutes: 200,
-        format: "16/9",
-        language: "English",
-        sections: [{ title: "Intro", slides: 0 }, { title: "", slides: 3 }, { title: "Partie", guidance: "g".repeat(900), slides: 12 }],
-        tone: "t".repeat(500),
-      },
-      base,
-    );
-    expect(PromptTemplateSchema.safeParse(template).success).toBe(true);
-    expect(template.durationMinutes).toBe(90);
-    expect(template.language).toBe("en");
-    expect(template.sections.map((s) => s.title)).toEqual(["Intro", "Partie"]);
-    expect(template.sections.map((s) => s.slides)).toEqual([1, 8]);
-    expect(found).toContain("2 sections");
-  });
-
-  it("devrait garder la base pour les champs absents", () => {
-    const { template, found } = normalizeTemplateDraft({}, base);
-    expect(template).toEqual(base);
-    expect(found).toEqual([]);
-  });
-});
-
 describe("parseTemplateText — prompt collé sur une seule ligne", () => {
   const oneLine =
     "Oral de 20 minutes en 16:9. Sections : 1. Introduction (1 diapo) 2. Problématique (1 diapo) 3. Développement en deux parties (4 diapos) 4. Conclusion (1 diapo). Ton : professionnel.";
@@ -165,7 +138,7 @@ describe("parseTemplateText — prompt collé sur une seule ligne", () => {
     expect(template.durationMinutes).toBe(20);
     expect(template.format).toBe("16:9");
     expect(found).toEqual(expect.arrayContaining(["Ton"]));
-    expect(found.some((f) => /4 sections/.test(f))).toBe(true);
+    expect(found).toContain("4 lignes");
   });
 
   it("ne devrait pas couper un format ou une durée comme « 16:9. » ou « 1 h 30. »", () => {

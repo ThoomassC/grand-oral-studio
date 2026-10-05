@@ -1,34 +1,33 @@
 import { ImportFileError } from "./errors";
 
 /**
- * Type d'un fichier importé : extension ET signature (octets magiques) doivent
- * concorder. Taille maximale par type. Fonction pure.
+ * Type d'un fichier importé (apparence d'exemple) : extension ET signature
+ * (octets magiques) doivent concorder. Seuls les fichiers Office sont lus, sans
+ * IA. Fonction pure, utilisable côté client comme côté serveur.
  */
 
-export type ImportFileKind = "pptx" | "potx" | "thmx" | "pdf" | "png" | "jpeg";
-export type OfficeKind = Extract<ImportFileKind, "pptx" | "potx" | "thmx">;
+export type ImportFileKind = "pptx" | "potx" | "thmx";
 
 const MB = 1024 * 1024;
 
-export const IMPORT_MAX_BYTES: Record<ImportFileKind, number> = {
-  pptx: 20 * MB,
-  potx: 20 * MB,
-  thmx: 20 * MB,
-  // Limites de l'API Anthropic : 5 Mo par image ; un PDF est envoyé en base64 (+33 %).
-  pdf: 10 * MB,
-  png: 5 * MB,
-  jpeg: 5 * MB,
-};
+/** Taille maximale d'un fichier Office importé. */
+export const IMPORT_MAX_BYTES = 20 * MB;
+
+/**
+ * Import d'apparence depuis un PDF ou une image : retiré en 1.1.0 (il exigeait
+ * l'IA avant le jour J). Message affiché tel quel, côté client et côté serveur.
+ */
+export const RETIRED_FORMAT_MESSAGE =
+  "L'import depuis un PDF ou une image n'est plus proposé : utilisez un .pptx, .potx ou .thmx d'exemple.";
 
 const EXTENSIONS: Record<string, ImportFileKind> = {
   pptx: "pptx",
   potx: "potx",
   thmx: "thmx",
-  pdf: "pdf",
-  png: "png",
-  jpg: "jpeg",
-  jpeg: "jpeg",
 };
+
+/** Extensions des formats retirés : refusées avec une explication plutôt qu'un « format non pris en charge ». */
+export const RETIRED_EXTENSIONS: readonly string[] = ["pdf", "png", "jpg", "jpeg"];
 
 const MACRO_EXTENSIONS = new Set(["pptm", "potm", "ppsm", "ppam"]);
 
@@ -36,9 +35,9 @@ function startsWith(bytes: Uint8Array, signature: readonly number[]): boolean {
   return bytes.length >= signature.length && signature.every((b, i) => bytes[i] === b);
 }
 
-const SIGNATURES: Record<"zip" | "pdf" | "png" | "jpeg", readonly number[]> = {
+/** Signatures utiles : l'archive Office, et les images du logo qu'elle peut contenir. */
+const SIGNATURES: Record<"zip" | "png" | "jpeg", readonly number[]> = {
   zip: [0x50, 0x4b, 0x03, 0x04], // PK\x03\x04
-  pdf: [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
   png: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
   jpeg: [0xff, 0xd8, 0xff],
 };
@@ -47,29 +46,26 @@ export function hasSignature(bytes: Uint8Array, kind: keyof typeof SIGNATURES): 
   return startsWith(bytes, SIGNATURES[kind]);
 }
 
-function signatureOf(kind: ImportFileKind): keyof typeof SIGNATURES {
-  return kind === "pptx" || kind === "potx" || kind === "thmx" ? "zip" : kind;
-}
-
-export function isOfficeKind(kind: ImportFileKind): kind is OfficeKind {
-  return kind === "pptx" || kind === "potx" || kind === "thmx";
+/** Extension en minuscules (« .POTX » → « potx »), "" si absente. */
+export function fileExtension(fileName: string): string {
+  return /\.([A-Za-z0-9]{1,8})$/.exec(fileName.trim())?.[1]?.toLowerCase() ?? "";
 }
 
 export function detectImportFile(fileName: string, bytes: Uint8Array): { kind: ImportFileKind } {
-  const ext = /\.([A-Za-z0-9]{1,8})$/.exec(fileName.trim())?.[1]?.toLowerCase() ?? "";
+  const ext = fileExtension(fileName);
   if (MACRO_EXTENSIONS.has(ext)) {
     throw new ImportFileError("Les fichiers avec macros (.pptm, .potm) sont refusés : enregistrez-le en .pptx ou .potx.");
   }
+  if (RETIRED_EXTENSIONS.includes(ext)) throw new ImportFileError(RETIRED_FORMAT_MESSAGE);
   const kind = EXTENSIONS[ext];
   if (!kind) {
-    throw new ImportFileError("Format non pris en charge : utilisez un fichier .pptx, .potx, .thmx, .pdf, .png ou .jpg.");
+    throw new ImportFileError("Format non pris en charge : utilisez un fichier .pptx, .potx ou .thmx.");
   }
   if (bytes.byteLength === 0) throw new ImportFileError("Le fichier est vide.");
-  const max = IMPORT_MAX_BYTES[kind];
-  if (bytes.byteLength > max) {
-    throw new ImportFileError(`Le fichier dépasse ${Math.round(max / MB)} Mo.`);
+  if (bytes.byteLength > IMPORT_MAX_BYTES) {
+    throw new ImportFileError(`Le fichier dépasse ${IMPORT_MAX_BYTES / MB} Mo.`);
   }
-  if (!hasSignature(bytes, signatureOf(kind))) {
+  if (!hasSignature(bytes, "zip")) {
     throw new ImportFileError(`Le contenu du fichier ne correspond pas à son extension (.${ext}).`);
   }
   return { kind };

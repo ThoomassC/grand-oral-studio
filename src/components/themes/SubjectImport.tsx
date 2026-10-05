@@ -1,60 +1,42 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@thomascaron/opale-ui";
 import type { Brand, PromptTemplate } from "@/domain/schemas";
-import { IMPORT_ANCHORS } from "@/components/projects/steps";
-import { CurrentLogoProvider } from "./current-logo";
-import { SubjectFileImport } from "./SubjectFileImport";
 import { SubjectPromptImport } from "./SubjectPromptImport";
 
-const TITLE_ID = "importer-votre-sujet-titre";
+/** Ancre du bloc (contrat `IMPORT_ANCHORS.subjects` de steps.ts). */
+const ANCHOR = "importer-sujets";
+const TITLE_ID = "importer-sujets-titre";
 
 /**
- * Bloc principal de l'onglet Thèmes : « Importer votre sujet », en deux modes
- * (`Tabs` d'Opale, parties nommées : ce composant reste un Server Component,
- * seuls les deux panneaux sont des feuilles client).
+ * Bloc « Importer des sujets depuis un texte » de la page Sujets : la liste des
+ * sujets, l'énoncé de l'oral ou les consignes de l'établissement, lus sans IA ;
+ * les sujets repérés sont proposés à cocher avant l'import. Server Component :
+ * seul le panneau est une feuille client.
  *
- * - Depuis un fichier : la charte déduite d'une présentation, enregistrée ;
- * - Depuis un prompt : les thèmes et la charte repérés dans un texte.
- *
- * Seul le logo de la charte actuelle traverse la frontière, une fois
- * (`CurrentLogoProvider`) : il est conservé quand l'import n'en trouve pas.
+ * L'apparence n'est plus importée ici (bloc « Partir d'un exemple » de la page
+ * Apparence). `currentBrand` est accepté pour ne pas casser la page actuelle,
+ * mais n'est plus utilisé.
  */
 export function SubjectImport({
   programId,
-  currentBrand,
   format,
 }: {
   programId: string;
-  currentBrand: Pick<Brand, "logoDataUrl">;
   format: PromptTemplate["format"];
+  /** @deprecated Inutilisé depuis la 1.1.0 (l'apparence s'importe sur sa page). */
+  currentBrand?: Pick<Brand, "logoDataUrl">;
 }) {
   return (
-    <section
-      id={IMPORT_ANCHORS.subject}
-      aria-labelledby={TITLE_ID}
-      className="subject-import opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6"
-    >
+    <section id={ANCHOR} aria-labelledby={TITLE_ID} className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6">
       <p className="eyebrow">Démarrage rapide</p>
       <h2 id={TITLE_ID} className="mt-1 text-2xl">
-        Importer votre sujet
+        Importer des sujets depuis un texte
       </h2>
       <p className="mt-1 max-w-3xl text-muted">
-        Partez de ce que vous avez déjà : une présentation pour la charte graphique, ou l&apos;énoncé de votre oral pour
-        les thèmes et la charte. Vous vérifiez un aperçu avant d&apos;importer ; tout reste modifiable ensuite.
+        Partez de ce que vous avez déjà : la liste des sujets ou l&apos;énoncé de votre oral. Vous cochez les sujets à
+        importer dans un aperçu ; tout reste modifiable ensuite. Rien n&apos;est envoyé à une IA.
       </p>
-      <CurrentLogoProvider logo={currentBrand.logoDataUrl}>
-        <Tabs defaultValue="fichier" className="mt-4">
-          <TabsList aria-label="Mode d'import">
-            <TabsTrigger value="fichier">Depuis un fichier</TabsTrigger>
-            <TabsTrigger value="prompt">Depuis un prompt</TabsTrigger>
-          </TabsList>
-          <TabsContent value="fichier" className="pt-4">
-            <SubjectFileImport programId={programId} format={format} />
-          </TabsContent>
-          <TabsContent value="prompt" className="pt-4">
-            <SubjectPromptImport programId={programId} format={format} />
-          </TabsContent>
-        </Tabs>
-      </CurrentLogoProvider>
+      <div className="mt-4">
+        <SubjectPromptImport programId={programId} format={format} scope="subjects" />
+      </div>
     </section>
   );
 }
