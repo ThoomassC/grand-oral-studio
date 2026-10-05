@@ -26,7 +26,7 @@ function mostRecent(decks: FinalDeckSummary[], now: number): RecentDeck | null {
 function writerLabel(engine: AiSettingsView["engine"]): string {
   switch (engine.effective) {
     case "free":
-      return "Gratuit (trame à compléter)";
+      return "Sans IA (trame remplie avec vos notes)";
     case "claude":
       return "Claude";
     case "ollama":
@@ -49,12 +49,17 @@ export default async function DayPage({ params }: PageProps<"/projets/[id]/jour-
     }),
     getAiSettings(user.id),
   ]);
-  const themes: DayTheme[] = program.themes.map((t) => ({ id: t.id, name: t.name, hasSkeleton: t.skeleton !== null }));
+  // DTO explicite : ni notes ni ancien squelette ne traversent vers le client (inutiles au parcours).
+  const themes: DayTheme[] = program.themes.map((t) => ({ id: t.id, name: t.name }));
   const requestTime = new Date().getTime();
   return (
     <div className="flex flex-col gap-6">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
-        <p className="text-muted">Problématique, thème, diaporama : trois étapes, puis place à la répétition.</p>
+        <p className="text-muted">
+          {themes.length === 0
+            ? "Problématique, puis diaporama : deux étapes, puis place à la répétition."
+            : "Problématique, sujet, diaporama : trois étapes, puis place à la répétition."}
+        </p>
         {/* Repère du temps de préparation : rappel visuel, ne décompte rien. */}
         <p className="flex items-center gap-3 rounded-lg border border-border bg-surface py-2 pr-4 pl-2 shadow-card">
           <PrepDial usedMinutes={0} className="h-10 w-10 shrink-0" />

@@ -144,9 +144,9 @@ describe("Préremplissage de la trame avec un prompt", () => {
     await user.click(await screen.findByRole("button", { name: "Appliquer à la trame" }));
 
     expect(screen.getByLabelText("Durée de l'oral (minutes)")).toHaveValue(25);
-    expect(screen.getByLabelText("Titre de la section 2")).toHaveValue("Développement");
+    expect(screen.getByLabelText("Titre de la ligne 2")).toHaveValue("Développement");
     expect(screen.getByText("Modifications non enregistrées")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Gabarit de présentation" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Diapos de la trame" })).toHaveFocus());
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -236,5 +236,9 @@ describe("Préremplissage de la trame avec un prompt", () => {
     expect(items[0]).toHaveTextContent("Contexte — 2 diapos · 3:00");
     expect(items[1]).toHaveTextContent("Conclusion — 1 diapo");
     expect(items[1]).not.toHaveTextContent(":");
+
+    await user.click(within(preview).getByRole("button", { name: "Appliquer à la trame" }));
+    expect(screen.getByLabelText("Durée de la ligne 1")).toHaveValue("3:00");
+    expect(screen.getByLabelText("Durée de la ligne 2")).toHaveValue("");
   });
 });

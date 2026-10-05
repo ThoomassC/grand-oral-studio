@@ -146,7 +146,7 @@ export function BrandEditor({
         }
         setSaved(checked.data);
         setBrand(checked.data);
-        setStatus({ kind: "success", message: "Charte enregistrée." });
+        setStatus({ kind: "success", message: "Apparence enregistrée." });
       } catch {
         setStatus({ kind: "error", message: "La connexion a été interrompue. Vos réglages sont conservés : réessayez." });
       }
@@ -176,14 +176,14 @@ export function BrandEditor({
       <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
           <h2 tabIndex={-1} className="text-2xl focus:outline-none">
-            Charte graphique
+            Couleurs, polices et logo
           </h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
         </div>
 
         <div>
           <label htmlFor={nameId} className="opale-field__label">
-            Nom de la charte
+            Nom de l&apos;apparence
           </label>
           <TextInput
             id={nameId}
@@ -363,7 +363,7 @@ export function BrandEditor({
           <FormStatus state={status} />
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" aria-disabled={pending || undefined}>
-              <ButtonLabel idle="Enregistrer la charte" busy="Enregistrement…" isBusy={pending} />
+              <ButtonLabel idle="Enregistrer l'apparence" busy="Enregistrement…" isBusy={pending} />
             </Button>
             {dirty ? (
               <>

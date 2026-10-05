@@ -3,24 +3,21 @@
 import { TextArea, TextInput } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
-import { ThemeInputSchema, type ThemeInput } from "@/domain/schemas";
+import { LIMITS, ThemeInputSchema, type ThemeInput } from "@/domain/schemas";
 import type { ActionResult } from "@/server/actions/result";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { formatCount } from "@/components/ui/format";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { KeywordInput } from "./KeywordInput";
 
-/**
- * Valeurs de départ. `notes` facultatif tant que le formulaire n'a pas de champ « Notes » :
- * les notes reçues sont renvoyées telles quelles à l'enregistrement (jamais effacées).
- */
-type ThemeFormInitial = Omit<ThemeInput, "notes"> & { notes?: string };
+const NOTES_MAX = LIMITS.subjectNotes;
 
 interface ThemeFormProps {
-  initial?: ThemeFormInitial;
+  initial?: ThemeInput;
   submitLabel: string;
   pendingLabel: string;
   /** Message affiché dans le formulaire après succès (formulaire d'ajout, qui reste ouvert). */
@@ -57,20 +54,29 @@ export function ThemeForm({
   nameId,
 }: ThemeFormProps) {
   const generatedId = useId();
-  const ids = { name: nameId ?? `${generatedId}-name`, description: useId(), keywords: useId() };
+  const ids = {
+    name: nameId ?? `${generatedId}-name`,
+    description: `${generatedId}-description`,
+    keywords: `${generatedId}-keywords`,
+    notes: `${generatedId}-notes`,
+    notesHint: `${generatedId}-notes-hint`,
+    notesCount: `${generatedId}-notes-count`,
+  };
   const formRef = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
   const [keywords, setKeywords] = useState<string[]>(initial.keywords);
+  const [notes, setNotes] = useState(initial.notes);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [pending, startTransition] = useTransition();
   /** Dernière saisie enregistrée (ou l'état initial) : la référence des modifications non enregistrées. */
-  const [baseline, setBaseline] = useState<ThemeFormInitial>(initial);
+  const [baseline, setBaseline] = useState<ThemeInput>(initial);
   const dirty =
     name !== baseline.name ||
     description !== baseline.description ||
+    notes !== baseline.notes ||
     JSON.stringify(keywords) !== JSON.stringify(baseline.keywords);
   useUnsavedChanges(dirty);
 
@@ -80,7 +86,6 @@ export function ThemeForm({
     e.preventDefault();
     if (pending) return;
     setStatus(IDLE);
-    const notes = initial.notes ?? "";
     const checked = validateWith(ThemeInputSchema, { name, description, keywords, notes });
     if (!checked.ok) {
       setFieldErrors(checked.fieldErrors);
@@ -111,6 +116,7 @@ export function ThemeForm({
         setName("");
         setDescription("");
         setKeywords([]);
+        setNotes("");
         nameRef.current?.focus();
       }
       onSaved?.(checked.data.name);
@@ -132,7 +138,7 @@ export function ThemeForm({
     >
       <div>
         <label htmlFor={ids.name} className="opale-field__label">
-          Nom du thème
+          Nom du sujet
         </label>
         <TextInput
           ref={nameRef}
@@ -161,7 +167,7 @@ export function ThemeForm({
       </div>
       <div>
         <label htmlFor={ids.keywords} className="opale-field__label">
-          Mots-clés <span className="font-normal text-muted">(aident la reconnaissance du thème)</span>
+          Mots-clés <span className="font-normal text-muted">(aident la reconnaissance du sujet)</span>
         </label>
         <KeywordInput
           id={ids.keywords}
@@ -171,6 +177,29 @@ export function ThemeForm({
           describedBy={keywordError ? `${ids.keywords}-err` : undefined}
         />
         <FieldError id={`${ids.keywords}-err`} message={keywordError} />
+      </div>
+      <div>
+        <label htmlFor={ids.notes} className="opale-field__label">
+          Notes <span className="font-normal text-muted">(facultatif)</span>
+        </label>
+        <TextArea
+          id={ids.notes}
+          rows={5}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          maxLength={NOTES_MAX}
+          {...errorProps(fieldErrors, "notes", `${ids.notes}-err`, `${ids.notesHint} ${ids.notesCount}`)}
+        />
+        <p id={ids.notesHint} className="opale-field__helper">
+          Chiffres, exemples, sources : le jour J, le diaporama s&apos;appuie dessus.
+        </p>
+        <p
+          id={ids.notesCount}
+          className={`opale-field__helper num ${notes.length > NOTES_MAX ? "font-semibold text-danger" : ""}`}
+        >
+          {`${formatCount(notes.length)} / ${formatCount(NOTES_MAX)} caractères`}
+        </p>
+        <FieldError id={`${ids.notes}-err`} message={firstError(fieldErrors, "notes")} />
       </div>
       <FormStatus state={status} />
       <div className="flex flex-wrap gap-2">
