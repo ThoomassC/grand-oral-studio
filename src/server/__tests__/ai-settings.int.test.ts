@@ -9,6 +9,7 @@ import {
   AiKeyRequiredError,
   AiKeyUnreadableError,
   AiUnavailableError,
+  ConfigurationError,
   RateLimitedError,
   ValidationError,
 } from "@/server/errors";
@@ -49,11 +50,11 @@ async function count(key: string): Promise<number> {
   return (await db().usageWindow.findUnique({ where: { key } }))?.count ?? 0;
 }
 
-describe("saveApiKey", () => {
-  it("devrait vérifier la clé puis l'enregistrer chiffrée, sans jamais stocker le clair", async () => {
+describe("activateClaudeWithKey", () => {
+  it("devrait vérifier la clé, l'enregistrer chiffrée ET choisir Claude, sans jamais stocker le clair", async () => {
     const a = await createUser("a");
     const d = deps();
-    expect(await settings.saveApiKey(a.id, { apiKey: `  ${KEY_A}  ` }, d)).toEqual({ last4: "AAAA" });
+    expect(await settings.activateClaudeWithKey(a.id, { apiKey: `  ${KEY_A}  ` }, d)).toEqual({ last4: "AAAA" });
     expect(d.verifyKey).toHaveBeenCalledWith(KEY_A);
 
     const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
@@ -61,27 +62,51 @@ describe("saveApiKey", () => {
     expect(row.anthropicKeyCiphertext).not.toContain("aaaa");
     expect(row.anthropicKeyLast4).toBe("AAAA");
     expect(row.keyVersion).toBe(1);
+    expect(row.engine).toBe("claude");
     expect(await loadUserApiKey(a.id, { env: ENV, log: recordingLogger() })).toBe(KEY_A);
+    expect(d.log.events.map((e) => e.event)).toContain("ai_key.activated");
+  });
+
+  it("devrait choisir Claude en conservant le dernier modèle Ollama choisi", async () => {
+    const a = await createUser("a");
+    await db().userAiSettings.create({ data: { userId: a.id, engine: "ollama", ollamaModel: "mistral:latest" } });
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(row).toMatchObject({ engine: "claude", ollamaModel: "mistral:latest", anthropicKeyLast4: "AAAA" });
+  });
+
+  it("devrait garder une seule ligne, dernier gagnant, quand deux activations se croisent", async () => {
+    const a = await createUser("a");
+    await Promise.all([
+      settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps()),
+      settings.activateClaudeWithKey(a.id, { apiKey: KEY_B }, deps()),
+    ]);
+    expect(await db().userAiSettings.count({ where: { userId: a.id } })).toBe(1);
+    const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(row.engine).toBe("claude");
+    expect(["AAAA", "BBBB"]).toContain(row.anthropicKeyLast4);
+    // Chiffré et 4 derniers caractères viennent de la même écriture.
+    expect(await loadUserApiKey(a.id, { env: ENV, log: recordingLogger() })).toBe(row.anthropicKeyLast4 === "AAAA" ? KEY_A : KEY_B);
   });
 
   it("ne devrait jamais journaliser la clé", async () => {
     const a = await createUser("a");
     const d = deps();
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, d);
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, d);
     expect(JSON.stringify(d.log.events)).not.toContain(KEY_A.slice(0, 30));
   });
 
   it("devrait remplacer la clé quand on la réenregistre (une seule ligne, rejouable)", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
-    await settings.saveApiKey(a.id, { apiKey: KEY_B }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_B }, deps());
     expect(await db().userAiSettings.count({ where: { userId: a.id } })).toBe(1);
     expect(await loadUserApiKey(a.id, { env: ENV, log: recordingLogger() })).toBe(KEY_B);
   });
 
   it("devrait refuser une clé rejetée par Anthropic avec une erreur sur le champ apiKey, sans rien enregistrer", async () => {
     const a = await createUser("a");
-    const error = await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "rejected" })).catch((e: unknown) => e);
+    const error = await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "rejected" })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ValidationError);
     expect((error as ValidationError).fieldErrors?.apiKey).toEqual([
       "Cette clé est refusée par Anthropic. Vérifiez-la ou créez-en une nouvelle sur console.anthropic.com.",
@@ -89,9 +114,20 @@ describe("saveApiKey", () => {
     expect(await db().userAiSettings.count()).toBe(0);
   });
 
+  it("devrait laisser intacts le moteur et la clé précédents quand la nouvelle clé est refusée ou invérifiable", async () => {
+    const a = await createUser("a");
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.setEngine(a.id, { engine: "free" }, { env: ENV, log: recordingLogger(), listOllamaModels: noOllama });
+    const before = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    for (const check of [{ ok: false, reason: "rejected" }, { ok: false, reason: "unavailable" }] as const) {
+      await expect(settings.activateClaudeWithKey(a.id, { apiKey: KEY_B }, deps(check))).rejects.toThrow();
+    }
+    expect(await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } })).toEqual(before);
+  });
+
   it("devrait signaler une API injoignable sans rien enregistrer", async () => {
     const a = await createUser("a");
-    const error = await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "unavailable" })).catch((e: unknown) => e);
+    const error = await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "unavailable" })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AiUnavailableError);
     expect((error as AiUnavailableError).userMessage).toBe("Impossible de vérifier la clé pour le moment. Réessayez.");
     expect(await db().userAiSettings.count()).toBe(0);
@@ -100,38 +136,43 @@ describe("saveApiKey", () => {
   it("devrait refuser un format invalide sans appel réseau ni consommation de quota", async () => {
     const a = await createUser("a");
     const d = deps();
-    const error = await settings.saveApiKey(a.id, { apiKey: "sk-mauvaise" }, d).catch((e: unknown) => e);
+    const error = await settings.activateClaudeWithKey(a.id, { apiKey: "sk-mauvaise" }, d).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ValidationError);
     expect((error as ValidationError).fieldErrors?.apiKey?.length).toBeGreaterThan(0);
     expect(d.verifyKey).not.toHaveBeenCalled();
     expect(await count(`apikey-verify:${a.id}`)).toBe(0);
   });
 
-  it("devrait refuser l'enregistrement sans clé maître, avant tout appel réseau", async () => {
+  it("devrait refuser l'activation sans clé maître, avant le quota et tout appel réseau", async () => {
     const a = await createUser("a");
     const d = deps({ ok: true }, { NODE_ENV: "development" });
-    await expect(settings.saveApiKey(a.id, { apiKey: KEY_A }, d)).rejects.toBeInstanceOf(EncryptionKeyMissingError);
+    const error = await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, d).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EncryptionKeyMissingError);
+    expect(error).toBeInstanceOf(ConfigurationError);
     expect(d.verifyKey).not.toHaveBeenCalled();
+    expect(await count(`apikey-verify:${a.id}`)).toBe(0);
+    expect(await db().userAiSettings.count()).toBe(0);
   });
 
   it("devrait limiter le nombre de vérifications par utilisateur (pas d'oracle à clés)", async () => {
     const a = await createUser("a");
     for (let i = 0; i < API_KEY_VERIFY_QUOTA.limit; i += 1) {
-      await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "rejected" })).catch(() => undefined);
+      await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps({ ok: false, reason: "rejected" })).catch(() => undefined);
     }
     const d = deps();
-    const error = await settings.saveApiKey(a.id, { apiKey: KEY_A }, d).catch((e: unknown) => e);
+    const error = await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, d).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RateLimitedError);
     expect((error as RateLimitedError).userMessage).toMatch(/vérifications de clé/);
     expect(d.verifyKey).not.toHaveBeenCalled();
+    expect(await db().userAiSettings.count()).toBe(0);
   });
 });
 
 describe("isolement entre utilisateurs", () => {
   it("devrait donner à chacun sa propre clé et ne jamais exposer celle d'un autre", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
-    await settings.saveApiKey(b.id, { apiKey: KEY_B }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(b.id, { apiKey: KEY_B }, deps());
     const log = recordingLogger();
     expect(await loadUserApiKey(a.id, { env: ENV, log })).toBe(KEY_A);
     expect(await loadUserApiKey(b.id, { env: ENV, log })).toBe(KEY_B);
@@ -140,7 +181,7 @@ describe("isolement entre utilisateurs", () => {
 
   it("ne devrait pas déchiffrer un chiffré recopié sur la ligne d'un autre utilisateur (AAD)", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const rowA = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
     await db().userAiSettings.create({
       data: { userId: b.id, anthropicKeyCiphertext: rowA.anthropicKeyCiphertext, anthropicKeyLast4: "AAAA", keyVersion: 1 },
@@ -150,8 +191,8 @@ describe("isolement entre utilisateurs", () => {
 
   it("devrait supprimer uniquement la clé de l'appelant", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
-    await settings.saveApiKey(b.id, { apiKey: KEY_B }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(b.id, { apiKey: KEY_B }, deps());
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
     expect(await loadUserApiKey(a.id, { env: ENV, log: recordingLogger() })).toBeNull();
     expect(await loadUserApiKey(b.id, { env: ENV, log: recordingLogger() })).toBe(KEY_B);
@@ -161,7 +202,7 @@ describe("isolement entre utilisateurs", () => {
 describe("deleteApiKey", () => {
   it("devrait être idempotent et ramener la source effective au repli", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
     const v = await view(a.id, { ...ENV, ANTHROPIC_API_KEY: "sk-ant-server-key" });
@@ -171,7 +212,7 @@ describe("deleteApiKey", () => {
 
   it("devrait disparaître avec l'utilisateur (cascade)", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     await db().user.delete({ where: { id: a.id } });
     expect(await db().userAiSettings.count()).toBe(0);
   });
@@ -180,7 +221,7 @@ describe("deleteApiKey", () => {
 describe("getAiSettingsView", () => {
   it("ne devrait contenir ni la clé ni son chiffré", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
     const v = await view(a.id, ENV);
     const json = JSON.stringify(v);
@@ -209,7 +250,7 @@ describe("getAiSettingsView", () => {
 describe("rotation de la clé maître", () => {
   it("devrait lire une clé chiffrée avec l'ancienne clé maître puis la rechiffrer avec la nouvelle", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const rotated = {
       NODE_ENV: "test",
       SETTINGS_ENCRYPTION_KEY: MASTER_2,
@@ -225,7 +266,7 @@ describe("rotation de la clé maître", () => {
 
   it("devrait signaler une clé illisible (sans repli silencieux) si la clé maître a changé sans rotation", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const env = { NODE_ENV: "production", SETTINGS_ENCRYPTION_KEY: MASTER_2, ANTHROPIC_API_KEY: "sk-ant-srv" };
     await expect(getEngineForUser(a.id, { env, log: recordingLogger() })).rejects.toBeInstanceOf(AiKeyUnreadableError);
   });
@@ -264,7 +305,7 @@ describe("getEngineForUser (Claude)", () => {
 
   it("devrait appeler Anthropic avec la clé de l'utilisateur, et non celle du serveur", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const env = { ...ENV, ANTHROPIC_API_KEY: "sk-ant-server-key" };
 
     const fa = capturingFetch();
@@ -297,39 +338,41 @@ describe("quotas selon la clé utilisée", () => {
     const a = await createUser("a");
     const programId = await seedProgram(a.id);
     const [themeId] = await seedThemes(programId, [themeInput("Numérique", ["internet"])]);
-    return { a, themeId: themeId! };
+    /** Deck final : seule génération IA depuis la v1.1.0 (problématique distincte : pas de réutilisation). */
+    const generate = (billing: "user" | "server" | undefined, problem = "Le numérique rapproche-t-il les citoyens ?") =>
+      gen.generateFinalDeck(a.id, { programId, themeId: themeId!, problem }, {
+        ai: createMockProvider(),
+        log: recordingLogger(),
+        ...(billing ? { billing } : {}),
+      });
+    return { a, generate };
   }
 
   it("ne devrait pas entamer le plafond global ni le quota serveur avec la clé de l'utilisateur", async () => {
-    const { a, themeId } = await setup();
-    await gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "user" });
+    const { a, generate } = await setup();
+    await generate("user");
     expect(await count(aiOwnKeyQuotaKey(a.id))).toBe(1);
     expect(await count(aiQuotaKey(a.id))).toBe(0);
     expect(await count(AI_GLOBAL_QUOTA_KEY)).toBe(0);
   });
 
   it("devrait générer avec sa clé même quand le plafond global est atteint", async () => {
-    const { a, themeId } = await setup();
+    const { a, generate } = await setup();
     await db().usageWindow.create({ data: { key: AI_GLOBAL_QUOTA_KEY, windowStart: new Date(), count: AI_GLOBAL_QUOTA.limit } });
-    await expect(
-      gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "server" }),
-    ).rejects.toBeInstanceOf(RateLimitedError);
-    await expect(
-      gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "user" }),
-    ).resolves.toMatchObject({ warnings: [] });
+    await expect(generate("server")).rejects.toBeInstanceOf(RateLimitedError);
+    await expect(generate("user")).resolves.toMatchObject({ reused: false });
+    expect(await count(aiOwnKeyQuotaKey(a.id))).toBe(1);
   });
 
   it("devrait conserver un quota par utilisateur sur sa propre clé (protection contre les boucles)", async () => {
-    const { a, themeId } = await setup();
+    const { a, generate } = await setup();
     await db().usageWindow.create({ data: { key: aiOwnKeyQuotaKey(a.id), windowStart: new Date(), count: 200 } });
-    await expect(
-      gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "user" }),
-    ).rejects.toBeInstanceOf(RateLimitedError);
+    await expect(generate("user")).rejects.toBeInstanceOf(RateLimitedError);
   });
 
   it("devrait appliquer quota utilisateur et plafond global sur la clé du serveur (défaut)", async () => {
-    const { a, themeId } = await setup();
-    await gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger() });
+    const { a, generate } = await setup();
+    await generate(undefined);
     expect(await count(aiQuotaKey(a.id))).toBe(1);
     expect(await count(AI_GLOBAL_QUOTA_KEY)).toBe(1);
     expect(await count(aiOwnKeyQuotaKey(a.id))).toBe(0);
@@ -339,7 +382,7 @@ describe("quotas selon la clé utilisée", () => {
 describe("testEffectiveKey", () => {
   it("devrait revérifier la clé de l'utilisateur", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     const d = deps();
     expect(await settings.testEffectiveKey(a.id, d)).toEqual({ source: "user", model: "claude-opus-5-5" });
     expect(d.verifyKey).toHaveBeenCalledWith(KEY_A);
@@ -347,7 +390,7 @@ describe("testEffectiveKey", () => {
 
   it("devrait signaler une clé utilisateur désormais refusée", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
     await expect(settings.testEffectiveKey(a.id, deps({ ok: false, reason: "rejected" }))).rejects.toBeInstanceOf(
       AiKeyRejectedError,
     );

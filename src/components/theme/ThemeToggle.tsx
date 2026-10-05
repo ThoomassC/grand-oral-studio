@@ -12,7 +12,7 @@ import { useTheme } from "./ThemeProvider";
  * L'icône (lune en clair, soleil en sombre) est choisie par le CSS (variante
  * `dark:`, qui lit le `data-theme` posé avant la première peinture) : juste
  * dès l'affichage, avant l'hydratation. Le retour au mode « Système » se fait
- * dans Réglages > Apparence (bouton voisin de l'en-tête).
+ * dans Réglages > Affichage (bouton voisin de l'en-tête).
  */
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();

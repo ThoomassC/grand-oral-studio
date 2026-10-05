@@ -649,32 +649,6 @@
     }
   }
 
-  /*
-   * Sommaire de la Configuration IA : le Sidebar d'Opale tel quel (rail sur le fond de
-   * page, filet, parties, barre de défilement et poignée d'Opale). On ne fait
-   * que le placer : sous 768 px en haut de page ; au-delà, collé au bord gauche
-   * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
-   * barre de défilement d'Opale exige une hauteur.
-   */
-  @media (max-width: 767px) {
-    .settings-rail {
-      padding: var(--opale-space-md) 1rem 0;
-    }
-  }
-  @media (min-width: 768px) {
-    .settings-rail {
-      position: sticky;
-      top: 0;
-      flex: none;
-      align-self: flex-start;
-      height: 100dvh;
-    }
-    /* Le cadre d'Opale (poignée, format mobile) s'étire seul ; le rail le remplit. */
-    .settings-rail .settings-toc__root {
-      height: 100%;
-    }
-  }
-
   /* Zone de texte dans la coquille d'Opale (voir components/ui/Field.tsx). */
   .opale-input-shell--textarea {
     align-items: stretch;

@@ -67,15 +67,21 @@ export async function saveUserEngine(userId: string, engine: Engine, ollamaModel
   await db().userAiSettings.upsert({ where: { userId }, create: { userId, ...data }, update: data, select: { userId: true } });
 }
 
-/** Chiffre puis enregistre (INSERT … ON CONFLICT DO UPDATE : rejouable, dernier gagnant). */
-export async function saveUserAiKey(
+/**
+ * Chiffre la clé et choisit Claude en UNE écriture (INSERT … ON CONFLICT DO
+ * UPDATE) : rejouable, dernier gagnant, jamais d'état intermédiaire « clé
+ * enregistrée mais Claude non choisi ». Le modèle Ollama enregistré est
+ * conservé (revenir à Ollama retrouve le dernier modèle choisi).
+ */
+export async function activateUserClaudeKey(
   userId: string,
   apiKey: string,
   last4: string,
   box: SecretBox,
 ): Promise<UserAiKeyMeta> {
   const sealed = box.seal(apiKey, userId);
-  const data = { anthropicKeyCiphertext: sealed.ciphertext, anthropicKeyLast4: last4, keyVersion: sealed.keyVersion };
+  const engine: Engine = "claude";
+  const data = { anthropicKeyCiphertext: sealed.ciphertext, anthropicKeyLast4: last4, keyVersion: sealed.keyVersion, engine };
   const row = await db().userAiSettings.upsert({
     where: { userId },
     create: { userId, ...data },
@@ -83,7 +89,7 @@ export async function saveUserAiKey(
     select: { anthropicKeyLast4: true, keyVersion: true, updatedAt: true },
   });
   const meta = keyMeta(row);
-  if (!meta) throw new Error("saveUserAiKey: ligne sans clé après écriture"); // inatteignable (CHECK)
+  if (!meta) throw new Error("activateUserClaudeKey: ligne sans clé après écriture"); // inatteignable (CHECK)
   return meta;
 }
 

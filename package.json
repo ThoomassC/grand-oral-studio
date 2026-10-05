@@ -1,6 +1,6 @@
 {
   "name": "grand-oral-studio",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -20,6 +20,7 @@
     "postinstall": "prisma generate",
     "test:int": "VITEST_INTEGRATION=1 vitest run --project integration",
     "test:e2e": "playwright test",
+    "changelog": "CHANGELOG_WRITE=1 vitest run --project node src/domain/__tests__/changelog.test.ts",
     "vercel-build": "prisma migrate deploy && next build"
   },
   "dependencies": {

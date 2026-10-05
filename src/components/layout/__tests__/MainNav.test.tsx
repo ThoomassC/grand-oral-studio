@@ -32,7 +32,7 @@ function renderDirtyHeader() {
     <UnsavedChangesProvider>
       <Dirty />
       <GuardedLink href="/projets">Grand Oral Studio</GuardedLink>
-      <MainNav />
+      <MainNav signedIn />
       <UnsavedChangesBanner />
     </UnsavedChangesProvider>,
   );
@@ -41,26 +41,45 @@ function renderDirtyHeader() {
 const modal = () => screen.queryByRole("dialog", { name: "Quitter sans enregistrer ?" });
 
 describe("MainNav", () => {
-  it("devrait proposer Projets puis Configuration IA dans la navigation principale", () => {
-    render(<MainNav />);
-    const nav = screen.getByRole("navigation", { name: "Navigation principale" });
-    const links = nav.querySelectorAll("a");
-    expect([...links].map((a) => a.textContent)).toEqual(["Projets", "Configuration IA"]);
+  const tabs = () => [...screen.getByRole("navigation", { name: "Navigation principale" }).querySelectorAll("a")];
+
+  it("devrait proposer Projets, Configuration IA puis Notes de version à un compte connecté", () => {
+    render(<MainNav signedIn />);
+    expect(tabs().map((a) => a.textContent)).toEqual(["Projets", "Configuration IA", "Notes de version"]);
     expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("href", "/projets");
     expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("href", "/configuration-ia");
+    expect(screen.getByRole("link", { name: "Notes de version" })).toHaveAttribute("href", "/notes-de-version");
+  });
+
+  it("ne devrait proposer que Notes de version sans compte", () => {
+    pathname = "/";
+    render(<MainNav signedIn={false} />);
+    expect(tabs().map((a) => a.textContent)).toEqual(["Notes de version"]);
+    expect(screen.getByRole("link", { name: "Notes de version" })).not.toHaveAttribute("aria-current");
   });
 
   it("devrait signaler la page courante sur /configuration-ia", () => {
     pathname = "/configuration-ia";
-    render(<MainNav />);
+    render(<MainNav signedIn />);
     expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Projets" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Notes de version" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("devrait signaler Notes de version sur sa page, connecté ou non", () => {
+    pathname = "/notes-de-version";
+    for (const signedIn of [true, false]) {
+      render(<MainNav signedIn={signedIn} />);
+      expect(screen.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");
+      expect(tabs().filter((a) => a.hasAttribute("aria-current"))).toHaveLength(1);
+      cleanup();
+    }
   });
 
   it("devrait signaler Projets sur la liste et dans chaque projet", () => {
     for (const path of ["/projets", "/projets/abc/jour-j"]) {
       pathname = path;
-      render(<MainNav />);
+      render(<MainNav signedIn />);
       expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("aria-current", "page");
       expect(screen.getByRole("link", { name: "Configuration IA" })).not.toHaveAttribute("aria-current");
       cleanup();
