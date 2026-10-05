@@ -11,22 +11,51 @@ function lines(count: number): string {
   return Array.from({ length: count }, (_, i) => `Thème ${i + 1}`).join("\n");
 }
 
-describe("parseThemeImport — format Nom | description | mots, clés", () => {
+describe("parseThemeImport — format Nom | description | mots, clés | notes", () => {
   it("devrait lire nom, description et mots-clés", () => {
     expect(parseThemeImport("Numérique | Réseaux et données | internet, données")).toEqual({
       ok: true,
-      themes: [{ name: "Numérique", description: "Réseaux et données", keywords: ["internet", "données"] }],
+      themes: [{ name: "Numérique", description: "Réseaux et données", keywords: ["internet", "données"], notes: "" }],
     });
   });
 
+  it("devrait lire les notes en 4e colonne", () => {
+    expect(parseThemeImport("Énergie | Production et usages | climat | 42 % d'EnR en 2030 (source : ADEME)")).toEqual({
+      ok: true,
+      themes: [
+        {
+          name: "Énergie",
+          description: "Production et usages",
+          keywords: ["climat"],
+          notes: "42 % d'EnR en 2030 (source : ADEME)",
+        },
+      ],
+    });
+  });
+
+  it("devrait accepter des notes sans description ni mots-clés", () => {
+    const result = parseThemeImport("Ville | | | Paris : 20 % de pistes cyclables en plus");
+    expect(result.ok && result.themes[0]).toEqual({
+      name: "Ville",
+      description: "",
+      keywords: [],
+      notes: "Paris : 20 % de pistes cyclables en plus",
+    });
+  });
+
+  it("devrait signaler des notes trop longues avec le nom de la colonne", () => {
+    const result = parseThemeImport(`Ville | | | ${"x".repeat(4001)}`);
+    expect(!result.ok && result.errors).toEqual([{ line: 1, message: expect.stringMatching(/^notes : /) }]);
+  });
+
   it("devrait accepter une ligne réduite au nom", () => {
-    expect(parseThemeImport("Ville")).toEqual({ ok: true, themes: [{ name: "Ville", description: "", keywords: [] }] });
+    expect(parseThemeImport("Ville")).toEqual({ ok: true, themes: [{ name: "Ville", description: "", keywords: [], notes: "" }] });
   });
 
   it("devrait accepter une description vide suivie de mots-clés", () => {
     expect(parseThemeImport("Ville | | urbanisme ; mobilité")).toEqual({
       ok: true,
-      themes: [{ name: "Ville", description: "", keywords: ["urbanisme", "mobilité"] }],
+      themes: [{ name: "Ville", description: "", keywords: ["urbanisme", "mobilité"], notes: "" }],
     });
   });
 
@@ -48,9 +77,11 @@ describe("parseThemeImport — lignes invalides", () => {
     expect(!result.ok && result.errors.map((e) => e.line)).toEqual([2]);
   });
 
-  it("devrait signaler une ligne avec plus de trois colonnes", () => {
-    const result = parseThemeImport("Un | a | b | c");
-    expect(!result.ok && result.errors).toEqual([{ line: 1, message: expect.stringContaining("|") }]);
+  it("devrait signaler une ligne avec plus de quatre colonnes", () => {
+    const result = parseThemeImport("Un | a | b | c | d");
+    expect(!result.ok && result.errors).toEqual([
+      { line: 1, message: "Trop de séparateurs « | » (4 colonnes au plus)." },
+    ]);
   });
 
   it("devrait signaler un nom vide", () => {
@@ -60,7 +91,7 @@ describe("parseThemeImport — lignes invalides", () => {
 
   it("devrait signaler un doublon de nom dans l'import en citant la première ligne", () => {
     const result = parseThemeImport("Énergie\n\nenergie");
-    expect(!result.ok && result.errors).toEqual([{ line: 3, message: expect.stringContaining("ligne 1") }]);
+    expect(!result.ok && result.errors).toEqual([{ line: 3, message: "Doublon du sujet de la ligne 1." }]);
   });
 
   it("devrait rejeter tout l'import quand une seule ligne est invalide", () => {
@@ -70,21 +101,23 @@ describe("parseThemeImport — lignes invalides", () => {
   it.each([
     { cas: "un texte vide", text: "" },
     { cas: "uniquement des commentaires", text: "# rien\n\n# toujours rien" },
-  ])("devrait signaler l'absence de thème pour $cas", ({ text }) => {
+  ])("devrait signaler l'absence de sujet pour $cas", ({ text }) => {
     const result = parseThemeImport(text);
-    expect(!result.ok && result.errors).toEqual([{ line: 0, message: expect.stringMatching(/aucun thème/i) }]);
+    expect(!result.ok && result.errors).toEqual([{ line: 0, message: expect.stringMatching(/aucun sujet/i) }]);
   });
 });
 
 describe("parseThemeImport — limite de lignes", () => {
-  it(`devrait accepter exactement ${THEME_IMPORT_MAX_LINES} thèmes`, () => {
+  it(`devrait accepter exactement ${THEME_IMPORT_MAX_LINES} sujets`, () => {
     const result = parseThemeImport(lines(THEME_IMPORT_MAX_LINES));
     expect(result.ok && result.themes).toHaveLength(THEME_IMPORT_MAX_LINES);
   });
 
-  it(`devrait refuser ${THEME_IMPORT_MAX_LINES + 1} thèmes avec une erreur globale unique`, () => {
+  it(`devrait refuser ${THEME_IMPORT_MAX_LINES + 1} sujets avec une erreur globale unique`, () => {
     const result = parseThemeImport(lines(THEME_IMPORT_MAX_LINES + 1));
-    expect(!result.ok && result.errors).toEqual([{ line: 0, message: expect.stringContaining(String(THEME_IMPORT_MAX_LINES)) }]);
+    expect(!result.ok && result.errors).toEqual([
+      { line: 0, message: `L'import est limité à ${THEME_IMPORT_MAX_LINES} sujets (${THEME_IMPORT_MAX_LINES + 1} lignes reçues).` },
+    ]);
   });
 
   it("ne devrait pas compter commentaires et lignes vides dans la limite", () => {

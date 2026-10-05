@@ -124,6 +124,8 @@ model Theme {
   name        String
   description String   @default("")
   keywords    String[] @default([])
+  /// Notes de l'utilisateur (chiffres, exemples, sources), 4000 caractères au plus (CHECK Theme_notes_length).
+  notes       String   @default("")
   decks       Deck[]
 
   @@unique([programId, position])
@@ -141,8 +143,9 @@ model Deck {
   id        String   @id @default(cuid())
   programId String
   program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
-  themeId   String
-  theme     Theme    @relation(fields: [themeId, programId], references: [id, programId], onDelete: Cascade)
+  /// NULL = deck final produit sans sujet. Un SKELETON a toujours un thème (CHECK Deck_skeleton_has_theme).
+  themeId   String?
+  theme     Theme?   @relation(fields: [themeId, programId], references: [id, programId], onDelete: Cascade)
   kind      DeckKind
   /// Problématique du jour J (decks FINAL uniquement).
   problem   String?

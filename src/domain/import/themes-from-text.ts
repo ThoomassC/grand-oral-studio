@@ -326,6 +326,8 @@ function boundThemes(drafts: readonly DraftTheme[]): ThemeInput[] {
       name,
       description: clean(d.description, BOUNDS.description),
       keywords: dedupeKeywords(d.keywords.map((k) => clean(k, BOUNDS.keyword))).slice(0, BOUNDS.keywords),
+      // Pas de notes depuis un prompt libre : aucune frontière fiable dans le texte.
+      notes: "",
     });
     if (!parsed.success) continue; // défense en profondeur : les bornes ci-dessus suffisent
     seen.add(key);

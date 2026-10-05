@@ -8,7 +8,7 @@ import { lockOwnedProgram, ownedProgram } from "./ownership";
 import type { ThemeView } from "./types";
 
 /**
- * Thèmes. Invariant : dans un programme, les positions forment 0..n-1 sans trou,
+ * Sujets (identifiant de code historique : « theme »). Invariant : dans un programme, les positions forment 0..n-1 sans trou,
  * garanti par UNIQUE(programId, position) + réécriture complète sous verrou.
  *
  * Toute écriture qui touche aux positions verrouille d'abord la ligne Program
@@ -31,7 +31,7 @@ async function rewritePositions(tx: Tx, programId: string, orderedIds: string[])
     WHERE t."id" = v.id AND t."programId" = ${programId}`;
   if (updated !== orderedIds.length) {
     // Ne doit pas arriver sous verrou ; la transaction est annulée.
-    throw new ConflictError("La liste des thèmes a changé entre-temps. Rechargez la page.");
+    throw new ConflictError("La liste des sujets a changé entre-temps. Rechargez la page.");
   }
 }
 
@@ -59,10 +59,17 @@ export async function addTheme(userId: string, programId: string, input: ThemeIn
     await lockOwnedProgram(tx, userId, programId);
     const { position, count } = await nextPosition(tx, programId);
     if (count >= MAX_THEMES_PER_PROGRAM) {
-      throw new LimitExceededError(`Un projet est limité à ${MAX_THEMES_PER_PROGRAM} thèmes.`);
+      throw new LimitExceededError(`Un projet est limité à ${MAX_THEMES_PER_PROGRAM} sujets.`);
     }
     const row = await tx.theme.create({
-      data: { programId, position, name: input.name, description: input.description, keywords: input.keywords },
+      data: {
+        programId,
+        position,
+        name: input.name,
+        description: input.description,
+        keywords: input.keywords,
+        notes: input.notes,
+      },
     });
     await touchProgram(tx, programId);
     return toThemeView(row);
@@ -73,7 +80,7 @@ export async function updateTheme(userId: string, themeId: string, input: ThemeI
   return db().$transaction(async (tx) => {
     const { count } = await tx.theme.updateMany({
       where: { id: themeId, program: ownedProgram(userId) },
-      data: { name: input.name, description: input.description, keywords: input.keywords },
+      data: { name: input.name, description: input.description, keywords: input.keywords, notes: input.notes },
     });
     if (count === 0) throw new NotFoundError("thème");
     const row = await tx.theme.findUniqueOrThrow({ where: { id: themeId } });
@@ -123,7 +130,7 @@ export async function reorderThemes(userId: string, programId: string, themeIds:
       requested.size === currentIds.size &&
       themeIds.every((id) => currentIds.has(id));
     if (!sameSet) {
-      throw new ConflictError("La liste des thèmes a changé entre-temps. Rechargez la page.");
+      throw new ConflictError("La liste des sujets a changé entre-temps. Rechargez la page.");
     }
     await rewritePositions(tx, programId, themeIds);
     await touchProgram(tx, programId);
@@ -157,7 +164,7 @@ export async function importThemes(
     }
     if (existing.length + fresh.length > MAX_THEMES_PER_PROGRAM) {
       throw new LimitExceededError(
-        `Un projet est limité à ${MAX_THEMES_PER_PROGRAM} thèmes (${existing.length} existants, ${fresh.length} à importer).`,
+        `Un projet est limité à ${MAX_THEMES_PER_PROGRAM} sujets (${existing.length} existants, ${fresh.length} à importer).`,
       );
     }
     if (fresh.length > 0) {
@@ -169,6 +176,7 @@ export async function importThemes(
           name: t.name,
           description: t.description,
           keywords: t.keywords,
+          notes: t.notes,
         })),
       });
       await touchProgram(tx, programId);

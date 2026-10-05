@@ -13,8 +13,14 @@ import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStat
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { KeywordInput } from "./KeywordInput";
 
+/**
+ * Valeurs de départ. `notes` facultatif tant que le formulaire n'a pas de champ « Notes » :
+ * les notes reçues sont renvoyées telles quelles à l'enregistrement (jamais effacées).
+ */
+type ThemeFormInitial = Omit<ThemeInput, "notes"> & { notes?: string };
+
 interface ThemeFormProps {
-  initial?: ThemeInput;
+  initial?: ThemeFormInitial;
   submitLabel: string;
   pendingLabel: string;
   /** Message affiché dans le formulaire après succès (formulaire d'ajout, qui reste ouvert). */
@@ -29,7 +35,7 @@ interface ThemeFormProps {
   nameId?: string;
 }
 
-const EMPTY: ThemeInput = { name: "", description: "", keywords: [] };
+const EMPTY: ThemeInput = { name: "", description: "", keywords: [], notes: "" };
 
 /** Première erreur portant sur un mot-clé précis (`keywords.3`), avec son rang. */
 function keywordItemError(errors: FieldErrors): string | undefined {
@@ -61,7 +67,7 @@ export function ThemeForm({
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [pending, startTransition] = useTransition();
   /** Dernière saisie enregistrée (ou l'état initial) : la référence des modifications non enregistrées. */
-  const [baseline, setBaseline] = useState<ThemeInput>(initial);
+  const [baseline, setBaseline] = useState<ThemeFormInitial>(initial);
   const dirty =
     name !== baseline.name ||
     description !== baseline.description ||
@@ -74,7 +80,8 @@ export function ThemeForm({
     e.preventDefault();
     if (pending) return;
     setStatus(IDLE);
-    const checked = validateWith(ThemeInputSchema, { name, description, keywords });
+    const notes = initial.notes ?? "";
+    const checked = validateWith(ThemeInputSchema, { name, description, keywords, notes });
     if (!checked.ok) {
       setFieldErrors(checked.fieldErrors);
       setStatus({ kind: "error", message: invalidCountMessage(countFieldErrors(checked.fieldErrors)) });
@@ -82,7 +89,7 @@ export function ThemeForm({
       return;
     }
     setFieldErrors({});
-    const submitted: ThemeInput = { name, description, keywords };
+    const submitted: ThemeInput = { name, description, keywords, notes };
     startTransition(async () => {
       let result: ActionResult<unknown>;
       try {

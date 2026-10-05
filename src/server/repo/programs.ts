@@ -80,9 +80,12 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
           _count: { select: { decks: { where: { kind: "FINAL" } } } },
         },
       },
+      // Total du programme : compte aussi les decks finaux sans sujet, que les compteurs par sujet ignorent.
+      _count: { select: { decks: { where: { kind: "FINAL" } } } },
     },
   });
   if (!row) throw new NotFoundError("programme");
+  const finalDeckCount = row._count.decks;
   const template = readTemplate(row.template, row.id);
   const themes = row.themes.map((t) => {
     const skeleton = t.decks[0];
@@ -101,12 +104,13 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     themes,
+    finalDeckCount,
     progress: computeProjectProgress({
       themeCount: themes.length,
       brandSavedAt,
       templateSavedAt,
       skeletonCount: themes.filter((t) => t.skeleton !== null).length,
-      finalDeckCount: themes.reduce((sum, t) => sum + t.finalDeckCount, 0),
+      finalDeckCount,
       template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),
   };
@@ -197,7 +201,7 @@ export async function deleteProgram(userId: string, programId: string): Promise<
 const COPY_SUFFIX = " (copie)";
 
 /**
- * Duplique un programme : métadonnées, charte, gabarit, thèmes et squelettes.
+ * Duplique un programme : métadonnées, apparence, trame, sujets (notes comprises) et squelettes.
  * Les decks finaux (propres à un jour J) ne sont pas copiés. Tout ou rien.
  */
 export async function duplicateProgram(userId: string, programId: string): Promise<{ id: string }> {
@@ -238,6 +242,7 @@ export async function duplicateProgram(userId: string, programId: string): Promi
         name: t.name,
         description: t.description,
         keywords: t.keywords,
+        notes: t.notes,
       })),
       select: { id: true, position: true },
     });

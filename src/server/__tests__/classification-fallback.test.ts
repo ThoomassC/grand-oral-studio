@@ -11,8 +11,8 @@ const CTX: ProgramContext = {
   description: "",
   template: makeTemplate(),
   themes: [
-    { id: "t-energie", name: "Transition énergétique", description: "Énergie et climat", keywords: ["énergie", "climat"] },
-    { id: "t-numerique", name: "Numérique", description: "Internet et données", keywords: ["internet", "données"] },
+    { id: "t-energie", name: "Transition énergétique", description: "Énergie et climat", keywords: ["énergie", "climat"], notes: "" },
+    { id: "t-numerique", name: "Numérique", description: "Internet et données", keywords: ["internet", "données"], notes: "" },
   ],
 };
 const PROBLEM = "Comment réduire la consommation de données sur internet ?";

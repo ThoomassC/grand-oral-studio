@@ -168,7 +168,7 @@ describe("importThemeList (Server Action)", () => {
     const before = await names(ids.programId);
     const result = await importThemeList(ids.programId, { themes: list("Nouveau un", "Nouveau deux") });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatch(/limité à 60 thèmes/);
+    if (!result.ok) expect(result.error).toMatch(/limité à 60 sujets/);
     expect(await names(ids.programId)).toEqual(before);
     // Les thèmes déjà présents ne comptent pas : un seul nouveau passe.
     expect(await importThemeList(ids.programId, { themes: list("Thème 0", "Nouveau un") })).toEqual({

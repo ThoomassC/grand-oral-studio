@@ -15,6 +15,7 @@ export default async function ThemesPage({ params }: PageProps<"/projets/[id]">)
     name: t.name,
     description: t.description,
     keywords: t.keywords,
+    notes: t.notes,
     hasSkeleton: t.skeleton !== null,
     finalDeckCount: t.finalDeckCount,
   }));

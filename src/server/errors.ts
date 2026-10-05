@@ -43,13 +43,13 @@ export abstract class AppError extends Error {
  * Ressource absente OU appartenant à un autre utilisateur : on ne distingue pas
  * les deux cas pour ne pas révéler l'existence d'un objet.
  */
-const RESOURCE_LABELS = { programme: "projet", thème: "thème", deck: "deck" } as const;
+const RESOURCE_LABELS = { programme: "projet", thème: "sujet", deck: "deck" } as const;
 
 export class NotFoundError extends AppError {
   readonly code = "NOT_FOUND" as const;
   readonly status = 404;
   constructor(resource: "programme" | "thème" | "deck" = "programme") {
-    // Clé interne « programme » ; l'interface parle de « projet ».
+    // Clés internes « programme » et « thème » ; l'interface parle de « projet » et de « sujet ».
     super(`Ce ${RESOURCE_LABELS[resource]} est introuvable.`);
   }
 }
@@ -66,13 +66,13 @@ export class ValidationError extends AppError {
   }
 }
 
-/** L'état de la ressource a changé entre-temps (ex. liste de thèmes périmée). */
+/** L'état de la ressource a changé entre-temps (ex. liste de sujets périmée). */
 export class ConflictError extends AppError {
   readonly code = "CONFLICT" as const;
   readonly status = 409;
 }
 
-/** Plafond métier atteint (nombre de thèmes, taille d'import…). */
+/** Plafond métier atteint (nombre de sujets, taille d'import…). */
 export class LimitExceededError extends AppError {
   readonly code = "LIMIT_EXCEEDED" as const;
   readonly status = 422;
@@ -117,7 +117,7 @@ export class AiRefusalError extends AppError {
   readonly status = 422;
   constructor(readonly category: string | null) {
     super(
-      "L'IA a refusé de traiter cette demande. Reformulez la problématique ou le thème, puis réessayez.",
+      "L'IA a refusé de traiter cette demande. Reformulez la problématique ou le sujet, puis réessayez.",
     );
   }
 }

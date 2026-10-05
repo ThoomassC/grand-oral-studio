@@ -5,11 +5,14 @@ import type { Brand, Classification, DeckSpec, PromptTemplate, Section, Slide } 
  * sans accès réseau ni base). Les tests unitaires s'écrivent contre ces signatures.
  */
 
+/** Sujet du projet (identifiant de code historique : « theme »). */
 export interface ThemeRef {
   id: string;
   name: string;
   description: string;
   keywords: string[];
+  /** Notes du sujet ("" si aucune). Jamais envoyées à la reconnaissance. */
+  notes: string;
 }
 
 export interface ProgramContext {

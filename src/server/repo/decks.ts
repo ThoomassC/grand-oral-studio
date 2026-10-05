@@ -11,7 +11,9 @@ import type { DeckEngine, DeckView, DeckWithProgram, FinalDeckSummary } from "./
 /**
  * Decks. Un deck appartient au programme qui appartient à l'utilisateur ; la
  * clé étrangère composite (themeId, programId) → Theme(id, programId) garantit
- * en base qu'un deck ne pointe jamais vers le thème d'un autre programme.
+ * en base qu'un deck ne pointe jamais vers le sujet d'un autre programme.
+ * `themeId` NULL = deck final produit sans sujet (MATCH SIMPLE : non contrôlé) ;
+ * un squelette a toujours un sujet (CHECK "Deck_skeleton_has_theme").
  */
 
 const FINAL_DECKS_LIMIT = 100;
@@ -27,8 +29,8 @@ export interface GenerationContext {
   themes: ThemeRef[];
 }
 
-function toThemeRef(t: { id: string; name: string; description: string; keywords: string[] }): ThemeRef {
-  return { id: t.id, name: t.name, description: t.description, keywords: t.keywords };
+function toThemeRef(t: { id: string; name: string; description: string; keywords: string[]; notes: string }): ThemeRef {
+  return { id: t.id, name: t.name, description: t.description, keywords: t.keywords, notes: t.notes };
 }
 
 export async function getGenerationContext(userId: string, programId: string): Promise<GenerationContext> {
@@ -44,6 +46,34 @@ export async function getGenerationContext(userId: string, programId: string): P
     themes,
     ctx: { name: row.name, description: row.description, themes, template: readTemplate(row.template, row.id) },
   };
+}
+
+export interface FinalDeckContext {
+  programId: string;
+  /** ctx.themes : tous les sujets du programme (avec leurs notes). */
+  ctx: ProgramContext;
+  brand: Brand;
+  /** Sujet choisi, ou null (sans sujet). */
+  subject: ThemeRef | null;
+}
+
+/**
+ * Contexte du deck final (jour J). Lecture filtrée par propriétaire :
+ * programme absent ou étranger → NotFoundError("programme") ; `themeId` inconnu
+ * DANS CE programme (absent, ou sujet d'un autre programme) → NotFoundError("thème").
+ */
+export async function getFinalDeckContext(
+  userId: string,
+  programId: string,
+  themeId: string | null,
+): Promise<FinalDeckContext> {
+  const { ctx, brand } = await getGenerationContext(userId, programId);
+  let subject: ThemeRef | null = null;
+  if (themeId !== null) {
+    subject = ctx.themes.find((t) => t.id === themeId) ?? null;
+    if (!subject) throw new NotFoundError("thème");
+  }
+  return { programId, ctx, brand, subject };
 }
 
 /** Contexte complet d'un thème possédé : programme, thème ciblé et squelette existant. */
@@ -125,9 +155,14 @@ export async function upsertSkeleton(
   }
 }
 
+/**
+ * Crée un deck final. Autorisation revérifiée dans la transaction (programme
+ * possédé) ; un sujet hors du programme est refusé par la FK composite.
+ * `themeId: null` = deck sans sujet.
+ */
 export async function createFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; spec: DeckSpec; engine?: DeckEngine | null },
+  input: { programId: string; themeId: string | null; problem: string; spec: DeckSpec; engine?: DeckEngine | null },
 ): Promise<{ deckId: string }> {
   const json = specJson(input.spec);
   return db().$transaction(async (tx) => {
@@ -150,7 +185,7 @@ export async function createFinalDeck(
       });
       return { deckId: created.id };
     } catch (error) {
-      // FK composite : thème absent ou d'un autre programme.
+      // FK composite : sujet absent ou d'un autre programme.
       if (prismaErrorCode(error) === "P2003") throw new NotFoundError("thème");
       throw error;
     }
@@ -158,12 +193,13 @@ export async function createFinalDeck(
 }
 
 /**
- * Deck FINAL identique (même thème, même problématique) créé récemment : sert
- * à absorber un double envoi / un retry client sans regénérer.
+ * Deck FINAL identique (même sujet — ou même absence de sujet —, même
+ * problématique) créé récemment : sert à absorber un double envoi / un retry
+ * client sans regénérer. `themeId: null` filtre les decks sans sujet (IS NULL).
  */
 export async function findRecentFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; sinceMs: number; engine?: DeckEngine },
+  input: { programId: string; themeId: string | null; problem: string; sinceMs: number; engine?: DeckEngine },
 ): Promise<{ deckId: string } | null> {
   const row = await db().deck.findFirst({
     where: {
@@ -227,10 +263,11 @@ export async function listSkeletonThemeIds(userId: string, programId: string): P
     where: { programId, kind: "SKELETON", program: ownedProgram(userId) },
     select: { themeId: true },
   });
-  return new Set(rows.map((r) => r.themeId));
+  // Un squelette a toujours un sujet (CHECK) : le filtre ne sert qu'au typage.
+  return new Set(rows.flatMap((r) => (r.themeId === null ? [] : [r.themeId])));
 }
 
-export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string }> {
+export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string | null }> {
   return db().$transaction(async (tx) => {
     const deck = await tx.deck.findFirst({
       where: { id: deckId, program: ownedProgram(userId) },
@@ -263,11 +300,11 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   });
   if (!row) throw new NotFoundError("deck");
   const view: DeckView = toDeckView(row);
-  const skeleton = view.kind === "FINAL" ? row.theme.decks[0] : undefined;
+  const skeleton = view.kind === "FINAL" ? row.theme?.decks[0] : undefined;
   return {
     ...view,
     updatedAt: view.updatedAt.toISOString(),
-    themeName: row.theme.name,
+    themeName: row.theme?.name ?? null,
     skeletonSpec: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
     program: {
       id: row.program.id,
@@ -296,7 +333,7 @@ export async function listFinalDecks(userId: string, programId: string): Promise
       id: r.id,
       engine: view.engine,
       themeId: r.themeId,
-      themeName: r.theme.name,
+      themeName: r.theme?.name ?? null,
       problem: r.problem ?? "",
       title: view.spec.title,
       createdAt: r.createdAt,

@@ -247,3 +247,145 @@ describe("repo decks — lectures et suppression", () => {
     expect(await db().deck.count({ where: { id: deckId } })).toBe(0);
   });
 });
+
+describe("repo decks — decks finaux sans sujet", () => {
+  it("devrait créer un deck final sans sujet et le relire sans nom de sujet ni squelette", async () => {
+    const { a, programId } = await ownedSetup();
+    const { deckId } = await decks.createFinalDeck(a.id, {
+      programId,
+      themeId: null,
+      problem: "Une problématique",
+      spec: makeConformingDeck(),
+      engine: "free",
+    });
+
+    const row = await db().deck.findUniqueOrThrow({ where: { id: deckId }, select: { themeId: true, kind: true } });
+    expect(row).toEqual({ themeId: null, kind: "FINAL" });
+    const deck = await decks.getDeck(a.id, deckId);
+    expect(deck).toMatchObject({ themeId: null, themeName: null, skeletonSpec: null, engine: "free" });
+    expect((await decks.listFinalDecks(a.id, programId)).map((d) => [d.id, d.themeId, d.themeName])).toEqual([
+      [deckId, null, null],
+    ]);
+  });
+
+  it("devrait lever NotFoundError et ne rien créer quand B crée un deck sans sujet dans le programme de A", async () => {
+    const { b, programId } = await ownedSetup();
+    await expect(
+      decks.createFinalDeck(b.id, { programId, themeId: null, problem: "Une problématique", spec: makeConformingDeck() }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(await db().deck.count({ where: { programId } })).toBe(0);
+  });
+
+  it("findRecentFinalDeck devrait distinguer « sans sujet » d'un sujet pour la même problématique", async () => {
+    const { a, programId, themeId } = await ownedSetup();
+    const problem = "Même problématique";
+    const withoutSubject = await decks.createFinalDeck(a.id, { programId, themeId: null, problem, spec: makeConformingDeck() });
+
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId: null, problem, sinceMs: 60_000 })).toEqual(withoutSubject);
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId, problem, sinceMs: 60_000 })).toBeNull();
+
+    const withSubject = await decks.createFinalDeck(a.id, { programId, themeId, problem, spec: makeConformingDeck() });
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId, problem, sinceMs: 60_000 })).toEqual(withSubject);
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId: null, problem, sinceMs: 60_000 })).toEqual(withoutSubject);
+  });
+
+  it("ne devrait pas retrouver le deck sans sujet de A pour B", async () => {
+    const { a, b, programId } = await ownedSetup();
+    await decks.createFinalDeck(a.id, { programId, themeId: null, problem: "Même problématique", spec: makeConformingDeck() });
+    expect(
+      await decks.findRecentFinalDeck(b.id, { programId, themeId: null, problem: "Même problématique", sinceMs: 60_000 }),
+    ).toBeNull();
+  });
+
+  it("devrait refuser en base un squelette sans sujet (CHECK Deck_skeleton_has_theme), y compris hors du code", async () => {
+    const { programId } = await ownedSetup();
+    const spec = JSON.stringify(makeConformingDeck());
+    await expect(
+      db().$executeRaw`
+        INSERT INTO "Deck" ("id", "programId", "themeId", "kind", "spec", "updatedAt")
+        VALUES ('squelette-orphelin', ${programId}, NULL, 'SKELETON', ${spec}::jsonb, now())`,
+    ).rejects.toThrow(/Deck_skeleton_has_theme/);
+    expect(await db().deck.count({ where: { programId } })).toBe(0);
+  });
+
+  it("devrait garder les decks sans sujet quand on supprime un sujet du programme", async () => {
+    const { a, programId, themeId } = await ownedSetup();
+    const orphan = await seedDeck(programId, null, "FINAL");
+    await seedDeck(programId, themeId, "FINAL");
+    await db().theme.delete({ where: { id: themeId } });
+    expect((await db().deck.findMany({ where: { programId }, select: { id: true } })).map((d) => d.id)).toEqual([orphan]);
+    expect((await decks.getDeck(a.id, orphan)).themeName).toBeNull();
+  });
+
+  it("devrait supprimer un deck sans sujet et renvoyer themeId null", async () => {
+    const { a, programId } = await ownedSetup();
+    const deckId = await seedDeck(programId, null, "FINAL");
+    expect(await decks.deleteDeck(a.id, deckId)).toEqual({ programId, themeId: null });
+  });
+});
+
+describe("repo decks — contexte du deck final (getFinalDeckContext)", () => {
+  /** Programme de A avec deux sujets, dont un avec notes. */
+  async function contextSetup() {
+    const [a, b] = [await createUser("a"), await createUser("b")];
+    const programId = await seedProgram(a.id);
+    const [bareId, notedId] = await seedThemes(programId, [
+      themeInput("Sans notes"),
+      themeInput("Avec notes", ["climat"], "Chiffre clé : 42 %\nSource : ADEME"),
+    ]);
+    return { a, b, programId, bareId: bareId!, notedId: notedId! };
+  }
+
+  it("devrait renvoyer le sujet choisi avec ses notes, et tous les sujets du programme", async () => {
+    const { a, programId, notedId } = await contextSetup();
+    const context = await decks.getFinalDeckContext(a.id, programId, notedId);
+    expect(context.subject).toEqual({
+      id: notedId,
+      name: "Avec notes",
+      description: "Description de Avec notes",
+      keywords: ["climat"],
+      notes: "Chiffre clé : 42 %\nSource : ADEME",
+    });
+    expect(context.ctx.themes.map((t) => [t.name, t.notes])).toEqual([
+      ["Sans notes", ""],
+      ["Avec notes", "Chiffre clé : 42 %\nSource : ADEME"],
+    ]);
+    expect(context.programId).toBe(programId);
+    expect(context.brand).toEqual(makeBrand());
+    expect(context.ctx.template).toEqual(makeTemplate());
+  });
+
+  it("devrait renvoyer subject null quand aucun sujet n'est choisi", async () => {
+    const { a, programId } = await contextSetup();
+    const context = await decks.getFinalDeckContext(a.id, programId, null);
+    expect(context.subject).toBeNull();
+    expect(context.ctx.themes).toHaveLength(2);
+  });
+
+  it("devrait accepter un programme sans aucun sujet", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    const context = await decks.getFinalDeckContext(a.id, programId, null);
+    expect(context).toMatchObject({ programId, subject: null, ctx: { themes: [] } });
+  });
+
+  it("devrait lever NotFoundError(sujet) pour un sujet d'un autre programme du même utilisateur", async () => {
+    const { a, programId } = await contextSetup();
+    const other = await seedProgram(a.id, "Autre");
+    const [foreign] = await seedThemes(other, [themeInput("Ailleurs")]);
+    const error = await decks.getFinalDeckContext(a.id, programId, foreign!).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NotFoundError);
+    expect((error as NotFoundError).userMessage).toBe("Ce sujet est introuvable.");
+  });
+
+  it("devrait lever NotFoundError(sujet) pour un sujet inexistant", async () => {
+    const { a, programId } = await contextSetup();
+    await expect(decks.getFinalDeckContext(a.id, programId, "inexistant")).rejects.toThrow("Ce sujet est introuvable.");
+  });
+
+  it("devrait lever NotFoundError(projet) quand B demande le contexte du programme de A, avec ou sans sujet", async () => {
+    const { b, programId, notedId } = await contextSetup();
+    await expect(decks.getFinalDeckContext(b.id, programId, null)).rejects.toThrow("Ce projet est introuvable.");
+    await expect(decks.getFinalDeckContext(b.id, programId, notedId)).rejects.toThrow("Ce projet est introuvable.");
+  });
+});

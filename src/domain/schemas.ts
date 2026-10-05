@@ -38,7 +38,7 @@ export const LIMITS = {
   bullet: 180,
   notes: 3000,
   sectionId: 40,
-  /** Sections d'un gabarit : de quoi couvrir une structure de ~31 diapos à une section par ligne. */
+  /** Lignes (sections) d'une trame : de quoi couvrir une structure de ~31 diapos à une ligne par diapo. */
   maxSections: 30,
   maxSlidesPerSection: 8,
   minSlides: 2,
@@ -46,16 +46,25 @@ export const LIMITS = {
   reformulated: 600,
   rationale: 600,
   candidates: 10,
+  /** Notes d'un sujet (chiffres, exemples, sources). Aligné sur le CHECK "Theme_notes_length". */
+  subjectNotes: 4000,
+  /** Durée d'une ligne de trame, en secondes. */
+  minSectionSeconds: 10,
+  maxSectionSeconds: 5400,
 } as const;
 
 // ---------------------------------------------------------------------------
 // Saisies utilisateur
 // ---------------------------------------------------------------------------
 
+/**
+ * Sujet d'un projet (identifiant de code historique : « theme »). Les notes sont
+ * les éléments de l'orateur, repris le jour J.
+ */
 export const ThemeInputSchema = z.object({
   name: text()
-    .min(2, "Le nom du thème doit faire au moins 2 caractères.")
-    .max(120, "Le nom du thème ne doit pas dépasser 120 caractères."),
+    .min(2, "Le nom du sujet doit faire au moins 2 caractères.")
+    .max(120, "Le nom du sujet ne doit pas dépasser 120 caractères."),
   description: text().max(2000, "La description ne doit pas dépasser 2000 caractères.").default(""),
   keywords: z
     .array(
@@ -65,6 +74,10 @@ export const ThemeInputSchema = z.object({
     )
     .max(30, "30 mots-clés au plus.")
     .default([]),
+  /** Chiffres, exemples, sources de l'utilisateur : repris le jour J. Sauts de ligne conservés. */
+  notes: text()
+    .max(LIMITS.subjectNotes, `Les notes ne doivent pas dépasser ${LIMITS.subjectNotes} caractères.`)
+    .default(""),
 });
 export type ThemeInput = z.infer<typeof ThemeInputSchema>;
 
@@ -78,8 +91,8 @@ const fontSchema = z.enum(SAFE_FONTS, "Choisissez une police dans la liste propo
 
 export const BrandSchema = z.object({
   name: text()
-    .min(1, "Donnez un nom à la charte.")
-    .max(80, "Le nom de la charte ne doit pas dépasser 80 caractères."),
+    .min(1, "Donnez un nom à l'apparence.")
+    .max(80, "Le nom de l'apparence ne doit pas dépasser 80 caractères."),
   colors: z.object({
     primary: hexColor,
     secondary: hexColor,
@@ -101,21 +114,36 @@ export const BrandSchema = z.object({
 });
 export type Brand = z.infer<typeof BrandSchema>;
 
+/**
+ * Une ligne de la trame (identifiant de code historique : « section ») : un titre,
+ * un nombre de diapos, leur contenu type et, facultativement, leur durée.
+ */
 export const SectionSchema = z.object({
   id: z
     .string()
-    .min(1, "L'identifiant de section est obligatoire.")
-    .max(LIMITS.sectionId, "L'identifiant de section ne doit pas dépasser 40 caractères."),
+    .min(1, "L'identifiant de ligne est obligatoire.")
+    .max(LIMITS.sectionId, "L'identifiant de ligne ne doit pas dépasser 40 caractères."),
   title: text()
-    .min(1, "Donnez un titre à la section.")
-    .max(80, "Le titre de section ne doit pas dépasser 80 caractères."),
-  /** Consigne donnée à l'IA pour cette section. */
-  guidance: text().max(600, "La consigne ne doit pas dépasser 600 caractères.").default(""),
+    .min(1, "Donnez un titre à la ligne.")
+    .max(80, "Le titre ne doit pas dépasser 80 caractères."),
+  /** Contenu type : ce que disent les diapos de cette ligne (ancienne « consigne »). Clé JSON inchangée. */
+  guidance: text().max(600, "Le contenu type ne doit pas dépasser 600 caractères.").default(""),
   slides: z
     .number("Indiquez un nombre de diapos.")
     .int("Le nombre de diapos doit être entier.")
-    .min(1, "Une section compte au moins 1 diapo.")
-    .max(LIMITS.maxSlidesPerSection, `Une section compte au plus ${LIMITS.maxSlidesPerSection} diapos.`),
+    .min(1, "Une ligne compte au moins 1 diapo.")
+    .max(LIMITS.maxSlidesPerSection, `Une ligne compte au plus ${LIMITS.maxSlidesPerSection} diapos.`),
+  /**
+   * Durée de la ligne en secondes ; absente = part égale du temps restant. Absente des
+   * JSON v1.0 : `.optional()` (et non `.nullable()`) pour qu'un ancien gabarit relu puis
+   * réenregistré ressorte sans la clé.
+   */
+  seconds: z
+    .number("Indiquez une durée.")
+    .int("La durée doit être un nombre entier de secondes.")
+    .min(LIMITS.minSectionSeconds, "Une ligne dure au moins 10 secondes.")
+    .max(LIMITS.maxSectionSeconds, "Une ligne dure au plus 90 minutes.")
+    .optional(),
 });
 export type Section = z.infer<typeof SectionSchema>;
 
@@ -132,15 +160,30 @@ export const PromptTemplateSchema = z
       .max(90, "L'oral dure au plus 90 minutes."),
     sections: z
       .array(SectionSchema)
-      .min(1, "Le gabarit compte au moins une section.")
-      .max(LIMITS.maxSections, `Le gabarit compte au plus ${LIMITS.maxSections} sections.`),
+      .min(1, "La trame compte au moins une ligne.")
+      .max(LIMITS.maxSections, `La trame compte au plus ${LIMITS.maxSections} lignes.`),
     tone: text().max(200, "Le ton ne doit pas dépasser 200 caractères.").default(""),
     constraints: text().max(2000, "Les contraintes ne doivent pas dépasser 2000 caractères.").default(""),
   })
   .refine((t) => 1 + t.sections.reduce((sum, s) => sum + s.slides, 0) <= MAX_TEMPLATE_SLIDES, {
-    message: "Le gabarit dépasse 60 diapos : réduisez le nombre de diapos par section.",
+    message: "La trame dépasse 60 diapos : réduisez le nombre de diapos par ligne.",
     path: ["sections"],
-  });
+  })
+  // Les durées saisies tiennent dans l'oral, couverture comprise (même calcul que templateTimings).
+  .refine(
+    (t) => {
+      const fixed = t.sections.reduce((sum, s) => sum + (s.seconds ?? 0), 0);
+      if (fixed === 0) return true;
+      const total = t.durationMinutes * 60;
+      const slides = 1 + t.sections.reduce((sum, s) => sum + s.slides, 0);
+      const cover = Math.min(30, total / slides);
+      return fixed <= total - cover;
+    },
+    {
+      message: "La durée des lignes dépasse celle de l'oral : réduisez les durées ou allongez l'oral.",
+      path: ["sections"],
+    },
+  );
 export type PromptTemplate = z.infer<typeof PromptTemplateSchema>;
 
 // ---------------------------------------------------------------------------
@@ -152,7 +195,7 @@ export type SlideLayout = z.infer<typeof SlideLayoutSchema>;
 
 export const SlideSchema = z.object({
   layout: SlideLayoutSchema,
-  /** Identifiant de la section du gabarit dont la diapo est issue ("cover" pour la couverture). */
+  /** Identifiant de la ligne de la trame dont la diapo est issue ("cover" pour la couverture). */
   sectionId: z.string().min(1).max(LIMITS.sectionId),
   title: text()
     .min(1, "Le titre de la diapo est obligatoire.")
@@ -179,7 +222,7 @@ export const DeckSpecSchema = z.object({
 });
 export type DeckSpec = z.infer<typeof DeckSpecSchema>;
 
-/** Réponse brute de l'IA pour la reconnaissance du thème. */
+/** Réponse brute de l'IA pour la reconnaissance du sujet. */
 export const ClassificationSchema = z.object({
   reformulatedProblem: text().min(1).max(LIMITS.reformulated),
   candidates: z
@@ -199,7 +242,7 @@ export const ProblemInputSchema = z.object({
   problem: text()
     .min(10, "La problématique doit faire au moins 10 caractères.")
     .max(1500, "La problématique ne doit pas dépasser 1500 caractères."),
-  /** Thème annoncé avec la problématique, s'il y en a un. */
+  /** Sujet annoncé avec la problématique, s'il y en a un. */
   hintedThemeId: z.string().min(1).nullable().default(null),
 });
 export type ProblemInput = z.infer<typeof ProblemInputSchema>;

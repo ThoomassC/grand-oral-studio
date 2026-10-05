@@ -17,6 +17,8 @@ export interface ThemeItem {
   name: string;
   description: string;
   keywords: string[];
+  /** Notes du sujet : relayées au formulaire de modification pour ne pas les effacer (champ visible au Lot E2). */
+  notes?: string;
   hasSkeleton: boolean;
   /** Nombre de diaporamas du jour J rattachés au thème (supprimés avec lui). */
   finalDeckCount: number;
@@ -257,7 +259,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm
                       nameId={`edit-name-${theme.id}`}
-                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords }}
+                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords, notes: theme.notes }}
                       submitLabel="Enregistrer le thème"
                       pendingLabel="Enregistrement…"
                       onSubmit={(value) => updateTheme(theme.id, value)}

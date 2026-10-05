@@ -62,8 +62,8 @@ describe("parseThemePromptText — thèmes", () => {
       CURRENT,
     );
     expect(out.themes).toEqual([
-      { name: "IA et emploi", description: "Effets de l'automatisation", keywords: ["robots", "travail"] },
-      { name: "Climat", description: "", keywords: ["GIEC"] },
+      { name: "IA et emploi", description: "Effets de l'automatisation", keywords: ["robots", "travail"], notes: "" },
+      { name: "Climat", description: "", keywords: ["GIEC"], notes: "" },
     ]);
   });
 
@@ -218,7 +218,7 @@ describe("normalizeThemePromptDraft (sortie IA permissive)", () => {
     });
     const out = normalizeThemePromptDraft(raw, CURRENT);
     expect(out.themes).toHaveLength(60);
-    expect(out.themes[0]).toEqual({ name: "Écologie", description: "Enjeux", keywords: ["climat", "x".repeat(60)] });
+    expect(out.themes[0]).toEqual({ name: "Écologie", description: "Enjeux", keywords: ["climat", "x".repeat(60)], notes: "" });
     expect(out.brand).toBeNull();
     expect(out.found).toEqual(["60 thèmes"]);
     for (const t of out.themes) expect(ThemeInputSchema.safeParse(t).success).toBe(true);

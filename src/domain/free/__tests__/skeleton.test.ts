@@ -83,6 +83,7 @@ describe("buildFreeSkeleton — conformité", () => {
       name: "T".repeat(120),
       description: "Description très longue. ".repeat(80).slice(0, 2000),
       keywords: Array.from({ length: 30 }, (_, i) => `${String(i).padStart(2, "0")}${"m".repeat(58)}`),
+      notes: "",
     };
     for (const [, template] of VARIED_TEMPLATES) {
       const ctx = { ...program, template };
@@ -92,7 +93,7 @@ describe("buildFreeSkeleton — conformité", () => {
   });
 
   it("devrait rester valide pour un thème sans description ni mot-clé", () => {
-    const bare: ThemeRef = { id: "bare", name: "Thème nu", description: "", keywords: [] };
+    const bare: ThemeRef = { id: "bare", name: "Thème nu", description: "", keywords: [], notes: "" };
     expectValid(buildFreeSkeleton(program, bare), program.template);
     expectValid(buildFreeFinalDeck(program, bare, null, PROBLEM), program.template);
   });
@@ -289,7 +290,7 @@ describe("lecture du gabarit", () => {
 });
 
 describe("deck gratuit — couverture et intercalaires", () => {
-  const theme: ThemeRef = { id: "g", name: "Green IT", description: "", keywords: [] };
+  const theme: ThemeRef = { id: "g", name: "Green IT", description: "", keywords: [], notes: "" };
   const problem = "Le Green IT peut-il réellement réduire l'empreinte environnementale du numérique ?";
 
   it("ne devrait pas répéter le thème dans le sous-titre quand le projet porte déjà son nom", () => {

@@ -122,6 +122,27 @@ describe("getProgram — progression", () => {
     expect(progress.steps.find((s) => s.id === "skeletons")?.status).toBe("done");
   });
 
+  it("devrait marquer le jour J fait avec un seul deck final sans sujet (total du programme)", async () => {
+    const a = await createUser("a");
+    const id = await seedProgram(a.id);
+    await seedThemes(id, [themeInput("A")]);
+    await seedDeck(id, null, "FINAL");
+    await seedDeck(id, null, "FINAL");
+    const { progress, finalDeckCount } = await programs.getProgram(a.id, id);
+    expect(finalDeckCount).toBe(2);
+    expect(progress.steps.find((s) => s.id === "day")).toMatchObject({ status: "done", summary: "2 diaporamas" });
+  });
+
+  it("devrait compter ensemble les decks finaux avec et sans sujet", async () => {
+    const a = await createUser("a");
+    const id = await seedProgram(a.id);
+    const [t1] = await seedThemes(id, [themeInput("A")]);
+    await seedDeck(id, t1!, "FINAL");
+    await seedDeck(id, null, "FINAL");
+    const { progress } = await programs.getProgram(a.id, id);
+    expect(progress.steps.find((s) => s.id === "day")?.summary).toBe("2 diaporamas");
+  });
+
   it("ne devrait pas exposer le projet de A à B", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
     const id = await seedProgram(a.id);
