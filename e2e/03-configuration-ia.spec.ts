@@ -36,6 +36,34 @@ test.describe("3. Configuration IA — page guidée", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
+  test("devrait détailler un choix par son bouton « i », sans le cocher, et se fermer par Échap", async ({ page, account }) => {
+    void account;
+    await page.goto("/configuration-ia");
+    const main = page.getByRole("main");
+    const info = main.getByRole("button", { name: "En savoir plus : Sans IA" });
+    await info.click();
+    const panel = page.getByRole("dialog", { name: "Sans IA" });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText("Coût")).toBeVisible();
+    await expect(panel.getByText("Vos données")).toBeVisible();
+    await expect(radio(page, "Sans IA")).not.toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(info).toBeFocused();
+  });
+
+  test("devrait faire apparaître « 2. Connecter Claude » quand on coche Claude, et le retirer avec Sans IA", async ({ page, account }) => {
+    void account;
+    await page.goto("/configuration-ia");
+    const main = page.getByRole("main");
+    const q2 = main.getByRole("heading", { name: "2. Connecter Claude", level: 2 });
+    await radio(page, "Sans IA").check();
+    await expect(q2).toHaveCount(0);
+    await radio(page, "Claude").check();
+    await expect(q2).toBeVisible();
+    await expect(page.getByText("Étape 2 affichée plus bas : connectez Claude.")).toBeAttached();
+  });
+
   test("devrait annoncer la rédaction en démo, prête, avec Claude coché et sa connexion ouverte (AI_PROVIDER=mock)", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");

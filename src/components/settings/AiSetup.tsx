@@ -2,7 +2,7 @@
 
 import { Badge, Button, Radio, RadioGroup } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useId, useRef, useState, useTransition } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { firstError, type FieldErrors } from "@/components/forms/validation";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -10,8 +10,10 @@ import { SelectInput } from "@/components/ui/Field";
 import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { setAiEngine, testAnthropicApiKey } from "@/server/actions/settings";
 import { isReady, writerLabel, type AiSetupStatus, type EngineId } from "./ai-status";
+import { ChoiceInfo, type ChoiceInfoItem } from "./ChoiceInfo";
 import { ClaudeConnect } from "./ClaudeConnect";
 
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
@@ -34,6 +36,62 @@ function choiceLabel(engine: EngineId, model: string | null): string {
   if (engine === "free") return "Sans IA";
   if (engine === "claude") return "Claude";
   return model ? `Ollama · ${model}` : "Ollama";
+}
+
+/** Le détail de chaque choix, derrière le bouton « i » : résultat, coût, devenir des données. */
+const ENGINE_INFO: Record<EngineId, readonly ChoiceInfoItem[]> = {
+  free: [
+    {
+      term: "Ce que vous obtenez",
+      detail:
+        "Un diaporama construit à partir de votre trame et des notes du sujet. Le texte des diapos et les notes d'orateur restent à écrire.",
+    },
+    { term: "Coût", detail: "Gratuit et instantané." },
+    { term: "Vos données", detail: "Rien n'est envoyé à un service externe." },
+  ],
+  claude: [
+    {
+      term: "Ce que vous obtenez",
+      detail: "Un diaporama rédigé diapo par diapo, avec des notes d'orateur, à relire avant l'oral.",
+    },
+    {
+      term: "Coût",
+      detail:
+        "Quelques centimes par diaporama, facturés à l'usage sur votre compte Anthropic (crédits prépayés, rubrique Billing de la console). Un abonnement Claude.ai (Pro, Max) ne donne pas de crédits API.",
+    },
+    {
+      term: "Vos données",
+      detail:
+        "La problématique, la trame et les notes du sujet sont envoyées à Anthropic pour la rédaction. Votre clé est chiffrée et n'est jamais réaffichée.",
+    },
+  ],
+  ollama: [
+    {
+      term: "Ce que vous obtenez",
+      detail: "Un diaporama rédigé par un modèle installé sur le serveur. Qualité variable : vérifiez les chiffres.",
+    },
+    { term: "Coût", detail: "Gratuit. Plus lent : comptez plusieurs minutes par diaporama." },
+    { term: "Vos données", detail: "Tout reste sur le serveur : rien n'est envoyé à un service externe." },
+  ],
+};
+
+/** Un choix de la question 1 : le radio, puis son bouton « i » en bout de ligne (hors du label). */
+function ChoiceRow({ info, label, children }: { info: readonly ChoiceInfoItem[]; label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">{children}</div>
+      <ChoiceInfo label={label} items={info} />
+    </div>
+  );
+}
+
+/** Vrai si l'utilisateur a demandé moins d'animations (système ou panneau Réglages). */
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return true;
+  return (
+    document.documentElement.getAttribute("data-motion") === "reduced" ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
 }
 
 const SAVE_LABEL: Record<EngineId, string> = {
@@ -68,6 +126,24 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
   const [model, setModel] = useState<string | null>(() =>
     ollama?.selectedModel && ollama.models.includes(ollama.selectedModel) ? ollama.selectedModel : (ollama?.models[0] ?? null),
   );
+
+  /**
+   * La question 2 apparaît en douceur (déroulé + fondu, globals.css `.step-reveal`) quand
+   * l'utilisateur coche Claude ; pas d'animation si elle est déjà là au chargement.
+   */
+  const [reveal, setReveal] = useState<"idle" | "enter">("idle");
+  const q2Ref = useRef<HTMLElement>(null);
+
+  // Synchronisation avec la fenêtre : si la question 2 vient d'apparaître hors de la vue
+  // (téléphone), on la fait monter juste assez pour voir son titre.
+  useEffect(() => {
+    if (reveal !== "enter") return;
+    const section = q2Ref.current;
+    if (!section) return;
+    const top = section.getBoundingClientRect().top;
+    if (top < window.innerHeight * 0.8) return;
+    window.scrollBy({ top: top - window.innerHeight * 0.4, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [reveal]);
 
   const choiceSaved = choice === saved.engine && (choice !== "ollama" || model === saved.model);
   const choiceUsable = choice === "free" || (choice === "claude" ? status.claude.available : ollamaUsable);
@@ -166,35 +242,44 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
             name="engine"
             value={choice}
             onValueChange={(value) => {
-              if (value === "claude" || value === "ollama" || value === "free") setChoice(value);
+              if (value !== "claude" && value !== "ollama" && value !== "free") return;
+              if (value === "claude" && choice !== "claude") setReveal("enter");
+              if (value !== "claude") setReveal("idle");
+              setChoice(value);
             }}
             error={engineError}
           >
-            <Radio
-              id={radioId("free")}
-              value="free"
-              label="Sans IA"
-              description="La trame remplie avec vos notes : le texte reste à écrire. Gratuit et instantané."
-            />
-            <Radio
-              id={radioId("claude")}
-              value="claude"
-              label="Claude"
-              description="Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas."
-            />
-            {ollama !== null ? (
+            <ChoiceRow label="Sans IA" info={ENGINE_INFO.free}>
               <Radio
-                id={radioId("ollama")}
-                value="ollama"
-                label="Modèle local (Ollama)"
-                disabled={!ollamaUsable}
-                description={
-                  <>
-                    Gratuit et privé, exécuté sur ce serveur. Plus lent, qualité variable selon le modèle.
-                    {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
-                  </>
-                }
+                id={radioId("free")}
+                value="free"
+                label="Sans IA"
+                description="La trame remplie avec vos notes : le texte reste à écrire. Gratuit et instantané."
               />
+            </ChoiceRow>
+            <ChoiceRow label="Claude" info={ENGINE_INFO.claude}>
+              <Radio
+                id={radioId("claude")}
+                value="claude"
+                label="Claude"
+                description="Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas."
+              />
+            </ChoiceRow>
+            {ollama !== null ? (
+              <ChoiceRow label="Modèle local (Ollama)" info={ENGINE_INFO.ollama}>
+                <Radio
+                  id={radioId("ollama")}
+                  value="ollama"
+                  label="Modèle local (Ollama)"
+                  disabled={!ollamaUsable}
+                  description={
+                    <>
+                      Gratuit et privé, exécuté sur ce serveur. Plus lent, qualité variable selon le modèle.
+                      {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
+                    </>
+                  }
+                />
+              </ChoiceRow>
             ) : null}
           </RadioGroup>
 
@@ -232,15 +317,27 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
         </form>
       </section>
 
+      <LiveRegion className="sr-only">
+        {reveal === "enter" && choice === "claude" ? "Étape 2 affichée plus bas : connectez Claude." : null}
+      </LiveRegion>
       {choice === "claude" ? (
-        <section aria-labelledby={ids.q2} className="opale-card opale-card--e1 block p-5 sm:p-6">
-          <h2 id={ids.q2} className="text-2xl">
-            2. Connecter Claude
-          </h2>
-          <div className="mt-5">
-            <ClaudeConnect claude={status.claude} onActivated={() => setSaved((s) => ({ ...s, engine: "claude" }))} />
-          </div>
-        </section>
+        <div
+          className="step-reveal"
+          data-reveal={reveal === "enter" ? "enter" : undefined}
+          onAnimationEnd={(e) => {
+            // Fin du déroulé (l'animation du conteneur, pas celles des enfants) : plus de découpe.
+            if (e.target === e.currentTarget) setReveal("idle");
+          }}
+        >
+          <section ref={q2Ref} aria-labelledby={ids.q2} className="opale-card opale-card--e1 block p-5 sm:p-6">
+            <h2 id={ids.q2} className="text-2xl">
+              2. Connecter Claude
+            </h2>
+            <div className="mt-5">
+              <ClaudeConnect claude={status.claude} onActivated={() => setSaved((s) => ({ ...s, engine: "claude" }))} />
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

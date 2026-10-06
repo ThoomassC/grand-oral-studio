@@ -213,3 +213,57 @@ describe("AiSetup — question 2", () => {
     expect(screen.queryByRole("button", { name: /^Choisir/ })).not.toBeInTheDocument();
   });
 });
+
+describe("AiSetup — infos de chaque choix (bouton « i »)", () => {
+  const info = (label: string) => screen.getByRole("button", { name: `En savoir plus : ${label}` });
+
+  it("devrait proposer un bouton « i » par choix, hors du nom du radio", () => {
+    render(<AiSetup status={status({ ollama: { reachable: false, models: [], selectedModel: null } })} />);
+    for (const label of ["Sans IA", "Claude", "Modèle local (Ollama)"]) {
+      expect(info(label)).toHaveAttribute("aria-expanded", "false");
+    }
+    // Le bouton ne s'ajoute pas au nom du radio.
+    expect(screen.getByRole("radio", { name: "Claude" })).toBeInTheDocument();
+  });
+
+  it("devrait ouvrir un panneau qui dit le résultat, le coût et le devenir des données, puis se fermer par Échap", async () => {
+    const user = userEvent.setup();
+    render(<AiSetup status={status()} />);
+    await user.click(info("Claude"));
+    const panel = await screen.findByRole("dialog", { name: "Claude" });
+    expect(within(panel).getByText("Ce que vous obtenez")).toBeInTheDocument();
+    expect(within(panel).getByText("Coût")).toBeInTheDocument();
+    expect(within(panel).getByText("Vos données")).toBeInTheDocument();
+    expect(within(panel).getByText(/abonnement Claude\.ai/)).toBeInTheDocument();
+    expect(info("Claude")).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Claude" })).not.toBeInTheDocument();
+    expect(info("Claude")).toHaveFocus();
+  });
+
+  it("ne devrait pas changer le choix coché en ouvrant les infos", async () => {
+    const user = userEvent.setup();
+    render(<AiSetup status={status({ selected: "free" })} />);
+    await user.click(info("Claude"));
+    expect(screen.getByRole("radio", { name: "Sans IA" })).toBeChecked();
+    expect(q2()).not.toBeInTheDocument();
+  });
+});
+
+describe("AiSetup — apparition de la question 2", () => {
+  it("devrait faire apparaître « Connecter Claude » en douceur quand on coche Claude", async () => {
+    const user = userEvent.setup();
+    render(<AiSetup status={status({ selected: "free" })} />);
+    await user.click(screen.getByRole("radio", { name: "Claude" }));
+    const section = q2()!.closest("section")!;
+    expect(section.parentElement).toHaveAttribute("data-reveal", "enter");
+    // Annoncée aux lecteurs d'écran : la suite apparaît plus bas.
+    expect(screen.getByText("Étape 2 affichée plus bas : connectez Claude.")).toBeInTheDocument();
+  });
+
+  it("ne devrait pas animer « Connecter Claude » déjà visible au chargement", () => {
+    render(<AiSetup status={status({ selected: "claude", effective: "claude" })} />);
+    const section = q2()!.closest("section")!;
+    expect(section.parentElement).not.toHaveAttribute("data-reveal", "enter");
+  });
+});
