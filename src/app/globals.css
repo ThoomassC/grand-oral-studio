@@ -1,13 +1,15 @@
 /*
- * Direction artistique : celle d'Opale (@thomascaron/opale-ui). Sa feuille est
+ * Direction artistique : la « fiche bristol » (design-system/grand-oral-studio/MASTER.md),
+ * posée sur les composants d'Opale (@thomascaron/opale-ui). La feuille d'Opale est
  * rangée dans la couche `opale`, placée avant `components` et `utilities` :
  * un utilitaire Tailwind l'emporte sur une règle d'Opale (README d'Opale,
- * « Avec Tailwind v4 : la feuille en couche »). Elle relie aussi ses polices,
- * Chivo et Bricolage Grotesque.
+ * « Avec Tailwind v4 : la feuille en couche »). Variante sans polices : les
+ * nôtres (Schibsted Grotesk, Atkinson Hyperlegible Next) viennent de next/font
+ * (layout racine).
  */
 @layer theme, base, opale, components, utilities;
 @import "tailwindcss";
-@import "@thomascaron/opale-ui/opale.layered.css";
+@import "@thomascaron/opale-ui/opale-nofonts.layered.css";
 
 /*
  * Thème : `data-theme="light" | "dark"` sur <html>, toujours posé — par le
@@ -18,13 +20,92 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
+ * Direction « fiche bristol » (design-system/grand-oral-studio/MASTER.md) : les
+ * seules valeurs de couleur, de rayon, d'ombre et de police de l'application.
+ * Hors couche, comme la personnalisation documentée d'Opale : elles l'emportent
+ * sur sa feuille (couche `opale`). Le thème clair est sur :root ; l'ardoise sur
+ * :root[data-theme="dark"]. Contrastes vérifiés par src/app/__tests__/fiche-palette.test.ts.
+ */
+:root {
+  --fiche-paper: #F5F6F8;
+  --fiche-card: #FFFFFF;
+  --fiche-sunken: #ECEFF4;
+  --fiche-ink: #14213D;
+  --fiche-graphite: #55607A;
+  --fiche-rule: #2A4DB3;
+  --fiche-rule-hover: #213E93;
+  --fiche-on-rule: #FFFFFF;
+  --fiche-margin: #C8372D;
+  --fiche-line: #DCE1EA;
+  /* Réglure des champs longs : décorative, jamais porteuse de sens. */
+  --fiche-ruling: color-mix(in srgb, var(--fiche-rule) 16%, var(--fiche-card));
+  --fiche-margin-offset: 0.75rem;
+  --fiche-radius-sm: 0.25rem;
+  --fiche-radius-md: 0.375rem;
+  --fiche-radius-lg: 0.5rem;
+  --fiche-shadow-float: 0 8px 24px -8px rgb(20 33 61 / 0.28);
+  --fiche-shadow-header: 0 1px 0 var(--fiche-line), 0 3px 8px -2px rgb(20 33 61 / 0.12);
+  --fiche-font-title: var(--font-schibsted-grotesk), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fiche-font-text: var(--font-atkinson-next), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+:root[data-theme="dark"] {
+  --fiche-paper: #141A24;
+  --fiche-card: #1C2431;
+  --fiche-sunken: #171E2A;
+  --fiche-ink: #E6EAF2;
+  --fiche-graphite: #A3ADC2;
+  --fiche-rule: #8FAEFF;
+  --fiche-rule-hover: #A9C1FF;
+  --fiche-on-rule: #0E1626;
+  --fiche-margin: #FF8A7A;
+  --fiche-line: #2C3647;
+  --fiche-ruling: color-mix(in srgb, var(--fiche-rule) 20%, var(--fiche-card));
+  --fiche-shadow-float: 0 8px 24px -8px rgb(0 0 0 / 0.55);
+  --fiche-shadow-header: 0 1px 0 var(--fiche-line), 0 3px 8px -2px rgb(0 0 0 / 0.45);
+}
+
+/*
+ * Opale branché sur la fiche : un seul bloc, indépendant du thème (les valeurs
+ * changent par --fiche-*). Aucune couleur littérale ici : une valeur hors couche
+ * écraserait aussi le bloc sombre d'Opale.
+ */
+:root {
+  --opale-background: var(--fiche-paper);
+  --opale-surface: var(--fiche-card);
+  --opale-surface-base: var(--fiche-card);
+  --opale-surface-sunken: var(--fiche-sunken);
+  --opale-text: var(--fiche-ink);
+  --opale-text-secondary: var(--fiche-graphite);
+  --opale-primary: var(--fiche-rule);
+  --opale-primary-dark: var(--fiche-rule-hover);
+  --opale-primary-on-surface: var(--fiche-rule);
+  --opale-on-primary: var(--fiche-on-rule);
+  --opale-focus: var(--fiche-rule);
+  --opale-divider: var(--fiche-line);
+  --opale-radius-sm: var(--fiche-radius-sm);
+  --opale-radius-md: var(--fiche-radius-md);
+  --opale-radius-lg: var(--fiche-radius-lg);
+  /* Cartes et champs : le filet (bordure 1px d'Opale) remplace l'ombre portée. */
+  --opale-shadow-1: 0 0 #0000;
+  --opale-shadow-2: 0 0 #0000;
+  /* Flottants (menus, panneaux « i », modales) : une ombre courte, pas de halo. */
+  --opale-shadow-3: var(--fiche-shadow-float);
+  --opale-shadow-4: var(--fiche-shadow-float);
+  --opale-font-body: var(--fiche-font-text);
+  --opale-font-display: var(--fiche-font-title);
+  --opale-font-title: var(--fiche-font-title);
+  /* Code seulement (référence d'erreur, format d'import) : jamais pour les données. */
+  --opale-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/*
  * Personnalisation documentée d'un seul jeton (README d'Opale, « Personnaliser
  * à sa marque » : surcharge hors couche). En sombre, l'encre de danger
- * d'Opale (#e2726b) ne tient que 4,14:1 sur le lavis d'erreur de
- * `.opale-feedback--error` (9 % de danger sur la surface #262c27), sous le
- * seuil AA de 4,5:1 — un couple de rendu de composant, hors du périmètre
- * mesuré par le contrat de couleur. On éclaircit seulement le rôle « danger
- * qui écrit » : 5,15:1 sur ce lavis, 5,80:1 sur la surface, 7,83:1 sur le fond.
+ * d'Opale (#e2726b) ne tient pas 4,5:1 sur le lavis d'erreur de
+ * `.opale-feedback--error` (9 % de danger sur la surface) — un couple de rendu
+ * de composant, hors du périmètre mesuré par le contrat de couleur. On
+ * éclaircit seulement le rôle « danger qui écrit » ; sur l'ardoise : 5,63:1 sur
+ * ce lavis (#2E2B36), 6,34:1 sur la surface #1C2431, 7,10:1 sur le fond #141A24.
  * Le remplissage `--opale-danger` (boutons destructifs) est inchangé.
  */
 :root[data-theme="dark"] {
@@ -32,8 +113,8 @@
 }
 
 /*
- * Nos noms de couleur, branchés sur les jetons publics d'Opale : aucune
- * couleur n'est définie ici, les deux thèmes viennent d'Opale. Les « lavis »
+ * Nos noms de couleur, branchés sur les jetons d'Opale, eux-mêmes branchés sur
+ * la fiche. Les « lavis »
  * (fonds doux) sont des mélanges de ces jetons avec la surface, comme ceux
  * d'Opale (`.opale-feedback--*`).
  */
@@ -61,18 +142,20 @@
   --color-success-soft: color-mix(in srgb, var(--opale-success) 9%, var(--opale-surface));
   --color-warning: var(--opale-warning-on-surface);
   --color-warning-soft: color-mix(in srgb, var(--opale-warning) 9%, var(--opale-surface));
-  --shadow-card: var(--opale-shadow-1);
-  --shadow-raised: var(--opale-shadow-2);
-  --shadow-slide: var(--opale-shadow-2);
+  /* Cartes : un filet, pas d'ombre portée. Élevé : filet et ombre courte. */
+  --shadow-card: 0 0 0 1px var(--fiche-line);
+  --shadow-raised: 0 0 0 1px var(--fiche-line), var(--fiche-shadow-float);
+  /* Miniatures de diapos : des feuilles posées, on garde un peu d'ombre. */
+  --shadow-slide: var(--fiche-shadow-float);
   --font-sans: var(--opale-font-body);
   --font-display: var(--opale-font-display);
   --font-title: var(--opale-font-title);
   --font-mono: var(--opale-font-mono);
-  /* Rayons : petites marques (sm), contrôles et encarts (md, lg), cartes (card). */
-  --radius-sm: 0.375rem;
-  --radius-md: var(--opale-radius-sm);
-  --radius-lg: var(--opale-radius-sm);
-  --radius-card: var(--opale-radius-md);
+  /* Rayons faibles (4 à 8 px) : traits (xs), petites marques (sm), contrôles (md), encarts et modales (lg). */
+  --radius-xs: 0.125rem;
+  --radius-sm: var(--fiche-radius-sm);
+  --radius-md: var(--fiche-radius-md);
+  --radius-lg: var(--fiche-radius-lg);
 }
 
 /*
@@ -91,28 +174,31 @@
     line-height: var(--opale-leading-relaxed);
   }
 
-  /* Titres : l'échelle d'Opale — Bricolage pour le titre de page, Chivo ensuite. */
+  /* Titres : Schibsted Grotesk, la graisse et l'approche portent la hiérarchie. */
   h1,
   h2,
-  h3 {
+  h3,
+  h4 {
     color: var(--opale-text);
+    font-family: var(--opale-font-title);
     line-height: var(--opale-leading-tight);
     text-wrap: balance;
   }
   h1 {
-    font-family: var(--opale-font-title);
-    font-weight: 600;
-    letter-spacing: -0.04em;
+    font-weight: 700;
+    letter-spacing: -0.025em;
   }
   h2 {
-    font-family: var(--opale-font-display);
-    font-weight: 400;
-    letter-spacing: -0.03em;
+    font-weight: 650;
+    letter-spacing: -0.015em;
   }
   h3 {
-    font-family: var(--opale-font-display);
     font-weight: 600;
     letter-spacing: -0.01em;
+  }
+  h4 {
+    font-weight: 600;
+    letter-spacing: 0;
   }
 
   :focus-visible {
@@ -122,7 +208,7 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--opale-accent) 45%, var(--opale-surface));
+    background: color-mix(in srgb, var(--opale-primary) 22%, var(--opale-surface));
     color: var(--opale-text);
   }
 
@@ -207,7 +293,7 @@
     color: var(--opale-primary-on-surface);
   }
   .header-control__sun {
-    color: var(--opale-accent-graphic);
+    color: var(--opale-primary-on-surface);
   }
   /*
    * Panneau Réglages (SiteSettingsPanel) : blocs séparés par le filet d'Opale ;
@@ -474,8 +560,13 @@
     --app-tab-fill: color-mix(in srgb, var(--opale-primary) 12%, transparent);
     color: var(--opale-primary-on-surface);
   }
+  /* Page courante : la réglure sous l'onglet, en plus de la graisse et du lavis. */
   .app-tab[aria-current="page"] {
     font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--opale-primary);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.45em;
   }
   .app-tab:focus-visible {
     outline-offset: -3px;
@@ -588,13 +679,11 @@
   }
 
   /*
-   * Ombre de l'en-tête (Topbar d'Opale) : fine mais marquée, un filet net d'un pixel
-   * et une ombre courte, au lieu du halo large (0 20px 48px) d'Opale.
+   * Ombre de l'en-tête (Topbar d'Opale) : un filet net d'un pixel et une ombre
+   * courte (MASTER.md, « En-tête »), au lieu du halo large (0 20px 48px) d'Opale.
    */
   .opale-topbar__shell {
-    box-shadow:
-      0 1px 0 color-mix(in srgb, var(--opale-text) 14%, transparent),
-      0 3px 8px -2px color-mix(in srgb, #000 22%, transparent);
+    box-shadow: var(--fiche-shadow-header);
   }
 
   .project-steps {
@@ -621,7 +710,7 @@
   }
   .project-steps__connector {
     width: 1.25rem;
-    height: 2px;
+    height: 1px;
     flex: none;
     border-radius: 1px;
     background: var(--opale-field-border);
@@ -662,7 +751,7 @@
     flex: none;
     place-items: center;
     border: 1.5px solid var(--opale-field-border);
-    border-radius: var(--opale-radius-pill);
+    border-radius: var(--fiche-radius-sm);
     background: var(--opale-surface);
     color: var(--opale-text-secondary);
     font-size: var(--opale-text-sm);
@@ -762,6 +851,19 @@
     align-items: center;
     gap: var(--opale-space-xs);
   }
+
+  /*
+   * Plus de pilules (MASTER.md, « Géométrie nette ») : badges, puces et segments
+   * à 4 px. L'interrupteur (Toggle) garde la sienne : c'est son affordance.
+   */
+  .opale-badge,
+  .opale-chip {
+    border-radius: var(--fiche-radius-sm);
+  }
+  .opale-segmented__item,
+  .opale-segmented__indicator {
+    border-radius: var(--fiche-radius-sm);
+  }
   @media (prefers-reduced-motion: reduce) {
     .project-step,
     .project-settings-trigger {
@@ -790,50 +892,48 @@
     border-color: var(--opale-danger);
   }
 
-  /* Petite étiquette au-dessus d'un titre. */
-  .eyebrow {
-    font-size: var(--opale-text-xs);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--opale-text-secondary);
-  }
-
-  /* Compteurs, durées, numéros : police mono d'Opale, chiffres tabulaires. */
+  /* Compteurs, durées, numéros : la police du texte, chiffres tabulaires (jamais de chasse fixe). */
   .num {
-    font-family: var(--opale-font-mono);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-    /* Les espaces mono sont larges : « 1 h 30 » resserré. */
-    word-spacing: -0.3em;
   }
 
   /*
-   * Surlignage « dessiné » sous un ou deux mots d'un titre : un trait épais à
-   * l'accent ambré d'Opale, posé sous la ligne de base, tracé de gauche à
-   * droite à l'apparition (supprimé si prefers-reduced-motion). Le texte garde
-   * sa couleur : il ne passe jamais sur l'ambre, donc aucun contraste ne dépend
-   * de l'animation, en clair comme en sombre.
+   * Le motif « fiche » (MASTER.md, Direction) : la marge rouge d'une fiche bristol,
+   * un filet vertical à gauche du bloc. Réservé aux blocs que l'étudiant écrit :
+   * lignes de trame, sujets, cartes de projet. L'élément porteur réserve la place
+   * à gauche (padding-inline-start ≥ 1.5rem, posé par un utilitaire pl-*).
    */
-  .marker {
-    padding: 0 0.06em;
-    background-image: linear-gradient(100deg, transparent 0, var(--opale-accent) 0.12em, var(--opale-accent) 97%, transparent 100%);
-    background-repeat: no-repeat;
-    background-size: 100% 0.2em;
-    background-position: 0 96%;
-    border-radius: 0.1em;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    animation: marker-draw 700ms cubic-bezier(0.3, 0.7, 0.3, 1) 200ms both;
+  .fiche {
+    position: relative;
   }
-}
+  .fiche::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--fiche-margin-offset);
+    width: 2px;
+    background: var(--fiche-margin);
+    content: "";
+    pointer-events: none;
+  }
 
-@keyframes marker-draw {
-  from {
-    background-size: 0% 0.2em;
+  /*
+   * Réglure discrète des champs de texte long que l'étudiant rédige : une ligne
+   * par ligne de texte (1lh), qui défile avec le contenu. Posée sur la coquille
+   * (shellClassName="fiche-ruled" de TextArea, components/ui/Field.tsx).
+   */
+  .fiche-ruled > textarea {
+    background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--fiche-ruling) calc(100% - 1px));
+    /* Repli sans `lh` : l'interligne relâché d'Opale (1.6). */
+    background-size: 100% 1.6em;
+    background-size: 100% 1lh;
+    background-attachment: local;
+    background-origin: content-box;
+    background-clip: content-box;
   }
-  to {
-    background-size: 100% 0.2em;
+  @media (forced-colors: active) {
+    .fiche-ruled > textarea {
+      background-image: none;
+    }
   }
 }
 

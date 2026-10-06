@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Atkinson_Hyperlegible_Next, Schibsted_Grotesk } from "next/font/google";
 import { opaleThemeScript } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -9,7 +10,23 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InlineScript } from "@/components/ui/InlineScript";
 import "./globals.css";
 
-// Polices : celles d'Opale (Chivo, Bricolage Grotesque), reliées par sa feuille.
+// Polices de la direction « fiche bristol » (design-system/grand-oral-studio/MASTER.md),
+// auto-hébergées par next/font (aucune requête vers Google à l'exécution). Les
+// variables sont posées sur <html> : c'est là que globals.css résout --fiche-font-*.
+// Polices variables, axe de graisse complet (les types de next/font n'acceptent pas
+// de plage « 400 800 ») : le titre emploie aussi le 400 (« Studio » de l'en-tête).
+const titleFont = Schibsted_Grotesk({
+  subsets: ["latin"],
+  weight: "variable",
+  display: "swap",
+  variable: "--font-schibsted-grotesk",
+});
+const textFont = Atkinson_Hyperlegible_Next({
+  subsets: ["latin"],
+  weight: "variable",
+  display: "swap",
+  variable: "--font-atkinson-next",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -34,7 +51,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     // cookie), le nôtre `data-text-size` et `data-motion` (réglages du site).
     // React garde les attributs du DOM au lieu de signaler un écart ; l'option
     // ne porte que sur cet élément, pas sur ses enfants.
-    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className="h-full antialiased">
+    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className={`${titleFont.variable} ${textFont.variable} h-full antialiased`}>
       <head>
         {/* Mêmes options que useOpaleTheme (ThemeProvider), sans quoi script et React divergent. */}
         <InlineScript html={opaleThemeScript({ storageKey: THEME_STORAGE_KEY, defaultTheme })} />

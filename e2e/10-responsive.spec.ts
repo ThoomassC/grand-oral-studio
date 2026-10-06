@@ -151,6 +151,9 @@ test.describe("10. Thème sombre — lisibilité de base", () => {
     };
     expect(lum(colors.bg), `fond ${colors.bg}`).toBeLessThan(0.3);
     expect(lum(colors.fg), `texte ${colors.fg}`).toBeGreaterThan(0.7);
+    // L'ardoise de la fiche exactement : la surcharge hors couche l'emporte sur le bloc sombre d'Opale.
+    expect(colors.bg).toBe("rgb(20, 26, 36)");
+    expect(colors.fg).toBe("rgb(230, 234, 242)");
   });
 });
 
