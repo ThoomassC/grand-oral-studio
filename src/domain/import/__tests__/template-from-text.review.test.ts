@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultTemplate } from "@/domain/defaults";
-import { normalizeTemplateDraft, parseTemplateText } from "@/domain/import/template-from-text";
+import { parseTemplateText } from "@/domain/import/template-from-text";
 import { PromptTemplateSchema } from "@/domain/schemas";
 
 /** Constats de relecture : durée, plan sous un titre, tableau, couverture, ton. */
@@ -13,22 +13,17 @@ function parse(text: string) {
   return r;
 }
 
-describe("durée : le texte fait foi face à l'IA", () => {
-  it("devrait préférer la durée lue dans le texte et signaler l'écart de l'IA", () => {
-    const r = normalizeTemplateDraft({ durationMinutes: 25 }, base, "Oral de 10 min devant le jury.");
+describe("durée : lue dans le texte, sans IA", () => {
+  it("devrait reprendre la durée écrite dans le texte", () => {
+    const r = parse("Oral de 10 min devant le jury.");
     expect(r.template.durationMinutes).toBe(10);
     expect(r.recognized).toContain("durationMinutes");
     expect(r.found).toContain("Durée : 10 min");
-    expect(r.warnings.some((w) => /25 min/.test(w) && /10 min/.test(w))).toBe(true);
   });
 
-  it("devrait reprendre la durée du texte même si l'IA n'en propose pas", () => {
-    const r = normalizeTemplateDraft({}, base, "Soutenance de 15 minutes.");
+  it("devrait lire « 15 minutes » sans rien signaler", () => {
+    const r = parse("Soutenance de 15 minutes.");
     expect(r.template.durationMinutes).toBe(15);
-  });
-
-  it("ne devrait rien signaler quand l'IA et le texte concordent", () => {
-    const r = normalizeTemplateDraft({ durationMinutes: 15 }, base, "Oral de 15 minutes.");
     expect(r.warnings.filter((w) => /durée|min/i.test(w))).toEqual([]);
   });
 });
@@ -76,7 +71,10 @@ describe("durée : seules les valeurs plausibles liées à l'oral", () => {
         "| 2 | Conclusion | 2 min |",
       ].join("\n"),
     );
-    expect(r.recognized).not.toContain("durationMinutes");
+    // Ni 45 ni 30 min : seule la colonne « Temps » du tableau compte, par sa somme (7 min + 30 s de couverture).
+    expect(r.template.durationMinutes).toBe(8);
+    expect(r.found).toContain("Durée : 8 min (somme des diapos)");
+    expect(r.found.some((f) => /45|30 min/.test(f))).toBe(false);
   });
 });
 

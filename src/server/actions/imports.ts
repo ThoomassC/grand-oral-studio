@@ -1,7 +1,6 @@
 "use server";
 
 import type { z } from "zod";
-import { getEngineForUser } from "../ai";
 import * as themesRepo from "../repo/themes";
 import * as service from "../services/imports";
 import { IdSchema, parseInput, ThemeListImportSchema } from "../validation";
@@ -10,18 +9,19 @@ import { revalidatePrograms } from "./revalidate";
 import { runAction, type ActionContext } from "./run";
 
 /**
- * Imports (charte depuis un fichier, gabarit depuis des consignes, thèmes et
- * charte depuis un prompt). Les actions `analyze*` n'enregistrent RIEN : elles
- * renvoient une proposition que l'interface applique au formulaire, rejouables
- * sans effet (hors quotas). Seule `importThemeList` écrit (thèmes cochés par
- * l'utilisateur), de façon idempotente.
+ * Imports (apparence depuis un fichier, trame depuis des consignes, sujets et
+ * apparence depuis un prompt), tous lus SANS IA. Les actions `analyze*`
+ * n'enregistrent RIEN : elles renvoient une proposition que l'interface
+ * applique au formulaire, rejouables sans effet (hors quota d'import). Seule
+ * `importThemeList` écrit (sujets cochés par l'utilisateur), de façon
+ * idempotente.
  */
 
 function deps(ctx: ActionContext): service.ImportsDeps {
-  return { log: ctx.log, resolveEngine: () => getEngineForUser(ctx.user.id, { log: ctx.log }) };
+  return { log: ctx.log };
 }
 
-/** Charte déduite d'un .pptx/.potx/.thmx (gratuit) ou d'un PDF/image (moteur Claude). Fichier sous `file`. */
+/** Apparence lue dans un .pptx, .potx ou .thmx d'exemple (PDF et images refusés). Fichier sous `file`. */
 export async function analyzeBrandFile(
   programId: string,
   formData: FormData,
@@ -39,7 +39,7 @@ export async function analyzeBrandFile(
   });
 }
 
-/** Gabarit prérempli à partir de consignes (≤ 20 000 caractères), sur la base du gabarit actuel du projet. */
+/** Trame préremplie à partir de consignes (≤ 20 000 caractères), sur la base de la trame actuelle du projet. */
 export async function analyzeTemplatePrompt(
   programId: string,
   input: { text: string },
@@ -52,9 +52,9 @@ export async function analyzeTemplatePrompt(
 }
 
 /**
- * Thèmes ET charte proposés à partir d'un texte libre décrivant l'oral
+ * Sujets ET apparence proposés à partir d'un texte libre décrivant l'oral
  * (≤ 20 000 caractères). N'écrit rien : l'ajout passe par `importThemeList`,
- * la charte par l'enregistrement habituel.
+ * l'apparence par l'enregistrement habituel.
  */
 export async function analyzeThemePrompt(
   programId: string,
@@ -68,11 +68,11 @@ export async function analyzeThemePrompt(
 }
 
 /**
- * Ajout d'une liste de thèmes déjà structurée (proposition d'`analyzeThemePrompt`,
- * relue par l'utilisateur) : 1 à 60 thèmes. Même dépôt que l'import texte
+ * Ajout d'une liste de sujets déjà structurée (proposition d'`analyzeThemePrompt`,
+ * relue par l'utilisateur) : 1 à 60 sujets. Même dépôt que l'import texte
  * (`importThemes`), donc même verrou sur le projet, même idempotence par nom
  * (casse et accents ignorés : rejouer ne crée pas de doublon), même plafond de
- * 60 thèmes par projet (tout ou rien), positions à la suite.
+ * 60 sujets par projet (tout ou rien), positions à la suite.
  */
 export async function importThemeList(
   programId: string,

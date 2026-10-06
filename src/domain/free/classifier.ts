@@ -160,10 +160,10 @@ function rationaleFor(
   keywords: string[],
   anyOverlap: boolean,
 ): string {
-  if (!anyOverlap) return "Aucun mot-clé en commun : proposition par défaut, vérifiez le thème.";
-  if (matchedSurfaces.length === 0) return "Aucun mot en commun avec ce thème.";
+  if (!anyOverlap) return "Aucun mot-clé en commun : proposition par défaut, vérifiez le sujet.";
+  if (matchedSurfaces.length === 0) return "Aucun mot en commun avec ce sujet.";
   const parts = [`Mots en commun : ${matchedSurfaces.join(", ")}.`];
-  if (keywords.length > 0) parts.push(`Mot${keywords.length > 1 ? "s" : ""}-clé${keywords.length > 1 ? "s" : ""} du thème retrouvé${keywords.length > 1 ? "s" : ""} : ${keywords.join(", ")}.`);
+  if (keywords.length > 0) parts.push(`Mot${keywords.length > 1 ? "s" : ""}-clé${keywords.length > 1 ? "s" : ""} du sujet retrouvé${keywords.length > 1 ? "s" : ""} : ${keywords.join(", ")}.`);
   return truncateText(parts.join(" "), LIMITS.rationale);
 }
 

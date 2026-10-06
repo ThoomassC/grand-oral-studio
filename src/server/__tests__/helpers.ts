@@ -36,14 +36,14 @@ export async function seedThemes(programId: string, themes: ThemeInput[]): Promi
   return [...rows].sort((a, b) => a.position - b.position).map((r) => r.id);
 }
 
-export function themeInput(name: string, keywords: string[] = []): ThemeInput {
-  return { name, description: `Description de ${name}`, keywords };
+export function themeInput(name: string, keywords: string[] = [], notes = ""): ThemeInput {
+  return { name, description: `Description de ${name}`, keywords, notes };
 }
 
-/** Insère un deck directement en base (préparation de cascade, sans le domaine). */
+/** Insère un deck directement en base (préparation de cascade, sans le domaine). `themeId` null : deck final sans sujet. */
 export async function seedDeck(
   programId: string,
-  themeId: string,
+  themeId: string | null,
   kind: "SKELETON" | "FINAL",
   spec: DeckSpec = makeConformingDeck(),
 ): Promise<string> {

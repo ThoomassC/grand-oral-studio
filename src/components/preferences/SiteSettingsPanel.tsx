@@ -60,7 +60,7 @@ export function SiteSettingsPanel({ open, onOpenChange }: { open: boolean; onOpe
   const [announcement, setAnnouncement] = useState<{ text: string; n: number } | null>(null);
   const ids = {
     intro: useId(),
-    appearance: useId(),
+    display: useId(),
     theme: useId(),
     themeHelp: useId(),
     legibility: useId(),
@@ -114,9 +114,9 @@ export function SiteSettingsPanel({ open, onOpenChange }: { open: boolean; onOpe
       </p>
 
       <div className="mt-2 flex flex-col">
-        <section aria-labelledby={ids.appearance} className="site-settings__block">
-          <h3 id={ids.appearance} className="text-lg">
-            Apparence
+        <section aria-labelledby={ids.display} className="site-settings__block">
+          <h3 id={ids.display} className="text-lg">
+            Affichage
           </h3>
           <p id={ids.theme} className="mt-3 text-sm font-semibold">
             Thème

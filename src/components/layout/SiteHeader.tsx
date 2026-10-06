@@ -10,8 +10,8 @@ import { MainNav } from "./MainNav";
 
 /**
  * En-tête global : la `Topbar` d'Opale (parties nommées : Server Component).
- * Ordre de tabulation : logo → Projets → Configuration IA → thème (soleil /
- * lune) → Réglages (panneau des réglages du site, aussi sans compte) → menu
+ * Ordre de tabulation : logo → Projets → Configuration IA → Notes de version
+ * (seul onglet sans compte) → thème (soleil / lune) → Réglages (panneau des réglages du site, aussi sans compte) → menu
  * du compte (e-mail, informations du profil, déconnexion) ou, sans compte,
  * Connexion → Créer un compte. Le logo, les onglets et le
  * menu du compte passent par la garde « modifications non enregistrées ».
@@ -34,7 +34,10 @@ export async function SiteHeader() {
           </span>
         </GuardedLink>
       </TopbarBrand>
-      {user ? <MainNav className="col-span-2 row-start-2 justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1" /> : null}
+      <MainNav
+        signedIn={user !== null}
+        className="col-span-2 row-start-2 justify-self-center sm:col-span-1 sm:col-start-2 sm:row-start-1"
+      />
       <TopbarActions className="flex-wrap justify-self-end sm:col-start-3">
         <ThemeToggle />
         <SiteSettingsButton />

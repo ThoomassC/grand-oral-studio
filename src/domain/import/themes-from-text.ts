@@ -1,35 +1,35 @@
-import { z } from "zod";
 import { SAFE_FONTS } from "../fonts";
 import { stripControlChars, ThemeInputSchema, type Brand, type ThemeInput } from "../schemas";
 import { dedupeKeywords, splitKeywords, themeNameKey } from "../theme-name";
 import { brandFromTheme } from "./brand-from-theme";
 
 /**
- * Thèmes ET charte graphique préremplis à partir d'un texte libre décrivant un
- * oral (prompt collé dans l'onglet Thèmes).
+ * Sujets ET apparence (couleurs, polices) préremplis à partir d'un texte libre
+ * décrivant un oral (prompt collé sur la page Sujets ou Apparence).
  *
- * `parseThemePromptText` : heuristiques FR/EN, sans IA (moteur gratuit).
- * `normalizeThemePromptDraft` : ramène une sortie IA permissive dans les bornes.
+ * `parseThemePromptText` : heuristiques FR/EN déterministes, SANS IA.
  *
- * Garanties communes (fonctions pures) :
- *   - thèmes nettoyés, dédoublonnés (casse et accents ignorés), conformes à
+ * Garanties (fonction pure) :
+ *   - sujets nettoyés, dédoublonnés (casse et accents ignorés), conformes à
  *     ThemeInputSchema, 60 au plus ;
- *   - `brand` null si rien de graphique n'a été reconnu ; sinon une charte
- *     valide (BrandSchema) complétée depuis la charte actuelle, polices
+ *   - `brand` null si rien de graphique n'a été reconnu ; sinon une apparence
+ *     valide (BrandSchema) complétée depuis l'apparence actuelle, polices
  *     ramenées à SAFE_FONTS et contraste texte/fond ≥ 4,5:1, corrections
  *     signalées dans `brandNotes` (via `brandFromTheme`) ;
- *   - `found` décrit ce qui a été repris, sans jamais recopier le texte entier.
+ *   - `brandFound` décrit ce qui a été repris pour l'apparence, sans jamais
+ *     recopier le texte entier (le nombre de sujets se lit sur `themes`).
  */
 
 export const MAX_PROMPT_THEMES = 60;
 
-const BOUNDS = { name: 120, description: 2000, keyword: 60, keywords: 30, noteValue: 40, fontName: 80 } as const;
+const BOUNDS = { name: 120, description: 2000, keyword: 60, keywords: 30 } as const;
 
 export interface ThemePromptImport {
   themes: ThemeInput[];
   brand: Brand | null;
   brandNotes: string[];
-  found: string[];
+  /** Couleurs et polices reprises (« Couleur principale : #1F3A5F »), affichables telles quelles. */
+  brandFound: string[];
 }
 
 type ColorRole = "primary" | "secondary" | "accent" | "background" | "text";
@@ -175,20 +175,6 @@ function findColors(folded: string): Span<string>[] {
   return spans.sort((a, b) => a.start - b.start);
 }
 
-/**
- * Une valeur de couleur (sortie d'IA ou fragment de texte) → #RRGGBB : code hex
- * (avec ou sans dièse, 3 ou 6 chiffres), sinon premier nom de couleur reconnu.
- */
-export function colorFromText(value: string): string | null {
-  const folded = fold(value.trim());
-  if (!folded) return null;
-  const bare = /^([0-9a-f]{6}|[0-9a-f]{3})$/.exec(folded);
-  if (bare?.[1]) return expandHex(bare[1]);
-  const hash = /#([0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-z])/u.exec(folded);
-  if (hash?.[1]) return expandHex(hash[1]);
-  return findColors(folded)[0]?.value ?? null;
-}
-
 // ---------------------------------------------------------------------------
 // Polices : noms de SAFE_FONTS cités
 // ---------------------------------------------------------------------------
@@ -326,6 +312,8 @@ function boundThemes(drafts: readonly DraftTheme[]): ThemeInput[] {
       name,
       description: clean(d.description, BOUNDS.description),
       keywords: dedupeKeywords(d.keywords.map((k) => clean(k, BOUNDS.keyword))).slice(0, BOUNDS.keywords),
+      // Pas de notes depuis un prompt libre : aucune frontière fiable dans le texte.
+      notes: "",
     });
     if (!parsed.success) continue; // défense en profondeur : les bornes ci-dessus suffisent
     seen.add(key);
@@ -334,13 +322,9 @@ function boundThemes(drafts: readonly DraftTheme[]): ThemeInput[] {
   return out;
 }
 
-function themesFound(themes: readonly ThemeInput[]): string[] {
-  if (themes.length === 0) return [];
-  return [`${themes.length} ${themes.length > 1 ? "thèmes" : "thème"}`];
-}
 
 // ---------------------------------------------------------------------------
-// Heuristiques (moteur gratuit)
+// Heuristiques
 // ---------------------------------------------------------------------------
 
 const NUMBERED = /^\s*(\d{1,2})\s*[.)\-–:]\s+(.+)$/;
@@ -488,61 +472,5 @@ export function parseThemePromptText(text: string, currentBrand: Brand): ThemePr
   const consumed = new Set<number>();
   const themes = boundThemes(extractThemes(lines, consumed));
   const { brand, notes, found } = buildBrand(brandFromSegments(brandSegments(lines, consumed)), currentBrand);
-  return { themes, brand, brandNotes: notes, found: [...themesFound(themes), ...found] };
-}
-
-// ---------------------------------------------------------------------------
-// Sortie IA permissive → thèmes et charte bornés
-// ---------------------------------------------------------------------------
-
-/** Schéma PERMISSIF envoyé au modèle (forme seule) ; tout champ est facultatif. */
-export const RawThemePromptDraftSchema = z.object({
-  themes: z
-    .array(
-      z.object({
-        name: z.string().optional(),
-        description: z.string().optional(),
-        keywords: z.array(z.string()).optional(),
-      }),
-    )
-    .optional(),
-  brand: z
-    .object({
-      colors: z
-        .object({
-          primary: z.string().optional(),
-          secondary: z.string().optional(),
-          accent: z.string().optional(),
-          background: z.string().optional(),
-          text: z.string().optional(),
-        })
-        .optional(),
-      fonts: z.object({ heading: z.string().optional(), body: z.string().optional() }).optional(),
-    })
-    .optional(),
-});
-export type RawThemePromptDraft = z.infer<typeof RawThemePromptDraftSchema>;
-
-export function normalizeThemePromptDraft(raw: RawThemePromptDraft, currentBrand: Brand): ThemePromptImport {
-  const themes = boundThemes(
-    (raw.themes ?? []).map((t) => ({ name: t.name ?? "", description: t.description ?? "", keywords: t.keywords ?? [] })),
-  );
-  const patch: BrandPatch = { colors: {}, fonts: {} };
-  const unrecognized: string[] = [];
-  for (const role of COLOR_ROLES) {
-    const value = clean(raw.brand?.colors?.[role] ?? "", 200);
-    if (!value) continue;
-    const hex = colorFromText(value);
-    if (hex) patch.colors[role] = hex;
-    else {
-      const shown = clean(value, BOUNDS.noteValue);
-      unrecognized.push(`Couleur ${COLOR_LABEL[role]} « ${shown} » non reconnue : couleur actuelle conservée.`);
-    }
-  }
-  for (const role of ["heading", "body"] as const) {
-    const value = clean(raw.brand?.fonts?.[role] ?? "", BOUNDS.fontName);
-    if (value) patch.fonts[role] = value;
-  }
-  const { brand, notes, found } = buildBrand(patch, currentBrand);
-  return { themes, brand, brandNotes: [...unrecognized, ...notes], found: [...themesFound(themes), ...found] };
+  return { themes, brand, brandNotes: notes, brandFound: found };
 }

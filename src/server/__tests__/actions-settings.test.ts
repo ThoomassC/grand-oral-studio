@@ -1,18 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "@/server/errors";
+import { UnauthenticatedError, ValidationError } from "@/server/errors";
 
 /** Transport des actions Configuration IA : session, revalidation, traduction des erreurs. */
 
 const revalidatePath = vi.fn();
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => undefined, redirect: () => undefined }));
+let signedIn = true;
 vi.mock("@/server/session", () => ({
-  requireUser: async () => ({ id: "user-1", email: "u@example.test", name: "U" }),
+  requireUser: async () => {
+    if (!signedIn) throw new UnauthenticatedError();
+    return { id: "user-1", email: "u@example.test", name: "U" };
+  },
 }));
 
-const service = { saveApiKey: vi.fn(), deleteApiKey: vi.fn(), testEffectiveKey: vi.fn(), setEngine: vi.fn() };
+// Transport seulement : les sondes réseau (Ollama, vérification de clé) ne sont jamais appelées ici.
+vi.mock("@/server/ai/ollama", () => ({ listOllamaModels: vi.fn() }));
+vi.mock("@/server/ai/verify-key", () => ({ verifyAnthropicKey: vi.fn() }));
+
+const service = { activateClaudeWithKey: vi.fn(), deleteApiKey: vi.fn(), testEffectiveKey: vi.fn(), setEngine: vi.fn() };
 vi.mock("@/server/services/ai-settings", () => ({
-  saveApiKey: (...args: unknown[]) => service.saveApiKey(...args),
+  activateClaudeWithKey: (...args: unknown[]) => service.activateClaudeWithKey(...args),
   deleteApiKey: (...args: unknown[]) => service.deleteApiKey(...args),
   testEffectiveKey: (...args: unknown[]) => service.testEffectiveKey(...args),
   setEngine: (...args: unknown[]) => service.setEngine(...args),
@@ -21,32 +29,56 @@ vi.mock("@/server/services/ai-settings", () => ({
 const actions = await import("@/server/actions/settings");
 
 beforeEach(() => {
+  signedIn = true;
   revalidatePath.mockReset();
   for (const fn of Object.values(service)) fn.mockReset();
 });
 
-describe("saveAnthropicApiKey", () => {
-  it("devrait enregistrer pour l'utilisateur connecté, renvoyer les 4 derniers caractères et revalider /configuration-ia", async () => {
-    service.saveApiKey.mockResolvedValue({ last4: "AAAA" });
-    const result = await actions.saveAnthropicApiKey({ apiKey: "sk-ant-x" });
+const SECRET = "sk-ant-api03-secret-value-0000";
+
+describe("activateClaude", () => {
+  it("devrait activer Claude pour l'utilisateur connecté, renvoyer les 4 derniers caractères et revalider /configuration-ia", async () => {
+    service.activateClaudeWithKey.mockResolvedValue({ last4: "AAAA" });
+    const result = await actions.activateClaude({ apiKey: "sk-ant-x" });
     expect(result).toEqual({ ok: true, data: { last4: "AAAA" } });
-    expect(service.saveApiKey.mock.calls[0]![0]).toBe("user-1");
+    const [userId, input, deps] = service.activateClaudeWithKey.mock.calls[0]! as [string, unknown, { env: unknown; verifyKey: unknown }];
+    expect(userId).toBe("user-1");
+    expect(input).toEqual({ apiKey: "sk-ant-x" });
+    expect(deps.env).toBe(process.env);
+    expect(typeof deps.verifyKey).toBe("function");
     expect(revalidatePath).toHaveBeenCalledWith("/configuration-ia");
   });
 
+  it("devrait refuser sans session, sans appeler le service", async () => {
+    signedIn = false;
+    const result = await actions.activateClaude({ apiKey: SECRET });
+    expect(result.ok).toBe(false);
+    expect(service.activateClaudeWithKey).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("devrait transmettre l'erreur de champ apiKey au client", async () => {
-    service.saveApiKey.mockRejectedValue(new ValidationError("Cette clé est refusée", { apiKey: ["Cette clé est refusée"] }));
-    const result = await actions.saveAnthropicApiKey({ apiKey: "sk-ant-x" });
+    service.activateClaudeWithKey.mockRejectedValue(new ValidationError("Cette clé est refusée", { apiKey: ["Cette clé est refusée"] }));
+    const result = await actions.activateClaude({ apiKey: "sk-ant-x" });
     expect(result).toEqual({ ok: false, error: "Cette clé est refusée", fieldErrors: { apiKey: ["Cette clé est refusée"] } });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("ne devrait jamais renvoyer le message brut d'une panne (qui pourrait contenir la clé)", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    service.saveApiKey.mockRejectedValue(new Error("boom sk-ant-api03-secret"));
-    const result = await actions.saveAnthropicApiKey({ apiKey: "sk-ant-api03-secret" });
-    expect(result.ok).toBe(false);
-    expect(JSON.stringify(result)).not.toContain("secret");
+  it("ne devrait jamais renvoyer ni journaliser la clé, même quand une panne la contient", async () => {
+    const logged: unknown[] = [];
+    const capture = (...args: unknown[]) => void logged.push(args);
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(capture));
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk: unknown) => (logged.push(chunk), true));
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => (logged.push(chunk), true));
+    try {
+      service.activateClaudeWithKey.mockRejectedValue(new Error(`boom ${SECRET}`));
+      const result = await actions.activateClaude({ apiKey: SECRET });
+      expect(result.ok).toBe(false);
+      expect(JSON.stringify(result)).not.toContain("secret-value");
+      expect(JSON.stringify(logged)).not.toContain("secret-value");
+    } finally {
+      for (const spy of [...spies, stdout, stderr]) spy.mockRestore();
+    }
   });
 });
 

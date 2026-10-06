@@ -5,6 +5,7 @@ import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useId, useRef } from "react";
 import { createProgram } from "@/server/actions/programs";
+import { projectHomeHref } from "@/components/projects/steps";
 import { FieldError } from "@/components/ui/FieldError";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -80,7 +81,7 @@ export function CreateProgramForm({
       if (countFieldErrors(fieldErrors) > 0) focusFirstInvalid(formRef.current);
       return { status: { kind: "error", message: result.error }, fieldErrors, values };
     }
-    router.push(`/projets/${result.data.id}`);
+    router.push(projectHomeHref(result.data.id));
     return { status: { kind: "success", message: "Projet créé. Ouverture…" }, fieldErrors: {}, values };
   }, INITIAL);
 

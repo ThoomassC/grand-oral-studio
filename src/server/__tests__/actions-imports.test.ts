@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Couche de transport des imports : session, moteur et service isolés ; on
- * vérifie la validation au bord (FormData, taille, longueur) et ce qui est
- * transmis au service.
+ * Couche de transport des imports : session et service isolés ; on vérifie
+ * la validation au bord (FormData, taille, longueur) et ce qui est transmis au
+ * service. Aucun moteur d'IA n'est résolu : les imports sont lus sans IA.
  */
 
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => undefined, redirect: () => undefined }));
 vi.mock("@/server/session", () => ({
   requireUser: async () => ({ id: "user-1", email: "u@example.test", name: "U" }),
 }));
-const getEngineForUser = vi.fn(async () => ({ engine: "free" as const }));
-vi.mock("@/server/ai", () => ({ getEngineForUser: () => getEngineForUser() }));
+const getEngineForUser = vi.fn();
+vi.mock("@/server/ai", () => ({ getEngineForUser: (...args: unknown[]) => getEngineForUser(...args) }));
 
 const service = { analyzeBrandFile: vi.fn(), analyzeTemplatePrompt: vi.fn(), analyzeThemePrompt: vi.fn() };
 vi.mock("@/server/services/imports", async (importOriginal) => {
@@ -41,13 +41,15 @@ function form(file?: File): FormData {
 
 describe("action analyzeBrandFile", () => {
   it("devrait transmettre le fichier (nom, taille, octets) au service", async () => {
-    service.analyzeBrandFile.mockResolvedValue({ brand: {}, notes: [], source: "office" });
+    service.analyzeBrandFile.mockResolvedValue({ brand: {}, notes: [] });
     const result = await actions.analyzeBrandFile("prog-1", form(new File([new Uint8Array([1, 2, 3])], "charte.pptx")));
     expect(result.ok).toBe(true);
     const [userId, programId, input] = service.analyzeBrandFile.mock.calls[0]! as [string, string, { name: string; size: number; bytes: () => Promise<Uint8Array> }];
     expect([userId, programId, input.name, input.size]).toEqual(["user-1", "prog-1", "charte.pptx", 3]);
     expect([...(await input.bytes())]).toEqual([1, 2, 3]);
-    // Le moteur n'est résolu qu'à la demande du service.
+    // Plus aucun moteur d'IA : les dépendances transmises n'en contiennent pas.
+    const deps = service.analyzeBrandFile.mock.calls[0]![3] as Record<string, unknown>;
+    expect(Object.keys(deps)).toEqual(["log"]);
     expect(getEngineForUser).not.toHaveBeenCalled();
   });
 
@@ -85,10 +87,12 @@ describe("action analyzeBrandFile", () => {
 
 describe("action analyzeTemplatePrompt", () => {
   it("devrait transmettre le texte validé", async () => {
-    service.analyzeTemplatePrompt.mockResolvedValue({ template: {}, found: [], source: "free", fallbackReason: null });
+    service.analyzeTemplatePrompt.mockResolvedValue({ template: {}, found: [], recognized: [], warnings: [] });
     const result = await actions.analyzeTemplatePrompt("prog-1", { text: "Durée : 10 min" });
     expect(result.ok).toBe(true);
     expect(service.analyzeTemplatePrompt.mock.calls[0]!.slice(0, 3)).toEqual(["user-1", "prog-1", { text: "Durée : 10 min" }]);
+    expect(Object.keys(service.analyzeTemplatePrompt.mock.calls[0]![3] as object)).toEqual(["log"]);
+    expect(getEngineForUser).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -102,13 +106,13 @@ describe("action analyzeTemplatePrompt", () => {
   });
 
   it("devrait accepter exactement 20 000 caractères", async () => {
-    service.analyzeTemplatePrompt.mockResolvedValue({ template: {}, found: [], source: "free", fallbackReason: null });
+    service.analyzeTemplatePrompt.mockResolvedValue({ template: {}, found: [], recognized: [], warnings: [] });
     expect((await actions.analyzeTemplatePrompt("prog-1", { text: "a".repeat(20_000) })).ok).toBe(true);
   });
 });
 
 describe("action analyzeThemePrompt", () => {
-  const empty = { themes: [], brand: null, brandNotes: [], found: [], source: "free", fallbackReason: null };
+  const empty = { themes: [], brand: null, brandNotes: [], brandFound: [] };
 
   it("devrait transmettre le texte validé à l'utilisateur de la session", async () => {
     service.analyzeThemePrompt.mockResolvedValue(empty);

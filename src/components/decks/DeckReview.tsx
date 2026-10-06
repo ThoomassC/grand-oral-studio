@@ -75,7 +75,7 @@ export function DeckReview({
         {issues.length > 0 ? (
           <>
             <p className="font-semibold text-warning">
-              {issues.length} écart{issues.length > 1 ? "s" : ""} au gabarit
+              {issues.length} écart{issues.length > 1 ? "s" : ""} à la trame
             </p>
             <ul className="mt-1 list-disc pl-5 text-sm">
               {issues.map((issue) => (

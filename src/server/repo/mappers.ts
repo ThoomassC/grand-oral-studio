@@ -10,7 +10,7 @@ import type { DeckEngine, DeckView, ThemeView } from "./types";
 interface DeckRow {
   id: string;
   programId: string;
-  themeId: string;
+  themeId: string | null;
   kind: DeckKind;
   problem: string | null;
   engine: string | null;
@@ -42,6 +42,7 @@ interface ThemeRow {
   name: string;
   description: string;
   keywords: string[];
+  notes: string;
 }
 
 export function toThemeView(row: ThemeRow): ThemeView {
@@ -52,6 +53,7 @@ export function toThemeView(row: ThemeRow): ThemeView {
     name: row.name,
     description: row.description,
     keywords: row.keywords,
+    notes: row.notes,
   };
 }
 

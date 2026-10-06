@@ -69,7 +69,7 @@ export function defaultTemplate(): PromptTemplate {
 /** Charte neutre : gris ardoise et bleu sobre, polices système, sans logo ni marque. */
 export function defaultBrand(): Brand {
   return {
-    name: "Charte neutre",
+    name: "Apparence neutre",
     colors: {
       primary: "#1E3A5F",
       secondary: "#4A6A8A",

@@ -316,6 +316,133 @@
    * repos en texte secondaire, survol et page courante sur un lavis primaire
    * à 12 % découpé en squircle, page courante en graisse 600.
    */
+  /*
+   * Choix de la Configuration IA en cartes côte à côte (autant de colonnes que la
+   * largeur le permet, 15 rem au moins), détail écrit dans chaque carte. Le choix
+   * coché a la bordure primaire ; le focus clavier du radio entoure toute la carte.
+   * Sous 640 px, les cartes s'empilent et le détail se replie derrière son bouton.
+   */
+  .engine-cards .opale-radio-group__options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.75rem;
+  }
+  .engine-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--opale-field-border);
+    border-radius: var(--opale-radius-lg);
+    background: var(--opale-surface);
+    cursor: pointer;
+    transition: border-color var(--opale-motion) var(--opale-ease), background var(--opale-motion) var(--opale-ease);
+  }
+  .engine-card:hover {
+    border-color: var(--opale-primary);
+  }
+  .engine-card[data-checked="true"] {
+    border-color: var(--opale-primary);
+    box-shadow: inset 0 0 0 1px var(--opale-primary);
+    background: color-mix(in srgb, var(--opale-primary) 6%, var(--opale-surface));
+  }
+  .engine-card[data-disabled] {
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  .engine-card[data-disabled]:hover {
+    border-color: var(--opale-field-border);
+  }
+  .engine-card:has(input:focus-visible) {
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: var(--opale-focus-ring-offset);
+  }
+  .engine-card__details {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--opale-text) 10%, transparent);
+    font-size: 0.875rem;
+  }
+  .engine-card__details dt {
+    font-weight: 600;
+  }
+  .engine-card__details dd {
+    margin: 0;
+    color: var(--opale-text-secondary);
+  }
+  .engine-card__toggle {
+    display: none;
+  }
+  @media (max-width: 639px) {
+    .engine-card__toggle {
+      display: inline-flex;
+      align-self: flex-start;
+      min-height: 2.75rem;
+      align-items: center;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--opale-primary-on-surface);
+      font: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+      cursor: pointer;
+    }
+    .engine-card__details[data-open="false"] {
+      display: none;
+    }
+  }
+
+  /*
+   * Panneau du bouton « i » (Configuration IA) : une fenêtre flottante nettement
+   * détachée de la carte (arrondi, ombre portée, filet), en clair comme en sombre.
+   */
+  .choice-info-panel {
+    border: 1px solid color-mix(in srgb, var(--opale-text) 20%, transparent);
+    border-radius: var(--opale-radius-lg);
+    background: var(--opale-surface);
+    box-shadow: var(--opale-shadow-3);
+  }
+
+  /*
+   * Étape qui apparaît sous la précédente (Configuration IA, « 2. Connecter Claude ») :
+   * la hauteur se déroule (grille 0fr → 1fr) pendant que le bloc glisse et passe en
+   * fondu. Découpe seulement pendant l'animation (data-reveal="enter"), pour ne pas
+   * rogner l'ombre de la carte ensuite. Les mouvements réduits (système ou Réglages)
+   * ramènent la durée à presque rien (règles globales en fin de fichier).
+   */
+  .step-reveal[data-reveal="enter"] {
+    display: grid;
+    animation: step-reveal-rows 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .step-reveal[data-reveal="enter"] > * {
+    min-height: 0;
+    overflow: clip;
+    animation: step-reveal-fade 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes step-reveal-rows {
+    from {
+      grid-template-rows: 0fr;
+    }
+    to {
+      grid-template-rows: 1fr;
+    }
+  }
+  @keyframes step-reveal-fade {
+    from {
+      opacity: 0;
+      transform: translateY(-0.75rem);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   .app-tab {
     --app-tab-fill: transparent;
     position: relative;
@@ -408,7 +535,8 @@
    * monte à 44 px : cible tactile confortable au doigt.
    */
   .project-settings-trigger,
-  .project-row-trigger {
+  .project-row-trigger,
+  .choice-info-trigger {
     display: grid;
     width: 2.25rem;
     height: 2.25rem;
@@ -428,18 +556,22 @@
   .project-settings-trigger:hover,
   .project-settings-trigger[aria-expanded="true"],
   .project-row-trigger:hover,
-  .project-row-trigger[aria-expanded="true"] {
+  .project-row-trigger[aria-expanded="true"],
+  .choice-info-trigger:hover,
+  .choice-info-trigger[aria-expanded="true"] {
     border-color: var(--opale-field-border);
     background: color-mix(in srgb, var(--opale-primary) 8%, transparent);
     color: var(--opale-text);
   }
   .project-settings-trigger:focus-visible,
-  .project-row-trigger:focus-visible {
+  .project-row-trigger:focus-visible,
+  .choice-info-trigger:focus-visible {
     outline: var(--opale-focus-ring-width) solid var(--opale-focus);
     outline-offset: var(--opale-focus-ring-offset);
   }
   .project-settings-trigger .opale-icon,
-  .project-row-trigger .opale-icon {
+  .project-row-trigger .opale-icon,
+  .choice-info-trigger .opale-icon {
     display: inline-grid;
     width: 1.25rem;
     height: 1.25rem;
@@ -449,9 +581,20 @@
     color: inherit;
   }
   .project-settings-trigger .opale-icon svg,
-  .project-row-trigger .opale-icon svg {
+  .project-row-trigger .opale-icon svg,
+  .choice-info-trigger .opale-icon svg {
     width: 100%;
     height: 100%;
+  }
+
+  /*
+   * Ombre de l'en-tête (Topbar d'Opale) : fine mais marquée, un filet net d'un pixel
+   * et une ombre courte, au lieu du halo large (0 20px 48px) d'Opale.
+   */
+  .opale-topbar__shell {
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--opale-text) 14%, transparent),
+      0 3px 8px -2px color-mix(in srgb, #000 22%, transparent);
   }
 
   .project-steps {
@@ -572,10 +715,6 @@
     border-color: var(--opale-success-on-surface);
     color: var(--opale-success-on-surface);
   }
-  .project-step[data-state="blocked"] .project-step__dot {
-    border-style: dashed;
-    color: var(--opale-warning-on-surface);
-  }
   .project-step[aria-current="step"] {
     background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
     color: var(--opale-primary-on-surface);
@@ -607,7 +746,7 @@
   }
   .project-step__summary {
     display: inline-flex;
-    /* Trois étapes : la place permet le résumé complet (« 9 thèmes · charte et gabarit par défaut »). */
+    /* Trois étapes : la place permet le résumé complet (« Par défaut · 13 diapos · 20 min · 9 sujets »). */
     max-width: 20rem;
     align-items: center;
     gap: var(--opale-space-2xs);
@@ -615,25 +754,6 @@
     font-size: var(--opale-text-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .project-step__summary--blocked {
-    color: var(--opale-warning-on-surface);
-  }
-
-  /* Cadenas de « Étape suivante » bloquée (StepNav) : à la taille du texte du bouton. */
-  .step-nav__lock {
-    display: inline-grid;
-    width: 1em;
-    height: 1em;
-    min-width: 0;
-    min-height: 0;
-    place-items: center;
-    color: inherit;
-    font-size: inherit;
-  }
-  .step-nav__lock svg {
-    width: 100%;
-    height: 100%;
   }
 
   /* Fil d'Ariane d'Opale : un écart de chaque côté du séparateur. */
@@ -646,32 +766,6 @@
     .project-step,
     .project-settings-trigger {
       transition: none;
-    }
-  }
-
-  /*
-   * Sommaire de la Configuration IA : le Sidebar d'Opale tel quel (rail sur le fond de
-   * page, filet, parties, barre de défilement et poignée d'Opale). On ne fait
-   * que le placer : sous 768 px en haut de page ; au-delà, collé au bord gauche
-   * et en haut de la fenêtre (l'en-tête n'est pas collant), sur `100dvh` — la
-   * barre de défilement d'Opale exige une hauteur.
-   */
-  @media (max-width: 767px) {
-    .settings-rail {
-      padding: var(--opale-space-md) 1rem 0;
-    }
-  }
-  @media (min-width: 768px) {
-    .settings-rail {
-      position: sticky;
-      top: 0;
-      flex: none;
-      align-self: flex-start;
-      height: 100dvh;
-    }
-    /* Le cadre d'Opale (poignée, format mobile) s'étire seul ; le rail le remplit. */
-    .settings-rail .settings-toc__root {
-      height: 100%;
     }
   }
 

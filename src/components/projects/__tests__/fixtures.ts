@@ -1,22 +1,24 @@
-import type { PrepareItem, ProjectStep, StepId } from "@/domain/progress";
+import type { ProjectStep, StepId, TemplateTab } from "@/domain/progress";
 
 /** Les 3 étapes d'un projet de test. */
-export function makeSteps(doneIds: StepId[], blocked: Partial<Record<StepId, StepId>> = {}): ProjectStep[] {
-  const ids: StepId[] = ["prepare", "skeletons", "day"];
+export function makeSteps(doneIds: StepId[]): ProjectStep[] {
+  const ids: StepId[] = ["appearance", "template", "day"];
   return ids.map((id, i) => ({
     id,
     index: (i + 1) as ProjectStep["index"],
     status: doneIds.includes(id) ? "done" : "todo",
-    blockedBy: blocked[id] ?? null,
     summary: `résumé ${id}`,
   }));
 }
 
-/** Les choix de Préparer : thèmes faits ou non, charte et gabarit par défaut ou personnalisés. */
-export function makePrepare({ themes = false, brand = false, template = false } = {}): PrepareItem[] {
+/** Les onglets de la trame : diapos par défaut ou personnalisées, 0 à n sujets. */
+export function makeTemplateTabs({ slides = false, subjects = 0 } = {}): TemplateTab[] {
   return [
-    { id: "themes", required: true, status: themes ? "done" : "todo", summary: themes ? "2 thèmes" : "Aucun thème" },
-    { id: "brand", required: false, status: brand ? "done" : "default", summary: brand ? "Charte enregistrée" : "Charte par défaut" },
-    { id: "template", required: false, status: template ? "done" : "default", summary: "13 diapos · 20 min" },
+    { id: "slides", status: slides ? "done" : "default", summary: slides ? "13 diapos · 20 min" : "Par défaut" },
+    {
+      id: "subjects",
+      status: subjects > 0 ? "done" : "optional",
+      summary: subjects > 0 ? `${subjects} sujet${subjects > 1 ? "s" : ""}` : "Facultatif",
+    },
   ];
 }

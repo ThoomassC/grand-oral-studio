@@ -14,7 +14,7 @@ import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
  */
 
 const PROMPT: PromptPair = { system: "s", user: "u" };
-const HINTS: DeckHints = { template: makeTemplate(), theme: makeThemes()[0]!, programName: "P" };
+const HINTS: DeckHints = { template: makeTemplate(), subject: makeThemes()[0]!, programName: "P", problem: "Une problématique ?" };
 
 interface Reply {
   status?: number;
@@ -272,5 +272,12 @@ describe("createAnthropicProvider — crédit épuisé (400 credit balance)", ()
     const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(AiCreditExhaustedError);
     expect(error).not.toBeInstanceOf(AiUnavailableError);
+  });
+});
+
+describe("createAnthropicProvider — surface", () => {
+  it("ne devrait plus exposer que la rédaction du deck et la reconnaissance (imports sans IA)", () => {
+    const { ai } = provider([]);
+    expect(Object.keys(ai).sort()).toEqual(["classify", "engine", "generateDeck", "name"]);
   });
 });

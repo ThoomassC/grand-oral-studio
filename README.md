@@ -1,19 +1,20 @@
 # Grand Oral Studio
 
-Prépare un grand oral à plusieurs thèmes : un diaporama squelette par thème avant le jour J, puis, à partir de la problématique tirée au sort, reconnaissance du thème et génération du diaporama complet avec notes d'orateur. Export `.pptx`, import dans Canva ou prompt prêt à coller dans l'IA de Canva.
+Prépare un grand oral, avec ou sans sujets imposés. Avant le jour J, on choisit l'apparence des diapos et on écrit leur contenu type, sans IA. Le jour J, on saisit la problématique tirée au sort : l'app reconnaît le sujet et rédige le diaporama complet avec notes d'orateur. Export `.pptx`, import dans Canva ou prompt prêt à coller dans l'IA de Canva.
 
-L'app est générique : thèmes, charte graphique et gabarit de prompt sont des données propres à chaque projet.
+L'app est générique : apparence, trame et sujets sont des données propres à chaque projet. L'IA n'intervient qu'au jour J.
 
 En ligne : https://grand-oral-studio.vercel.app. Pour participer : [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Parcours
 
-1. **Thèmes** : saisie ou import en masse (`Nom | description | mot1, mot2`).
-2. **Charte** : couleurs, polices, logo PNG/JPEG, aperçu fidèle au `.pptx`.
-3. **Gabarit** : format, langue, durée, sections et nombre de diapos par section, ton, contraintes.
-4. **Squelettes** : un diaporama générique par thème, à relire et compléter.
-5. **Jour J** : problématique → 3 thèmes proposés avec confiance → choix → diaporama complet.
-6. **Decks** : relecture, édition des diapos, `.pptx`, import dans Canva.
+1. **Apparence** : couleurs, polices, logo PNG/JPEG, aperçu fidèle au `.pptx`. À la main, depuis un prompt ou depuis un `.pptx`/`.potx`/`.thmx` d'exemple.
+2. **Trame** : format, langue, durée de l'oral, puis une ligne par groupe de diapos (titre, nombre de diapos, contenu type, durée facultative). À la main ou depuis un prompt Markdown (tableau `Diapo | Titre | Contenu | Durée`, plages « 2-3 »), lu sans IA.
+   **Sujets** (facultatif, onglet de la Trame) : nom, description, mots-clés et notes (chiffres, exemples, sources). Saisie ou import en masse (`Nom | description | mot1, mot2 | notes`).
+3. **Jour J** : problématique → sujet reconnu (aucun sujet : étape sautée ; un seul : présélectionné ; option « Sans sujet ») → diaporama complet rédigé à partir de la trame et des notes du sujet.
+4. **Decks** : relecture, édition des diapos, `.pptx`, import dans Canva. Les squelettes produits par la v1.0 y restent consultables.
+
+Notes de version : page `/notes-de-version` (publique), générée avec `CHANGELOG.md` depuis `src/domain/releases.ts`.
 
 ## Démarrer en local
 
@@ -31,15 +32,15 @@ Sans aucune clé, le moteur gratuit (sans IA) rédige des trames à compléter :
 
 ## Moteurs de rédaction
 
-Chaque utilisateur choisit son moteur dans la **Configuration IA** :
+Chaque utilisateur choisit dans la **Configuration IA** qui rédige le jour J :
 
 | Moteur | Coût | Qualité | Prérequis |
 |---|---|---|---|
-| **Gratuit** | aucun, instantané, sans réseau | trame conforme au gabarit, à compléter (« Généré sans IA ») | aucun |
+| **Sans IA** | aucun, instantané, sans réseau | trame remplie avec les notes du sujet, à compléter (« Construit sans IA ») | aucun |
 | **Claude** | crédits Anthropic de l'utilisateur (ou du serveur) | contenu rédigé | une clé API (voir « Clé API ») |
 | **Ollama** | calcul local | dépend du modèle ; lent | Ollama sur le serveur |
 
-Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Si le moteur choisi n'est plus disponible (clé supprimée, Ollama arrêté), la génération échoue avec un message qui renvoie vers la Configuration IA : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du thème** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
+Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Supprimer sa clé alors que Claude est choisi ramène la rédaction au choix par défaut (le moteur gratuit, sauf clé serveur `ANTHROPIC_API_KEY`) ; un autre moteur choisi est conservé. Si le moteur choisi n'est plus disponible (Ollama arrêté, par exemple), la génération échoue avec un message qui renvoie vers la Configuration IA : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du sujet** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
 
 Chaque deck garde la trace du moteur qui l'a produit (`engine` : `claude`, `ollama`, `free`, `mock`, ou `null` pour les decks antérieurs).
 
@@ -59,7 +60,7 @@ Limites : délai `AI_OLLAMA_TIMEOUT_MS` pour un deck (défaut 10 min) et `AI_OLL
 
 ## Clé API
 
-Chaque utilisateur peut enregistrer **sa** clé API Anthropic dans la **Configuration IA** (`/configuration-ia`). Ses générations (squelettes, reconnaissance du thème, deck final) l'utilisent alors. Ordre de résolution :
+Chaque utilisateur peut enregistrer **sa** clé API Anthropic dans la **Configuration IA** (`/configuration-ia`). Ses générations du jour J (reconnaissance du sujet, deck final) l'utilisent alors. « Vérifier et activer » contrôle la clé, l'enregistre chiffrée et choisit Claude en une seule opération. Ordre de résolution :
 
 1. la clé de l'utilisateur ;
 2. la clé du serveur `ANTHROPIC_API_KEY` (sauf `AI_PROVIDER=mock`) ;

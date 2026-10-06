@@ -1,45 +1,44 @@
 import { createHash } from "node:crypto";
 import type { ClassificationOutcome } from "@/domain/contracts";
-import { checkDeckAgainstTemplate, completeThinNotes } from "@/domain/deck";
+import { checkDeckAgainstTemplate } from "@/domain/deck";
 import {
   assessFinalDeck,
   enforceProblem,
   findUnsourcedFigures,
-  neutralizeSkeletonProblem,
   pickBetterDeck,
   qualityFeedback,
   qualityWarnings,
   unsourcedFigureWarning,
   type FinalDeckQuality,
 } from "@/domain/deck-quality";
-import { buildFreeFinalDeck, buildFreeSkeleton } from "@/domain/free";
-import { buildClassificationPrompt, buildFinalDeckPrompt, buildSkeletonPrompt, withRetryFeedback } from "@/domain/prompts";
+import { buildFreeFinalDeck } from "@/domain/free";
+import { buildClassificationPrompt, buildFinalDeckPrompt, withRetryFeedback } from "@/domain/prompts";
 import type { DeckSpec, ProblemInput } from "@/domain/schemas";
 import type { AiProvider } from "../ai/types";
-import { AiUnavailableError, isAppError, NotFoundError, ValidationError } from "../errors";
+import { AiUnavailableError, isAppError, ValidationError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeAiQuotaFor, consumeFreeEngineQuota, refundAiQuotaFor, type AiBilling } from "../rate-limit";
 import {
   createFinalDeck,
   findRecentFinalDeck,
+  getFinalDeckContext,
   getGenerationContext,
-  getThemeGenerationContext,
-  listSkeletonThemeIds,
-  upsertSkeleton,
+  type FinalDeckContext,
 } from "../repo/decks";
 import type { DeckEngine } from "../repo/types";
 import { singleFlight } from "../single-flight";
 import { classifyWithFallback } from "./classification";
 
 /**
- * Logique métier de génération, indépendante de Next et de HTTP : l'appelant
+ * Logique métier du jour J, indépendante de Next et de HTTP : l'appelant
  * fournit l'utilisateur, le fournisseur IA et le logger. Ordre immuable :
- *   1. lecture autorisée du contexte (requête filtrée par propriétaire),
+ *   1. lecture autorisée du contexte (requête filtrée par propriétaire ; le
+ *      sujet, s'il y en a un, est cherché DANS ce programme),
  *   2. quota (IA, ou limite anti-abus légère pour le moteur gratuit),
  *   3. rédaction : appel IA HORS de toute transaction, ou moteur gratuit (pur) ;
  *      deck final IA : contrôle qualité, au plus UNE nouvelle tentative (une
  *      unité de quota de plus), puis corrections déterministes (problématique),
- *   4. écriture courte qui revérifie la propriété (le thème a pu disparaître),
+ *   4. écriture courte qui revérifie la propriété (le sujet a pu disparaître),
  *      avec le moteur qui a produit le deck.
  */
 
@@ -90,98 +89,11 @@ async function billedAiCall<T>(userId: string, deps: AiGenerationDeps, call: () 
   }
 }
 
-export interface SkeletonResult {
-  deckId: string;
-  /** Programme du thème (pour l'invalidation des pages). */
-  programId: string;
-  /** Écarts entre le deck produit et le gabarit (non bloquants). */
-  warnings: string[];
-}
-
-export async function generateSkeleton(userId: string, themeId: string, deps: GenerationDeps): Promise<SkeletonResult> {
-  // Le moteur fait partie de la clé : deux demandes simultanées de moteurs différents ne fusionnent pas.
-  return singleFlight(`skeleton:${userId}:${themeId}:${engineOf(deps)}`, async () => {
-    const g = await getThemeGenerationContext(userId, themeId);
-    await consumeGenerationQuota(userId, deps);
-
-    let spec: DeckSpec;
-    if (deps.mode === "free") {
-      spec = buildFreeSkeleton(g.ctx, g.theme);
-    } else {
-      const prompt = buildSkeletonPrompt(g.ctx, g.theme);
-      const ai = deps.ai;
-      const drafted = await billedAiCall(userId, deps, () =>
-        ai.generateDeck(prompt, { template: g.ctx.template, theme: g.theme, programName: g.ctx.name }),
-      );
-      // Un squelette ne formule jamais de problématique (le modèle en invente parfois une), et sa couverture
-      // porte le titre du sujet, pas le nom du projet. Le moteur gratuit respecte déjà ces deux règles.
-      spec = neutralizeSkeletonProblem(drafted, g.ctx.template, { themeName: g.theme.name, programName: g.ctx.name });
-    }
-    const warnings = checkDeckAgainstTemplate(spec, g.ctx.template);
-    if (warnings.length > 0) deps.log.warn("deck.template_mismatch", { themeId, kind: "SKELETON", warnings });
-
-    const engine = engineOf(deps);
-    const { deckId } = await upsertSkeleton(userId, themeId, spec, engine);
-    deps.log.info("deck.skeleton_saved", { themeId, deckId, engine });
-    return { deckId, programId: g.programId, warnings };
-  });
-}
-
-export type BatchItemResult =
-  | { themeId: string; themeName: string; ok: true; deckId: string; warnings: string[] }
-  | { themeId: string; themeName: string; ok: false; error: string };
-
-export const SKELETON_CONCURRENCY = 3;
-
-export type BatchMode = "missing" | "all";
-
 /**
- * Génère les squelettes, concurrence bornée ; un échec n'arrête pas les autres.
- * `missing` (défaut) ne traite que les thèmes sans squelette ; `all` régénère tout.
- */
-export async function generateAllSkeletons(
-  userId: string,
-  programId: string,
-  deps: GenerationDeps,
-  mode: BatchMode = "missing",
-): Promise<BatchItemResult[]> {
-  const g = await getGenerationContext(userId, programId);
-  const done = mode === "missing" ? await listSkeletonThemeIds(userId, programId) : new Set<string>();
-  const themes = g.themes.filter((t) => !done.has(t.id));
-  const results: BatchItemResult[] = new Array(themes.length);
-  let next = 0;
-
-  async function worker(): Promise<void> {
-    while (next < themes.length) {
-      const i = next;
-      next += 1;
-      const theme = themes[i];
-      if (!theme) continue;
-      try {
-        const r = await generateSkeleton(userId, theme.id, deps);
-        results[i] = { themeId: theme.id, themeName: theme.name, ok: true, deckId: r.deckId, warnings: r.warnings };
-      } catch (error) {
-        if (!isAppError(error)) {
-          deps.log.error("deck.skeleton_failed", { themeId: theme.id, error });
-        }
-        results[i] = {
-          themeId: theme.id,
-          themeName: theme.name,
-          ok: false,
-          error: isAppError(error) ? error.userMessage : `Erreur inattendue (réf. ${deps.log.correlationId}).`,
-        };
-      }
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(SKELETON_CONCURRENCY, themes.length) }, () => worker()));
-  return results;
-}
-
-/**
- * Reconnaissance du thème. Moteur gratuit → sans IA. Moteur IA → tentative IA
+ * Reconnaissance du sujet. Moteur gratuit → sans IA. Moteur IA → tentative IA
  * (quota compris) avec repli automatique sur la reconnaissance sans IA en cas
- * d'échec ; `source` et `fallbackReason` le disent à l'interface.
+ * d'échec ; `source` et `fallbackReason` le disent à l'interface. Les notes des
+ * sujets ne sont jamais envoyées à la reconnaissance.
  */
 export async function classifyProblem(
   userId: string,
@@ -191,7 +103,7 @@ export async function classifyProblem(
 ): Promise<ClassificationOutcome> {
   const g = await getGenerationContext(userId, programId);
   if (g.themes.length === 0) {
-    throw new ValidationError("Ajoutez au moins un thème au projet avant la reconnaissance.");
+    throw new ValidationError("Ce projet n'a pas de sujet : la reconnaissance est inutile.");
   }
   if (deps.mode === "free") {
     await consumeFreeEngineQuota(userId);
@@ -216,18 +128,32 @@ export async function classifyProblem(
 /** Fenêtre pendant laquelle une même demande de deck final renvoie le deck déjà produit. */
 export const FINAL_DECK_DEDUP_MS = 2 * 60 * 1000;
 
+export interface FinalDeckInput {
+  programId: string;
+  /** Sujet retenu ; null = deck sans sujet (problématique et trame seules). */
+  themeId: string | null;
+  problem: string;
+}
+
+/**
+ * Deck du jour J à partir de la trame, du sujet retenu (et de ses notes) ou
+ * d'aucun sujet, et de la problématique. Rejouable : deux demandes identiques
+ * simultanées n'en font qu'une (singleFlight), une demande rejouée dans les
+ * 2 minutes renvoie le deck déjà produit (`reused`).
+ */
 export async function generateFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string },
+  input: FinalDeckInput,
   deps: GenerationDeps,
 ): Promise<{ deckId: string; warnings: string[]; reused: boolean }> {
   const problemHash = createHash("sha256").update(input.problem).digest("hex").slice(0, 16);
-  return singleFlight(`final:${userId}:${input.themeId}:${problemHash}:${engineOf(deps)}`, async () => {
-    const g = await getThemeGenerationContext(userId, input.themeId);
-    // Le thème doit appartenir au programme annoncé (sinon : introuvable).
-    if (g.programId !== input.programId) throw new NotFoundError("thème");
+  const engine = engineOf(deps);
+  // Le moteur et l'absence de sujet font partie de la clé : rien ne fusionne entre deux demandes différentes.
+  const key = `final:${userId}:${input.programId}:${input.themeId ?? "-"}:${problemHash}:${engine}`;
+  return singleFlight(key, async () => {
+    // Autorisation : programme possédé, sujet de CE programme (sinon introuvable).
+    const g = await getFinalDeckContext(userId, input.programId, input.themeId);
 
-    const engine = engineOf(deps);
     const recent = await findRecentFinalDeck(userId, { ...input, sinceMs: FINAL_DECK_DEDUP_MS, engine });
     if (recent) {
       deps.log.info("deck.final_reused", { deckId: recent.deckId });
@@ -236,38 +162,22 @@ export async function generateFinalDeck(
 
     await consumeGenerationQuota(userId, deps);
     let spec: DeckSpec;
-    /** Avertissements de qualité, affichés après les écarts au gabarit. */
+    /** Avertissements de qualité, affichés après les écarts à la trame. */
     const warnings: string[] = [];
     let attempts = 1;
     if (deps.mode === "free") {
-      spec = buildFreeFinalDeck(g.ctx, g.theme, g.skeleton, input.problem);
+      spec = buildFreeFinalDeck(g.ctx, g.subject, input.problem);
     } else {
-      const names = { themeName: g.theme.name, programName: g.ctx.name };
-      // Un squelette ancien a pu formuler une autre problématique : elle n'est jamais transmise.
-      const skeleton = g.skeleton ? neutralizeSkeletonProblem(g.skeleton, g.ctx.template, names) : null;
-      const drafted = await draftFinalDeckWithRetry(userId, deps, { ...g, skeleton }, input.problem);
+      const drafted = await draftFinalDeckWithRetry(userId, deps, g, input.problem);
       attempts = drafted.attempts;
       warnings.push(...drafted.warnings);
       // La problématique TIRÉE est écrite par le code (couverture, diapo problématique), quoi qu'ait produit le modèle.
-      spec = enforceProblem(drafted.spec, { template: g.ctx.template, problem: input.problem, ...names });
-
-      // Un modèle local rend parfois des notes vides ou réduites à une consigne : le squelette rédigé prend le relais.
-      const completed = completeThinNotes(spec, skeleton);
-      spec = completed.deck;
-      if (completed.filled.length > 0) {
-        deps.log.info("deck.notes_completed_from_skeleton", { themeId: input.themeId, slides: completed.filled.length });
-        // Le squelette est générique (rédigé avant la problématique) : la note reprise est un point de départ.
-        warnings.push(
-          `Notes d'orateur trop courtes reprises du squelette, à adapter à votre problématique (diapo${completed.filled.length > 1 ? "s" : ""} ${completed.filled.join(", ")}).`,
-        );
-      }
-      if (completed.skippedSections.length > 0) {
-        deps.log.warn("deck.notes_section_mismatch", { themeId: input.themeId, sections: completed.skippedSections });
-        const titles = completed.skippedSections.map((id) => g.ctx.template.sections.find((s) => s.id === id)?.title ?? id);
-        warnings.push(
-          `Notes trop courtes non complétées dans ${titles.length > 1 ? "les sections" : "la section"} ${titles.map((t) => `« ${t} »`).join(", ")} : le nombre de diapos diffère du squelette. Rédigez-les.`,
-        );
-      }
+      spec = enforceProblem(drafted.spec, {
+        template: g.ctx.template,
+        problem: input.problem,
+        themeName: g.subject?.name ?? null,
+        programName: g.ctx.name,
+      });
       const unsourced = unsourcedFigureWarning(findUnsourcedFigures(spec));
       if (unsourced) warnings.push(unsourced);
     }
@@ -290,43 +200,43 @@ interface DraftedDeck {
 
 /**
  * Rédaction IA du deck final avec contrôle qualité (même code pour Claude,
- * Ollama et le mock) : si le deck sort des seuils (diapos par section, recopie
- * du squelette, conclusion hors problématique), UNE nouvelle tentative reçoit
- * un retour explicite. Elle consomme sa propre unité de quota (2 appels = 2
- * consommations, restituée si rien n'a été calculé). Le meilleur des deux est
- * gardé ; s'il reste hors seuil, des avertissements le disent. Un échec de la
- * seconde tentative (quota, panne) ne perd jamais la première.
+ * Ollama et le mock) : si le deck sort des seuils (diapos par ligne, recopie
+ * du contenu type, conclusion hors problématique), UNE nouvelle tentative
+ * reçoit un retour explicite. Elle consomme sa propre unité de quota (2 appels
+ * = 2 consommations, restituée si rien n'a été calculé). Le meilleur des deux
+ * est gardé ; s'il reste hors seuil, des avertissements le disent. Un échec de
+ * la seconde tentative (quota, panne) ne perd jamais la première.
  */
 async function draftFinalDeckWithRetry(
   userId: string,
   deps: AiGenerationDeps,
-  g: Awaited<ReturnType<typeof getThemeGenerationContext>>,
+  g: FinalDeckContext,
   problem: string,
 ): Promise<DraftedDeck> {
   const template = g.ctx.template;
   const lang = template.language;
   const ai = deps.ai;
   const billing = deps.billing ?? "server";
-  const prompt = (feedback: string | null, skeletonDetailMax?: number) => {
-    const base = buildFinalDeckPrompt(g.ctx, g.theme, g.skeleton, problem, skeletonDetailMax === undefined ? {} : { skeletonDetailMax });
+  const subject = g.subject;
+  const prompt = (feedback: string | null, subjectNotesMax?: number) => {
+    const base = buildFinalDeckPrompt(g.ctx, subject, problem, subjectNotesMax === undefined ? {} : { subjectNotesMax });
     return feedback ? withRetryFeedback(base, feedback, lang) : base;
   };
   const call = (feedback: string | null) =>
     billedAiCall(userId, deps, () =>
       ai.generateDeck(prompt(feedback), {
         template,
-        theme: g.theme,
+        subject,
         programName: g.ctx.name,
         problem,
-        skeleton: g.skeleton,
-        // Pour un modèle à contexte borné : mêmes consignes (et même retour), trame du squelette raccourcie.
-        compactPrompt: g.skeleton ? (skeletonDetailMax) => prompt(feedback, skeletonDetailMax) : undefined,
+        // Pour un modèle à contexte borné : mêmes consignes (et même retour), notes du sujet raccourcies.
+        compactPrompt: subject?.notes.trim() ? (subjectNotesMax) => prompt(feedback, subjectNotesMax) : undefined,
       }),
     );
-  const assess = (spec: DeckSpec) => ({ spec, quality: assessFinalDeck(spec, { template, skeleton: g.skeleton, problem }) });
+  const assess = (spec: DeckSpec) => ({ spec, quality: assessFinalDeck(spec, { template, problem }) });
   const logQuality = (attempt: number, q: FinalDeckQuality) =>
     deps.log.info("deck.final_quality", {
-      themeId: g.theme.id,
+      themeId: subject?.id ?? null,
       attempt,
       ok: q.ok,
       sectionGaps: q.sectionGaps.length,
@@ -352,7 +262,7 @@ async function draftFinalDeckWithRetry(
   } catch (error) {
     // Bug ou panne de base : remonte. Erreur attendue (quota, IA indisponible ou hors contrat) : la première tentative reste.
     if (!isAppError(error)) throw error;
-    deps.log.warn("deck.final_retry_failed", { themeId: g.theme.id, code: error.code });
+    deps.log.warn("deck.final_retry_failed", { themeId: subject?.id ?? null, code: error.code });
     warnings.push(`Nouvelle tentative impossible (${error.userMessage}) : le premier résultat est conservé.`);
   }
   if (!best.quality.ok) warnings.push(...qualityWarnings(best.quality));

@@ -37,8 +37,9 @@ function engineDeps(env: Record<string, string | undefined>, probe = ollamaProbe
   return { env, log: recordingLogger(), listOllamaModels: probe };
 }
 
+/** Clé de l'utilisateur enregistrée (et Claude choisi) ; les tests fixent ensuite le moteur voulu. */
 async function saveKey(userId: string, env: Record<string, string | undefined> = PROD) {
-  await settings.saveApiKey(userId, { apiKey: KEY }, { env, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
+  await settings.activateClaudeWithKey(userId, { apiKey: KEY }, { env, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
 }
 
 async function count(key: string): Promise<number> {
@@ -86,12 +87,12 @@ describe("setEngine — validation et stockage", () => {
     );
   });
 
-  it("devrait refuser un modèle non installé avec la commande ollama pull", async () => {
+  it("devrait refuser un modèle non installé, sans commande technique", async () => {
     const a = await createUser("a");
     const error = (await settings
       .setEngine(a.id, { engine: "ollama", ollamaModel: "qwen3:8b" }, engineDeps(WITH_OLLAMA))
       .catch((e: unknown) => e)) as ValidationError;
-    expect(error.fieldErrors?.ollamaModel).toEqual(["Le modèle qwen3:8b n'est pas installé : ollama pull qwen3:8b"]);
+    expect(error.fieldErrors?.ollamaModel).toEqual(["Ce modèle n'est pas installé sur le serveur."]);
   });
 
   it("devrait enregistrer un modèle installé et sonder l'URL du serveur, jamais une URL fournie par le client", async () => {
@@ -151,12 +152,19 @@ describe("getAiSettingsView — sonde Ollama", () => {
 });
 
 describe("getEngineForUser — pas de bascule silencieuse", () => {
-  it("devrait refuser Claude choisi quand la clé a disparu (et sans clé serveur)", async () => {
+  it("devrait refuser Claude choisi quand la clé a disparu sans action de l'utilisateur (et sans clé serveur)", async () => {
+    const a = await createUser("a");
+    // Ligne « Claude choisi, aucune clé » (clé effacée hors de l'app) : pas de repli silencieux.
+    await db().userAiSettings.create({ data: { userId: a.id, engine: "claude" } });
+    await expect(getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).rejects.toBeInstanceOf(AiKeyRequiredError);
+  });
+
+  it("devrait revenir au choix par défaut (sans IA) quand l'utilisateur supprime sa clé", async () => {
     const a = await createUser("a");
     await saveKey(a.id);
     await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD));
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
-    await expect(getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).rejects.toBeInstanceOf(AiKeyRequiredError);
+    expect((await getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).engine).toBe("free");
   });
 
   it("devrait refuser Ollama choisi quand le serveur ne le configure plus", async () => {
@@ -202,29 +210,28 @@ async function setupProgram() {
 const FREE = { mode: "free" as const, log: recordingLogger() };
 
 describe("moteur gratuit — decks", () => {
-  it("devrait produire un squelette marqué « free » sans aucun quota IA", async () => {
-    const { a, numerique } = await setupProgram();
-    const result = await gen.generateSkeleton(a.id, numerique, FREE);
-    expect(result.warnings).toEqual([]);
-    const deck = await decks.getDeck(a.id, result.deckId);
+  it("devrait produire un deck final « free » sans aucun quota IA, visible comme tel dans la liste", async () => {
+    const { a, programId, numerique } = await setupProgram();
+    const r = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, FREE);
+    expect(r.warnings).toEqual([]);
+    const deck = await decks.getDeck(a.id, r.deckId);
     expect(deck.engine).toBe("free");
     expect(deck.spec.slides.length).toBeGreaterThan(1);
+    expect((await decks.listFinalDecks(a.id, programId)).map((d) => d.engine)).toEqual(["free"]);
     expect(await count(aiQuotaKey(a.id))).toBe(0);
     expect(await count(AI_GLOBAL_QUOTA_KEY)).toBe(0);
     expect(await count(freeQuotaKey(a.id))).toBe(1);
   });
 
-  it("devrait produire un deck final « free » visible comme tel dans la liste", async () => {
-    const { a, programId, numerique } = await setupProgram();
-    await gen.generateSkeleton(a.id, numerique, FREE);
-    const r = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, FREE);
-    expect((await decks.getDeck(a.id, r.deckId)).engine).toBe("free");
-    expect((await decks.listFinalDecks(a.id, programId)).map((d) => d.engine)).toEqual(["free"]);
+  it("devrait produire un deck final « free » sans sujet", async () => {
+    const { a, programId } = await setupProgram();
+    const r = await gen.generateFinalDeck(a.id, { programId, themeId: null, problem: PROBLEM }, FREE);
+    expect(await decks.getDeck(a.id, r.deckId)).toMatchObject({ engine: "free", themeId: null });
   });
 
   it("devrait marquer le moteur IA sur un deck généré par IA", async () => {
-    const { a, numerique } = await setupProgram();
-    const r = await gen.generateSkeleton(a.id, numerique, { ai: createMockProvider(), log: recordingLogger() });
+    const { a, programId, numerique } = await setupProgram();
+    const r = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, { ai: createMockProvider(), log: recordingLogger() });
     expect((await decks.getDeck(a.id, r.deckId)).engine).toBe("mock");
   });
 
@@ -243,15 +250,19 @@ describe("moteur gratuit — decks", () => {
   });
 
   it("devrait appliquer une limite anti-abus légère", async () => {
-    const { a, numerique } = await setupProgram();
+    const { a, programId, numerique } = await setupProgram();
     await db().usageWindow.create({ data: { key: freeQuotaKey(a.id), windowStart: new Date(), count: FREE_ENGINE_QUOTA.limit } });
-    await expect(gen.generateSkeleton(a.id, numerique, FREE)).rejects.toBeInstanceOf(RateLimitedError);
+    await expect(gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, FREE)).rejects.toBeInstanceOf(
+      RateLimitedError,
+    );
   });
 
-  it("ne devrait pas permettre à B de générer sur le thème de A", async () => {
-    const { numerique } = await setupProgram();
+  it("ne devrait pas permettre à B de générer sur le sujet de A", async () => {
+    const { programId, numerique } = await setupProgram();
     const b = await createUser("b");
-    await expect(gen.generateSkeleton(b.id, numerique, FREE)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(gen.generateFinalDeck(b.id, { programId, themeId: numerique, problem: PROBLEM }, FREE)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 });
 
@@ -270,7 +281,7 @@ function failingAi(error: Error): AiProvider & { calls: number } {
   return p;
 }
 
-describe("reconnaissance du thème — repli", () => {
+describe("reconnaissance du sujet — repli", () => {
   it("devrait reconnaître sans IA avec le moteur gratuit", async () => {
     const { a, programId, numerique } = await setupProgram();
     const r = await gen.classifyProblem(a.id, programId, { problem: PROBLEM, hintedThemeId: null }, FREE);
@@ -311,7 +322,7 @@ describe("reconnaissance du thème — repli", () => {
     expect(r).toMatchObject({ source: "free", fallbackReason: "Ollama n'est pas configuré." });
   });
 
-  it("ne devrait jamais classer vers le thème d'un autre utilisateur, même en repli", async () => {
+  it("ne devrait jamais classer vers le sujet d'un autre utilisateur, même en repli", async () => {
     const { a, programId } = await setupProgram();
     const other = await setupProgram();
     const r = await gen.classifyProblem(
@@ -334,8 +345,8 @@ describe("contraintes de la base (moteurs)", () => {
   });
 
   it("devrait refuser un moteur de deck inconnu", async () => {
-    const { a, numerique } = await setupProgram();
-    const r = await gen.generateSkeleton(a.id, numerique, FREE);
+    const { a, programId, numerique } = await setupProgram();
+    const r = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, FREE);
     await expect(db().deck.update({ where: { id: r.deckId }, data: { engine: "gpt" } })).rejects.toThrow();
   });
 });

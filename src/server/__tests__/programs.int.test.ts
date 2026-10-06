@@ -75,6 +75,30 @@ describe("repo programmes — cycle de vie", () => {
   });
 });
 
+describe("repo programmes — compteur de decks finaux", () => {
+  it("devrait compter tous les decks finaux du programme, y compris ceux sans sujet, et pas les squelettes", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    const [t1] = await seedThemes(programId, [themeInput("Un")]);
+    await seedDeck(programId, t1!, "SKELETON");
+    await seedDeck(programId, t1!, "FINAL");
+    await seedDeck(programId, null, "FINAL");
+    await seedDeck(programId, null, "FINAL");
+
+    const detail = await programs.getProgram(a.id, programId);
+
+    expect(detail.finalDeckCount).toBe(3);
+    // Le compteur par sujet, lui, ne voit que les decks de ce sujet.
+    expect(detail.themes.map((t) => t.finalDeckCount)).toEqual([1]);
+  });
+
+  it("devrait valoir 0 pour un projet sans deck final", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    expect((await programs.getProgram(a.id, programId)).finalDeckCount).toBe(0);
+  });
+});
+
 describe("repo programmes — suppression en cascade", () => {
   it("devrait supprimer thèmes et decks quand on supprime le programme", async () => {
     const a = await createUser("a");
@@ -82,6 +106,7 @@ describe("repo programmes — suppression en cascade", () => {
     const [t1, t2] = await seedThemes(programId, [themeInput("Un"), themeInput("Deux")]);
     await seedDeck(programId, t1!, "SKELETON");
     await seedDeck(programId, t2!, "FINAL");
+    await seedDeck(programId, null, "FINAL");
 
     await programs.deleteProgram(a.id, programId);
 
@@ -130,6 +155,28 @@ describe("repo programmes — duplication", () => {
     ]);
     expect(copy.themes.map((t) => t.skeleton !== null)).toEqual([true, false]);
     expect(await db().deck.count({ where: { programId: copyId, kind: "FINAL" } })).toBe(0);
+  });
+
+  it("devrait recopier les notes des sujets", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id, "Source");
+    await seedThemes(programId, [themeInput("Un", [], "Notes de un\nSource : INSEE"), themeInput("Deux")]);
+
+    const { id: copyId } = await programs.duplicateProgram(a.id, programId);
+    const copy = await programs.getProgram(a.id, copyId);
+
+    expect(copy.themes.map((t) => [t.name, t.notes])).toEqual([
+      ["Un", "Notes de un\nSource : INSEE"],
+      ["Deux", ""],
+    ]);
+  });
+
+  it("ne devrait pas copier les decks finaux sans sujet", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id, "Source");
+    await seedDeck(programId, null, "FINAL");
+    const { id: copyId } = await programs.duplicateProgram(a.id, programId);
+    expect(await db().deck.count({ where: { programId: copyId } })).toBe(0);
   });
 
   it("devrait garder un nom d'au plus 120 caractères quand le nom source est déjà au maximum", async () => {

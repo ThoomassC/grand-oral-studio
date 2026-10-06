@@ -6,7 +6,7 @@ import { AiInvalidOutputError, AiUnavailableError } from "@/server/errors";
 import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
 
 const PROMPT: PromptPair = { system: "sys", user: "usr" };
-const HINTS: DeckHints = { template: makeTemplate(), theme: makeThemes()[0]!, programName: "P" };
+const HINTS: DeckHints = { template: makeTemplate(), subject: makeThemes()[0]!, programName: "P", problem: "Une problématique ?" };
 const BASE = "http://localhost:11434";
 
 interface Call {
@@ -50,7 +50,7 @@ describe("createOllamaProvider — contexte (num_ctx) d'un deck", () => {
     expect((calls[0]!.body?.options as { num_ctx: number }).num_ctx).toBe(16_384);
   });
 
-  it("devrait agrandir le contexte pour un deck de 31 diapos avec un long prompt (squelette + notes), plafonné à 32 k", async () => {
+  it("devrait agrandir le contexte pour un deck de 31 diapos avec un long prompt (trame + notes du sujet), plafonné à 32 k", async () => {
     const big: DeckHints = { ...HINTS, template: makeTemplate({ sections: sections(15, 2) }) };
     const long: PromptPair = { system: "s".repeat(6_000), user: "u".repeat(30_000) };
     const { impl, calls } = fakeFetch(() => json(200, { message: { content: "{}" }, done: true, done_reason: "stop" }));
@@ -80,18 +80,26 @@ describe("deckContext — estimation du contexte et dépassement du plafond", ()
 
 describe("createOllamaProvider — prompt trop long pour le contexte", () => {
   const huge: PromptPair = { system: "règles", user: `début ${"u".repeat(110_000)}` };
-  const compact = (max: number): PromptPair => ({ system: "règles", user: max >= 120 ? "u".repeat(100_000) : `notes ${max}` });
+  const asked: number[] = [];
+  const compact = (max: number): PromptPair => {
+    asked.push(max);
+    return { system: "règles", user: max >= 1500 ? "u".repeat(100_000) : `notes ${max}` };
+  };
 
-  it("devrait raccourcir les pistes de la trame du squelette pour tenir dans le plafond et le journaliser sans données utilisateur", async () => {
+  it("devrait raccourcir les notes du sujet par paliers (1500, 600, 0) pour tenir dans le plafond, journalisé sans données utilisateur", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    asked.length = 0;
     try {
       const { ai, calls } = provider(() => chat(JSON.stringify(makeConformingDeck())));
       await ai.generateDeck(huge, { ...HINTS, compactPrompt: compact });
+      expect(asked).toEqual([1500, 600]);
       const messages = calls[0]!.body?.messages as { content: string }[];
-      expect(messages[1]!.content).toBe("notes 60");
+      expect(messages[1]!.content).toBe("notes 600");
       expect((calls[0]!.body?.options as { num_ctx: number }).num_ctx).toBeLessThanOrEqual(32_768);
       const logged = warn.mock.calls.map((args) => String(args[0])).join("\n");
       expect(logged).toContain("ollama.context_reduced");
+      expect(logged).toContain("subjectNotesMax");
+      expect(logged).not.toContain("skeleton");
       expect(logged).not.toContain("début");
     } finally {
       warn.mockRestore();

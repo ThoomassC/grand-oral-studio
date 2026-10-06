@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkDeckAgainstTemplate, completeThinNotes, replaceSlide } from "@/domain/deck";
-import { DeckSpecSchema, LIMITS, type DeckSpec, type Slide } from "@/domain/schemas";
+import { checkDeckAgainstTemplate, isThinNotes, replaceSlide } from "@/domain/deck";
+import type { DeckSpec, Slide } from "@/domain/schemas";
 import { makeConformingDeck, makeTemplate } from "@/test/fixtures";
 
 const newSlide: Slide = {
@@ -13,7 +13,7 @@ const newSlide: Slide = {
 };
 
 describe("checkDeckAgainstTemplate", () => {
-  it("devrait renvoyer une liste vide quand le deck est conforme au gabarit", () => {
+  it("devrait renvoyer une liste vide quand le deck est conforme à la trame", () => {
     expect(checkDeckAgainstTemplate(makeConformingDeck(), makeTemplate())).toEqual([]);
   });
 
@@ -31,14 +31,14 @@ describe("checkDeckAgainstTemplate", () => {
     expect(issues.some((issue) => /couverture/i.test(issue))).toBe(true);
   });
 
-  it("devrait signaler une section du gabarit absente du deck en citant son titre", () => {
+  it("devrait signaler une section de la trame absente du deck en citant son titre", () => {
     const deck = makeConformingDeck();
     const withoutConclusion: DeckSpec = { ...deck, slides: deck.slides.filter((s) => s.sectionId !== "conclusion") };
     const issues = checkDeckAgainstTemplate(withoutConclusion, makeTemplate());
     expect(issues.some((issue) => issue.includes("« Conclusion »"))).toBe(true);
   });
 
-  it("devrait signaler une section dont le nombre de diapos diffère du gabarit en citant son titre", () => {
+  it("devrait signaler une section dont le nombre de diapos diffère de la trame en citant son titre", () => {
     const deck = makeConformingDeck();
     const firstPart2 = deck.slides.findIndex((s) => s.sectionId === "part2");
     const shortPart2: DeckSpec = { ...deck, slides: deck.slides.filter((_, i) => i !== firstPart2) };
@@ -85,75 +85,26 @@ describe("replaceSlide", () => {
   });
 });
 
-describe("completeThinNotes", () => {
-  const rich = "Je commence par une situation que chacun connaît. Elle montre l'enjeu du sujet. J'annonce ensuite la question.";
-
-  it("devrait compléter depuis le squelette les notes vides ou réduites à une consigne, en gardant le minutage du deck", () => {
-    const skeleton = makeConformingDeck();
-    skeleton.slides[0] = { ...skeleton.slides[0]!, notes: `[0:00–0:30] ${rich}` };
-    skeleton.slides[1] = { ...skeleton.slides[1]!, notes: rich };
-    const deck = makeConformingDeck();
-    deck.slides[0] = { ...deck.slides[0]!, notes: "" };
-    deck.slides[1] = { ...deck.slides[1]!, notes: "[0:30–2:00] Présentez le contexte." };
-    const { deck: out, filled } = completeThinNotes(deck, skeleton);
-    expect(filled).toEqual([1, 2]);
-    expect(out.slides[0]!.notes).toBe(`[0:00–0:30] ${rich}`);
-    expect(out.slides[1]!.notes).toBe(`[0:30–2:00] ${rich}`);
-    // Les autres diapos et l'entrée sont intactes.
-    expect(out.slides[2]).toEqual(deck.slides[2]);
-    expect(deck.slides[0]!.notes).toBe("");
+describe("isThinNotes", () => {
+  it.each([
+    { notes: "", thin: true },
+    { notes: "[0:30–2:00]", thin: true },
+    { notes: "[0:30–2:00] Présentez le contexte.", thin: true },
+    { notes: "[0:30–2:00] Je commence par une situation que chacun connaît, puis j'annonce la question.", thin: false },
+  ])("devrait juger « $notes » trop courte : $thin", ({ notes, thin }) => {
+    expect(isThinNotes(notes)).toBe(thin);
   });
+});
 
-  it("ne devrait rien reprendre d'une diapo du squelette d'une autre section, ni sans squelette", () => {
-    const skeleton = makeConformingDeck();
-    skeleton.slides[1] = { ...skeleton.slides[1]!, sectionId: "autre", notes: rich };
+describe("checkDeckAgainstTemplate — vocabulaire", () => {
+  it("devrait parler de la trame, plus du gabarit", () => {
     const deck = makeConformingDeck();
-    deck.slides[1] = { ...deck.slides[1]!, notes: "" };
-    expect(completeThinNotes(deck, skeleton).filled).toEqual([]);
-    expect(completeThinNotes(deck, null)).toEqual({ deck, filled: [], skippedSections: [] });
-  });
-
-  it("devrait borner la note complétée à LIMITS.notes pour que le deck reste valide", () => {
-    const longSpoken = `${"Une phrase rédigée qui développe longuement le propos. ".repeat(60)}`.trim();
-    const skeleton = makeConformingDeck();
-    skeleton.slides[1] = { ...skeleton.slides[1]!, notes: longSpoken.slice(0, LIMITS.notes) };
-    const deck = makeConformingDeck();
-    // Minutage long côté deck : la concaténation « minutage + texte » dépasserait la borne.
-    deck.slides[1] = { ...deck.slides[1]!, notes: "[0:30–2:00 environ, prendre son temps]" };
-    const { deck: out, filled } = completeThinNotes(deck, skeleton);
-    expect(filled).toEqual([2]);
-    expect(out.slides[1]!.notes.length).toBeLessThanOrEqual(LIMITS.notes);
-    expect(out.slides[1]!.notes.startsWith("[0:30–2:00 environ, prendre son temps] Une phrase")).toBe(true);
-    expect(DeckSpecSchema.safeParse(out).success).toBe(true);
-  });
-
-  it("devrait aligner par rang au sein de la section, sans décaler les notes quand l'IA omet une diapo ailleurs", () => {
-    const skeleton = makeConformingDeck();
-    skeleton.slides = skeleton.slides.map((s, i) => ({ ...s, notes: `${rich} (squelette ${i})` }));
-    // L'IA a omis la première diapo de part1 : toutes les diapos suivantes sont décalées d'un cran.
-    const deck = makeConformingDeck();
-    deck.slides = deck.slides.filter((_, i) => i !== 3).map((s) => ({ ...s, notes: "" }));
-    const { deck: out, filled, skippedSections } = completeThinNotes(deck, skeleton);
-    // part2 (rangs 0..2) reprend bien les notes des diapos 5, 6, 7 du squelette.
-    const part2 = out.slides.filter((s) => s.sectionId === "part2").map((s) => s.notes);
-    expect(part2).toEqual([`${rich} (squelette 5)`, `${rich} (squelette 6)`, `${rich} (squelette 7)`]);
-    const conclusion = out.slides.find((s) => s.sectionId === "conclusion")!;
-    expect(conclusion.notes).toBe(`${rich} (squelette 8)`);
-    // part1 (1 diapo au lieu de 2) : rien de complété, section signalée.
-    expect(out.slides.filter((s) => s.sectionId === "part1").map((s) => s.notes)).toEqual([""]);
-    expect(skippedSections).toEqual(["part1"]);
-    expect(filled).not.toContain(4);
-  });
-
-  it("ne devrait rien compléter dans une section où l'IA a ajouté une diapo", () => {
-    const skeleton = makeConformingDeck();
-    skeleton.slides = skeleton.slides.map((s) => ({ ...s, notes: rich }));
-    const deck = makeConformingDeck();
-    const extra = { ...deck.slides[5]!, title: "Diapo en trop" };
-    deck.slides = [...deck.slides.slice(0, 6), extra, ...deck.slides.slice(6)].map((s) => ({ ...s, notes: "" }));
-    const { deck: out, skippedSections } = completeThinNotes(deck, skeleton);
-    expect(skippedSections).toEqual(["part2"]);
-    expect(out.slides.filter((s) => s.sectionId === "part2").every((s) => s.notes === "")).toBe(true);
-    expect(out.slides.find((s) => s.sectionId === "conclusion")!.notes).toBe(rich);
+    const shuffled: DeckSpec = {
+      ...deck,
+      slides: [deck.slides[0]!, ...deck.slides.slice(1).reverse(), { ...newSlide, sectionId: "inconnue" }],
+    };
+    const issues = checkDeckAgainstTemplate(shuffled, makeTemplate()).join(" ");
+    expect(issues).toMatch(/trame/);
+    expect(issues).not.toMatch(/gabarit/);
   });
 });

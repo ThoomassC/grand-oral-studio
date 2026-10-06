@@ -9,16 +9,19 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { focusLater } from "@/components/ui/focus";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { plural } from "@/components/ui/format";
 import { ThemeForm } from "./ThemeForm";
 import { ThemeImport } from "./ThemeImport";
 
+/** Sujet du projet tel qu'affiché (identifiant de code historique : « theme »). */
 export interface ThemeItem {
   id: string;
   name: string;
   description: string;
   keywords: string[];
-  hasSkeleton: boolean;
-  /** Nombre de diaporamas du jour J rattachés au thème (supprimés avec lui). */
+  /** Chiffres, exemples, sources de l'utilisateur ("" si aucune). */
+  notes: string;
+  /** Nombre de diaporamas du jour J rattachés au sujet (supprimés avec lui). */
   finalDeckCount: number;
 }
 
@@ -34,13 +37,16 @@ const moveButtonId = (themeId: string, dir: "up" | "down") => `move-${dir}-${the
 const editButtonId = (themeId: string) => `edit-${themeId}`;
 
 function deleteQuestion(theme: ThemeItem): { question: string; confirm: string } {
-  const parts = [theme.hasSkeleton ? "son squelette" : null];
   const n = theme.finalDeckCount;
-  if (n > 0) parts.push(`${n === 1 ? "son diaporama" : `ses ${n} diaporamas`} du jour J`);
-  const what = parts.filter(Boolean).join(" et ");
+  const consequence =
+    n === 0
+      ? "Cette action est définitive."
+      : n === 1
+        ? "Son diaporama du jour J sera aussi supprimé."
+        : `Ses ${n} diaporamas du jour J seront aussi supprimés.`;
   return {
-    question: `Supprimer « ${theme.name} »${what ? `, ${what}` : ""} ? Cette action est définitive.`,
-    confirm: n > 0 ? `Supprimer le thème et ${n === 1 ? "son diaporama" : "ses diaporamas"}` : "Supprimer le thème",
+    question: `Supprimer le sujet « ${theme.name} » ? ${consequence}`,
+    confirm: n > 0 ? `Supprimer le sujet et ${n === 1 ? "son diaporama" : "ses diaporamas"}` : "Supprimer le sujet",
   };
 }
 
@@ -62,8 +68,8 @@ function ArrowIcon({ dir }: { dir: "up" | "down" }) {
 export function ThemeManager({ programId, themes }: { programId: string; themes: ThemeItem[] }) {
   const [optimisticThemes, setOptimisticThemes] = useOptimistic(themes);
   const [editingId, setEditingId] = useState<string | null>(null);
-  // Le bloc « Importer votre sujet », au-dessus, est la voie principale : la
-  // saisie manuelle et l'import de liste restent à un clic, en secondaire.
+  // Le bloc « Importer des sujets depuis un texte », au-dessus, est la voie
+  // principale : la saisie manuelle et l'import de liste restent à un clic.
   const [panel, setPanel] = useState<"none" | "add" | "import">("none");
   const [announce, setAnnounce] = useState("");
   const [reorderError, setReorderError] = useState<string | null>(null);
@@ -163,12 +169,13 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
-            Thèmes
-          </h2>
-          <p className="text-sm text-muted">
-            Saisissez-les à la main ou collez une liste si vous n&apos;importez pas votre sujet. L&apos;ordre des thèmes est celui de votre projet. Les mots-clés aident l&apos;IA à reconnaître le
-            thème d&apos;une problématique.
+          {/* Sous-bloc de la page Sujets (h2) : h3, et ses panneaux et sujets en h4. */}
+          <h3 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
+            Vos sujets
+          </h3>
+          <p className="max-w-3xl text-sm text-muted">
+            Saisissez-les un par un ou collez une liste. L&apos;ordre des sujets est celui de votre projet ; les
+            mots-clés aident à reconnaître le sujet d&apos;une problématique.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -179,7 +186,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
             onClick={() => openPanel("add")}
           >
-            Ajouter un thème
+            Ajouter un sujet
           </Button>
           <Button
             id={IDS.importButton}
@@ -196,15 +203,15 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
       {panel === "add" ? (
         <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="opale-card opale-card--e1 block p-5">
-          <h3 id="titre-ajout-theme" className="text-lg font-semibold">
-            Nouveau thème
-          </h3>
+          <h4 id="titre-ajout-theme" className="text-lg font-semibold">
+            Nouveau sujet
+          </h4>
           <div className="mt-4">
             <ThemeForm
               nameId={IDS.addName}
-              submitLabel="Ajouter le thème"
+              submitLabel="Ajouter le sujet"
               pendingLabel="Ajout…"
-              successMessage="Thème ajouté. Vous pouvez en saisir un autre."
+              successMessage="Sujet ajouté. Vous pouvez en saisir un autre."
               resetOnSuccess
               onSubmit={(value: ThemeInput) => addTheme(programId, value)}
               onCancel={closePanel}
@@ -215,9 +222,9 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
       {panel === "import" ? (
         <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="opale-card opale-card--e1 block p-5">
-          <h3 id="titre-import-themes" className="text-lg font-semibold">
-            Importer des thèmes
-          </h3>
+          <h4 id="titre-import-themes" className="text-lg font-semibold">
+            Importer des sujets
+          </h4>
           <ThemeImport programId={programId} textareaId={IDS.importText} onClose={closePanel} />
         </section>
       ) : null}
@@ -240,14 +247,15 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
       {optimisticThemes.length === 0 ? (
         <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
-          <p className="font-display text-lg font-semibold">Aucun thème</p>
+          <p className="font-display text-lg font-semibold">Aucun sujet</p>
           <p className="mt-1 text-muted">
-            Importez votre sujet ci-dessus, ou ajoutez les thèmes un par un (« Ajouter un thème ») ou en une fois
-            depuis une liste (« Importer une liste »).
+            Les sujets sont facultatifs : sans sujet, le diaporama du jour J part de la problématique et de la trame.
+            Si votre oral porte sur des sujets connus d&apos;avance, importez-les depuis un texte ci-dessus, ajoutez-les
+            un par un (« Ajouter un sujet ») ou collez une liste (« Importer une liste »).
           </p>
         </div>
       ) : (
-        <ol className="flex flex-col gap-3" aria-label="Thèmes du projet">
+        <ol className="flex flex-col gap-3" aria-label="Sujets du projet">
           {optimisticThemes.map((theme, index) => {
             const neighbour = optimisticThemes[index + 1] ?? optimisticThemes[index - 1];
             const { question, confirm } = deleteQuestion(theme);
@@ -257,12 +265,12 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm
                       nameId={`edit-name-${theme.id}`}
-                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords }}
-                      submitLabel="Enregistrer le thème"
+                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords, notes: theme.notes }}
+                      submitLabel="Enregistrer le sujet"
                       pendingLabel="Enregistrement…"
                       onSubmit={(value) => updateTheme(theme.id, value)}
                       onSaved={(name) => {
-                        setAnnounce(`Thème « ${name} » enregistré.`);
+                        setAnnounce(`Sujet « ${name} » enregistré.`);
                         closeEditor(theme.id);
                       }}
                       onCancel={() => closeEditor(theme.id)}
@@ -278,10 +286,10 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                         {index + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="pt-1 text-lg">
-                          <span className="sr-only">Thème {index + 1} : </span>
+                        <h4 className="pt-1 text-lg">
+                          <span className="sr-only">Sujet {index + 1} : </span>
                           {theme.name}
-                        </h3>
+                        </h4>
                         {theme.description ? <p className="mt-1 text-muted">{theme.description}</p> : null}
                         {theme.keywords.length > 0 ? (
                           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">
@@ -292,11 +300,16 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                             ))}
                           </ul>
                         ) : null}
+                        {theme.notes.trim() ? (
+                          <div className="mt-2">
+                            <p className="text-sm font-semibold">Notes</p>
+                            <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">{theme.notes}</p>
+                          </div>
+                        ) : null}
                         <p className="mt-2 text-sm text-muted">
-                          Squelette : {theme.hasSkeleton ? "généré" : "à générer"}
-                          {theme.finalDeckCount > 0
-                            ? ` · ${theme.finalDeckCount} diaporama${theme.finalDeckCount > 1 ? "s" : ""} du jour J`
-                            : ""}
+                          {theme.finalDeckCount === 0
+                            ? "Aucun diaporama du jour J"
+                            : `${plural(theme.finalDeckCount, "diaporama")} du jour J`}
                         </p>
                       </div>
                     </div>
@@ -338,12 +351,12 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                       <ConfirmAction
                         triggerLabel="Supprimer"
                         triggerAccessibleLabel={`Supprimer ${theme.name}`}
-                        title="Supprimer le thème ?"
+                        title="Supprimer le sujet ?"
                         question={question}
                         confirmLabel={confirm}
                         onConfirm={async () => {
                           const result = await deleteTheme(theme.id);
-                          if (result.ok) setAnnounce(`Thème « ${theme.name} » supprimé.`);
+                          if (result.ok) setAnnounce(`Sujet « ${theme.name} » supprimé.`);
                           return result.ok ? null : result.error;
                         }}
                         onDone={() =>

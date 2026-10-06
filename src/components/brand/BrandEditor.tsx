@@ -84,6 +84,20 @@ export function BrandEditor({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [logoError, setLogoError] = useState<string | null>(null);
+  // Apparence enregistrée reçue du serveur. Si elle diffère de ce que l'éditeur a lui-même
+  // enregistré (import appliqué au-dessus), on la reprend ; après notre propre enregistrement,
+  // le rafraîchissement renvoie la même apparence : rien ne bouge et le message reste affiché.
+  const [serverBrand, setServerBrand] = useState<Brand>(initialBrand);
+  if (initialBrand !== serverBrand) {
+    setServerBrand(initialBrand);
+    if (JSON.stringify(initialBrand) !== JSON.stringify(saved)) {
+      setSaved(initialBrand);
+      setBrand(initialBrand);
+      setFieldErrors({});
+      setStatus(IDLE);
+      setLogoError(null);
+    }
+  }
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -146,7 +160,7 @@ export function BrandEditor({
         }
         setSaved(checked.data);
         setBrand(checked.data);
-        setStatus({ kind: "success", message: "Charte enregistrée." });
+        setStatus({ kind: "success", message: "Apparence enregistrée." });
       } catch {
         setStatus({ kind: "error", message: "La connexion a été interrompue. Vos réglages sont conservés : réessayez." });
       }
@@ -176,14 +190,14 @@ export function BrandEditor({
       <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
         <div>
           <h2 tabIndex={-1} className="text-2xl focus:outline-none">
-            Charte graphique
+            Couleurs, polices et logo
           </h2>
           <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
         </div>
 
         <div>
           <label htmlFor={nameId} className="opale-field__label">
-            Nom de la charte
+            Nom de l&apos;apparence
           </label>
           <TextInput
             id={nameId}
@@ -363,7 +377,7 @@ export function BrandEditor({
           <FormStatus state={status} />
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" aria-disabled={pending || undefined}>
-              <ButtonLabel idle="Enregistrer la charte" busy="Enregistrement…" isBusy={pending} />
+              <ButtonLabel idle="Enregistrer l'apparence" busy="Enregistrement…" isBusy={pending} />
             </Button>
             {dirty ? (
               <>

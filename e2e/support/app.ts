@@ -18,8 +18,9 @@ export async function createProject(page: Page, name: string, description = ""):
   await modal.getByLabel("Nom du projet").fill(name);
   if (description) await modal.getByLabel(/^Description/).fill(description);
   await modal.getByRole("button", { name: "Créer le projet" }).click();
-  await page.waitForURL(/\/projets\/[a-z0-9]+$/);
-  await expect(page.getByRole("heading", { name: "Thèmes", level: 2 })).toBeVisible();
+  // La création ouvre l'étape 1 · Apparence (v1.1.0).
+  await page.waitForURL(/\/projets\/[a-z0-9]+\/apparence$/);
+  await expect(page.getByRole("main").getByRole("heading", { name: "Apparence", level: 2 })).toBeVisible();
   return projectIdFromUrl(page.url());
 }
 
@@ -55,13 +56,16 @@ export const DEFAULT_THEMES = `Cybersécurité | Protection des systèmes et des
 Transformation numérique | Numérisation des organisations | digital, numérique, outils, cloud, organisation
 Intelligence artificielle | Apprentissage automatique et éthique | IA, algorithme, apprentissage, modèle, éthique`;
 
-/** Import de la liste texte (format pipe) depuis l'onglet Thèmes. */
+/** Import de la liste texte (format pipe) depuis l'onglet Sujets de la Trame. */
 export async function importThemeList(page: Page, programId: string, text = DEFAULT_THEMES): Promise<void> {
-  await page.goto(`/projets/${programId}`);
-  await page.getByRole("button", { name: "Importer une liste" }).click();
-  await page.getByLabel("Liste des thèmes").fill(text);
-  await page.getByRole("button", { name: "Importer les thèmes" }).click();
-  await expect(page.getByText(/thèmes? créés?\.|Aucun nouveau thème créé\./)).toBeVisible();
+  await page.goto(`/projets/${programId}/trame/sujets`);
+  const main = page.getByRole("main");
+  const trigger = main.getByRole("button", { name: "Importer une liste" });
+  await waitForHydration(trigger);
+  await trigger.click();
+  await main.getByLabel("Liste des sujets").fill(text);
+  await main.getByRole("button", { name: "Importer les sujets" }).click();
+  await expect(main.getByText(/^\d+ sujets? créés?\.$|^Aucun nouveau sujet créé\.$/)).toBeVisible();
 }
 
 export type EngineChoice = "free" | "claude" | "ollama";

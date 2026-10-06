@@ -63,7 +63,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
         <li>Choisissez le fichier .pptx téléchargé : Canva le convertit en design modifiable.</li>
         <li>
           Pour aller plus loin, copiez le prompt ci-dessous et collez-le dans l&apos;assistant IA de Canva : il
-          rappelle la charte et le contenu diapo par diapo.
+          rappelle l&apos;apparence et le contenu diapo par diapo.
         </li>
       </ol>
 

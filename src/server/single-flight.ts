@@ -4,7 +4,7 @@
  * partage la même promesse au lieu de payer un second appel IA.
  *
  * Limite assumée : par instance. La garantie inter-instances repose sur la
- * base (index unique du squelette, déduplication des decks finaux récents).
+ * base (déduplication des decks finaux récents, cf. `findRecentFinalDeck`).
  */
 
 const inflight = new Map<string, Promise<unknown>>();

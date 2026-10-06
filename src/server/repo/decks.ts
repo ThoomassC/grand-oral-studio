@@ -11,7 +11,9 @@ import type { DeckEngine, DeckView, DeckWithProgram, FinalDeckSummary } from "./
 /**
  * Decks. Un deck appartient au programme qui appartient à l'utilisateur ; la
  * clé étrangère composite (themeId, programId) → Theme(id, programId) garantit
- * en base qu'un deck ne pointe jamais vers le thème d'un autre programme.
+ * en base qu'un deck ne pointe jamais vers le sujet d'un autre programme.
+ * `themeId` NULL = deck final produit sans sujet (MATCH SIMPLE : non contrôlé) ;
+ * un squelette a toujours un sujet (CHECK "Deck_skeleton_has_theme").
  */
 
 const FINAL_DECKS_LIMIT = 100;
@@ -27,8 +29,8 @@ export interface GenerationContext {
   themes: ThemeRef[];
 }
 
-function toThemeRef(t: { id: string; name: string; description: string; keywords: string[] }): ThemeRef {
-  return { id: t.id, name: t.name, description: t.description, keywords: t.keywords };
+function toThemeRef(t: { id: string; name: string; description: string; keywords: string[]; notes: string }): ThemeRef {
+  return { id: t.id, name: t.name, description: t.description, keywords: t.keywords, notes: t.notes };
 }
 
 export async function getGenerationContext(userId: string, programId: string): Promise<GenerationContext> {
@@ -46,28 +48,32 @@ export async function getGenerationContext(userId: string, programId: string): P
   };
 }
 
-/** Contexte complet d'un thème possédé : programme, thème ciblé et squelette existant. */
-export async function getThemeGenerationContext(
+export interface FinalDeckContext {
+  programId: string;
+  /** ctx.themes : tous les sujets du programme (avec leurs notes). */
+  ctx: ProgramContext;
+  brand: Brand;
+  /** Sujet choisi, ou null (sans sujet). */
+  subject: ThemeRef | null;
+}
+
+/**
+ * Contexte du deck final (jour J). Lecture filtrée par propriétaire :
+ * programme absent ou étranger → NotFoundError("programme") ; `themeId` inconnu
+ * DANS CE programme (absent, ou sujet d'un autre programme) → NotFoundError("thème").
+ */
+export async function getFinalDeckContext(
   userId: string,
-  themeId: string,
-): Promise<GenerationContext & { theme: ThemeRef; skeleton: DeckSpec | null }> {
-  const theme = await db().theme.findFirst({
-    where: { id: themeId, program: ownedProgram(userId) },
-    select: { programId: true },
-  });
-  if (!theme) throw new NotFoundError("thème");
-  const base = await getGenerationContext(userId, theme.programId);
-  const target = base.themes.find((t) => t.id === themeId);
-  if (!target) throw new NotFoundError("thème"); // supprimé entre les deux lectures
-  const skeleton = await db().deck.findFirst({
-    where: { themeId, programId: theme.programId, kind: "SKELETON" },
-    select: { id: true, spec: true },
-  });
-  return {
-    ...base,
-    theme: target,
-    skeleton: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
-  };
+  programId: string,
+  themeId: string | null,
+): Promise<FinalDeckContext> {
+  const { ctx, brand } = await getGenerationContext(userId, programId);
+  let subject: ThemeRef | null = null;
+  if (themeId !== null) {
+    subject = ctx.themes.find((t) => t.id === themeId) ?? null;
+    if (!subject) throw new NotFoundError("thème");
+  }
+  return { programId, ctx, brand, subject };
 }
 
 // ---------------------------------------------------------------------------
@@ -75,59 +81,13 @@ export async function getThemeGenerationContext(
 // ---------------------------------------------------------------------------
 
 /**
- * Crée ou remplace LE squelette du thème. L'unicité est garantie par l'index
- * unique partiel `Deck_one_skeleton_per_theme` (themeId WHERE kind='SKELETON') ;
- * le code tente une mise à jour, sinon une insertion, et si une insertion
- * concurrente a gagné (P2002) il retombe sur la mise à jour. Jamais deux
- * squelettes, jamais d'erreur visible pour une double génération.
+ * Crée un deck final. Autorisation revérifiée dans la transaction (programme
+ * possédé) ; un sujet hors du programme est refusé par la FK composite.
+ * `themeId: null` = deck sans sujet.
  */
-export async function upsertSkeleton(
-  userId: string,
-  themeId: string,
-  spec: DeckSpec,
-  /** Toujours fourni par le service ; null = inconnu. */
-  engine: DeckEngine | null = null,
-): Promise<{ deckId: string }> {
-  const json = specJson(spec);
-  const owned = { themeId, kind: "SKELETON" as const, program: ownedProgram(userId) };
-
-  const update = async (): Promise<{ deckId: string } | null> => {
-    const existing = await db().deck.findFirst({ where: owned, select: { id: true } });
-    if (!existing) return null;
-    const { count } = await db().deck.updateMany({ where: { id: existing.id, ...owned }, data: { spec: json, engine } });
-    return count === 1 ? { deckId: existing.id } : null;
-  };
-
-  const updated = await update();
-  if (updated) return updated;
-
-  const theme = await db().theme.findFirst({
-    where: { id: themeId, program: ownedProgram(userId) },
-    select: { programId: true },
-  });
-  if (!theme) throw new NotFoundError("thème");
-
-  try {
-    const created = await db().deck.create({
-      data: { programId: theme.programId, themeId, kind: "SKELETON", spec: json, engine },
-      select: { id: true },
-    });
-    return { deckId: created.id };
-  } catch (error) {
-    const code = prismaErrorCode(error);
-    if (code === "P2002") {
-      const retried = await update();
-      if (retried) return retried;
-    }
-    // P2003 : le thème a été supprimé pendant la génération.
-    if (code === "P2003") throw new NotFoundError("thème");
-    throw error;
-  }
-}
-
 export async function createFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; spec: DeckSpec; engine?: DeckEngine | null },
+  input: { programId: string; themeId: string | null; problem: string; spec: DeckSpec; engine?: DeckEngine | null },
 ): Promise<{ deckId: string }> {
   const json = specJson(input.spec);
   return db().$transaction(async (tx) => {
@@ -150,7 +110,7 @@ export async function createFinalDeck(
       });
       return { deckId: created.id };
     } catch (error) {
-      // FK composite : thème absent ou d'un autre programme.
+      // FK composite : sujet absent ou d'un autre programme.
       if (prismaErrorCode(error) === "P2003") throw new NotFoundError("thème");
       throw error;
     }
@@ -158,12 +118,13 @@ export async function createFinalDeck(
 }
 
 /**
- * Deck FINAL identique (même thème, même problématique) créé récemment : sert
- * à absorber un double envoi / un retry client sans regénérer.
+ * Deck FINAL identique (même sujet — ou même absence de sujet —, même
+ * problématique) créé récemment : sert à absorber un double envoi / un retry
+ * client sans regénérer. `themeId: null` filtre les decks sans sujet (IS NULL).
  */
 export async function findRecentFinalDeck(
   userId: string,
-  input: { programId: string; themeId: string; problem: string; sinceMs: number; engine?: DeckEngine },
+  input: { programId: string; themeId: string | null; problem: string; sinceMs: number; engine?: DeckEngine },
 ): Promise<{ deckId: string } | null> {
   const row = await db().deck.findFirst({
     where: {
@@ -177,19 +138,22 @@ export async function findRecentFinalDeck(
       program: ownedProgram(userId),
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true },
+    select: { id: true, createdAt: true, program: { select: { updatedAt: true } } },
   });
-  return row ? { deckId: row.id } : null;
+  // Projet modifié depuis (notes d'un sujet, trame, apparence : Program.updatedAt avance) :
+  // le deck récent ne reflète plus le contexte, on régénère.
+  if (!row || row.createdAt < row.program.updatedAt) return null;
+  return { deckId: row.id };
 }
 
 export const DECK_CHANGED_MESSAGE =
-  "Ce diaporama a changé entre-temps (régénération ou autre onglet). Rechargez la page pour voir la dernière version.";
+  "Ce diaporama a changé entre-temps (autre onglet). Rechargez la page pour voir la dernière version.";
 
 /**
  * Remplace une diapo. read → modify → write sous verrou de ligne (FOR UPDATE).
  *
  * Concurrence optimiste : si `expectedUpdatedAt` (ISO) est fourni et que le deck
- * a été modifié depuis (autre onglet, régénération du squelette), l'écriture
+ * a été modifié depuis (autre onglet), l'écriture
  * est refusée (ConflictError) au lieu d'écraser silencieusement l'autre version.
  */
 export async function updateDeckSlide(
@@ -221,16 +185,7 @@ export async function updateDeckSlide(
   });
 }
 
-/** Thèmes du programme (possédé) qui ont déjà un squelette. */
-export async function listSkeletonThemeIds(userId: string, programId: string): Promise<Set<string>> {
-  const rows = await db().deck.findMany({
-    where: { programId, kind: "SKELETON", program: ownedProgram(userId) },
-    select: { themeId: true },
-  });
-  return new Set(rows.map((r) => r.themeId));
-}
-
-export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string }> {
+export async function deleteDeck(userId: string, deckId: string): Promise<{ programId: string; themeId: string | null }> {
   return db().$transaction(async (tx) => {
     const deck = await tx.deck.findFirst({
       where: { id: deckId, program: ownedProgram(userId) },
@@ -251,24 +206,16 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   const row = await db().deck.findFirst({
     where: { id: deckId, program: ownedProgram(userId) },
     include: {
-      theme: {
-        select: {
-          name: true,
-          // Au plus un squelette par thème (index unique partiel) : lu pour la relecture d'un deck final.
-          decks: { where: { kind: "SKELETON" }, select: { id: true, spec: true }, take: 1 },
-        },
-      },
+      theme: { select: { name: true } },
       program: { select: { id: true, name: true, brand: true, template: true } },
     },
   });
   if (!row) throw new NotFoundError("deck");
   const view: DeckView = toDeckView(row);
-  const skeleton = view.kind === "FINAL" ? row.theme.decks[0] : undefined;
   return {
     ...view,
     updatedAt: view.updatedAt.toISOString(),
-    themeName: row.theme.name,
-    skeletonSpec: skeleton ? parseStored(DeckSpecSchema, skeleton.spec, "Deck.spec", skeleton.id) : null,
+    themeName: row.theme?.name ?? null,
     program: {
       id: row.program.id,
       name: row.program.name,
@@ -296,7 +243,7 @@ export async function listFinalDecks(userId: string, programId: string): Promise
       id: r.id,
       engine: view.engine,
       themeId: r.themeId,
-      themeName: r.theme.name,
+      themeName: r.theme?.name ?? null,
       problem: r.problem ?? "",
       title: view.spec.title,
       createdAt: r.createdAt,

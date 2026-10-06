@@ -45,6 +45,8 @@ describe("deckFileTitle — une seule règle pour tous les moteurs", () => {
     [{ themeName: "Green IT", kind: "FINAL", engine: "ollama", createdAt }, "Green IT - deck final - Ollama - 2026-10-02"],
     [{ themeName: "Énergie et société", kind: "SKELETON", engine: "claude", createdAt }, "Énergie et société - squelette - Claude"],
     [{ themeName: "Green IT", kind: "FINAL", engine: null, createdAt }, "Green IT - deck final - 2026-10-02"],
+    [{ themeName: null, kind: "FINAL", engine: "claude", createdAt }, "deck final - Claude - 2026-10-02"],
+    [{ themeName: "   ", kind: "FINAL", engine: "free", createdAt }, "deck final - Gratuit - 2026-10-02"],
   ] as const)("%o → %s", (info, expected) => {
     expect(deckFileTitle(info)).toBe(expected);
   });

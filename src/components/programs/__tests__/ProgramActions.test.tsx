@@ -108,7 +108,7 @@ describe("Menu « ⋮ » d'une ligne de projet", () => {
     renderActions();
     await user.click(within(await openMenu(user)).getByRole("menuitem", { name: "Supprimer" }));
     const dialog = await screen.findByRole("dialog", { name: "Supprimer le projet ?" });
-    expect(dialog).toHaveAccessibleDescription(/Supprimer « BTS SIO », ses thèmes, squelettes et decks \?/);
+    expect(dialog).toHaveAccessibleDescription(/Supprimer « BTS SIO », ses sujets et ses decks \?/);
     const input = within(dialog).getByLabelText("Recopiez « BTS SIO » pour confirmer");
     await waitFor(() => expect(input).toHaveFocus());
     expect(within(dialog).getByRole("button", { name: "Supprimer définitivement" })).toHaveAttribute("aria-disabled", "true");

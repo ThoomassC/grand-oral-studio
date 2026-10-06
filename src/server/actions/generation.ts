@@ -1,6 +1,6 @@
 "use server";
 
-import { z } from "zod";
+import type { z } from "zod";
 import type { ClassificationOutcome } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { getEngineForUser } from "../ai";
@@ -39,36 +39,7 @@ async function classifyDeps(ctx: ActionContext): Promise<service.GenerationDeps>
   }
 }
 
-/** Génère (ou régénère) le squelette d'un thème. Rejouable : un seul squelette par thème. */
-export async function generateSkeleton(themeId: string): Promise<ActionResult<{ deckId: string; warnings: string[] }>> {
-  return runAction("generateSkeleton", async (ctx) => {
-    const id = parseInput(IdSchema, themeId);
-    const { deckId, warnings, programId } = await service.generateSkeleton(ctx.user.id, id, await deps(ctx));
-    revalidatePrograms(programId);
-    return { deckId, warnings };
-  });
-}
-
-const BatchModeSchema = z.enum(["missing", "all"], "Mode attendu : missing ou all.");
-
-/**
- * Squelettes du programme (3 en parallèle au plus) ; résultat par thème.
- * `missing` (défaut) : seulement les thèmes sans squelette ; `all` : tout régénérer.
- */
-export async function generateAllSkeletons(
-  programId: string,
-  mode: service.BatchMode = "missing",
-): Promise<ActionResult<service.BatchItemResult[]>> {
-  return runAction("generateAllSkeletons", async (ctx) => {
-    const id = parseInput(IdSchema, programId);
-    const m = parseInput(BatchModeSchema, mode);
-    const results = await service.generateAllSkeletons(ctx.user.id, id, await deps(ctx), m);
-    revalidatePrograms(id);
-    return results;
-  });
-}
-
-/** Jour J, étape 1 : reconnaissance du thème (top 3). Aucune écriture. */
+/** Jour J, étape 1 : reconnaissance du sujet (top 3). Aucune écriture. */
 export async function classifyProblem(
   programId: string,
   input: ProblemFormInput,
@@ -80,15 +51,21 @@ export async function classifyProblem(
   });
 }
 
-/** Jour J, étape 2 : deck final pour le thème confirmé (s'appuie sur son squelette s'il existe). */
+/** Sujet retenu le jour J : un identifiant, ou null explicite pour un deck sans sujet. */
+const SubjectIdSchema = IdSchema.nullable();
+
+/**
+ * Jour J, étape 2 : deck final pour le sujet retenu, ou sans sujet (`themeId`
+ * null : problématique et trame seules). Rejouable sans doublon (cf. service).
+ */
 export async function generateFinalDeck(
   programId: string,
-  themeId: string,
+  themeId: string | null,
   problem: string,
 ): Promise<ActionResult<{ deckId: string }>> {
   return runAction("generateFinalDeck", async (ctx) => {
     const pid = parseInput(IdSchema, programId);
-    const tid = parseInput(IdSchema, themeId);
+    const tid = parseInput(SubjectIdSchema, themeId);
     const { problem: text } = parseInput(ProblemInputSchema, { problem });
     const { deckId } = await service.generateFinalDeck(
       ctx.user.id,

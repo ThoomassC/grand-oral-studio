@@ -1,20 +1,24 @@
 import { Meter } from "@/components/ui/Meter";
 import { ProjectSettingsMenu } from "@/components/programs/ProjectSettingsMenu";
 import { ProjectSteps } from "@/components/layout/ProjectSteps";
-import { PrepareNav } from "@/components/projects/PrepareNav";
-import { StepBlockedNotice, StepNav } from "@/components/projects/StepNav";
+import { StepNav } from "@/components/projects/StepNav";
+import { TemplateTabs } from "@/components/projects/TemplateTabs";
 import { loadProgram } from "../_lib/load";
 
 /**
  * En-tête commun des pages d'un projet : fil d'Ariane (slot `@crumbs`, qui
- * connaît le deck ouvert), titre, avancement, fil d'étapes ; puis la page.
+ * connaît le deck ouvert), titre, avancement, fil d'étapes (Apparence, Trame,
+ * Jour J) ; puis les onglets de la Trame (sous `/trame` seulement), la page et
+ * la barre précédent / suivant. `/projets/<id>` n'a pas de page : il redirige
+ * (307, next.config.ts) vers l'apparence.
  * La garde « modifications non enregistrées » est posée dans le layout racine.
  */
 export default async function ProgramLayout({ children, crumbs, params }: LayoutProps<"/projets/[id]">) {
   const { id } = await params;
   const program = await loadProgram(id);
-  const { steps, prepare, doneCount, total } = program.progress;
-  const deckCount = program.themes.reduce((n, t) => n + t.finalDeckCount, 0);
+  const { steps, templateTabs, doneCount, total } = program.progress;
+  // Decks du jour J, avec ou sans sujet (les anciens squelettes ne sont pas comptés).
+  const deckCount = program.finalDeckCount;
   const label = `${doneCount}/${total} étapes`;
 
   return (
@@ -43,10 +47,9 @@ export default async function ProgramLayout({ children, crumbs, params }: Layout
         </div>
       </div>
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
-        <StepBlockedNotice programId={program.id} steps={steps} />
-        <PrepareNav programId={program.id} items={prepare} />
+        <TemplateTabs programId={program.id} tabs={templateTabs} />
         {children}
-        <StepNav programId={program.id} prepare={prepare} steps={steps} />
+        <StepNav programId={program.id} />
       </div>
     </div>
   );
