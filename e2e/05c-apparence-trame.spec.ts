@@ -421,13 +421,13 @@ test.describe("5. Apparence — enregistrement et validations", () => {
     await openStep(page, id, "apparence");
     const appearance = projectSteps(page).getByRole("link", { name: /^Étape 1 : Apparence/ });
     // L'apparence par défaut est utilisable : l'étape est faite, son résumé dit « Par défaut ».
-    await expect(appearance).toHaveAccessibleName(/Apparence, Par défaut — faite/);
+    await expect(appearance).toHaveAccessibleName(/Apparence ?, Par défaut — faite/);
     await main(page).getByLabel("Nom de l'apparence").fill("Couleurs du master");
     await main(page).getByRole("button", { name: "Enregistrer l'apparence" }).click();
     await expect(main(page).getByText("Apparence enregistrée.")).toBeVisible();
     await page.reload();
     await expect(main(page).getByLabel("Nom de l'apparence")).toHaveValue("Couleurs du master");
-    await expect(appearance).toHaveAccessibleName(/Apparence, Personnalisée — faite/);
+    await expect(appearance).toHaveAccessibleName(/Apparence ?, Personnalisée — faite/);
   });
 
   test("devrait refuser une couleur hexadécimale invalide", async ({ page, account }) => {

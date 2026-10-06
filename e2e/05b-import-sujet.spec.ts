@@ -77,7 +77,7 @@ test.describe("5. Apparence — partir d'un exemple depuis un fichier .pptx", ()
   }) => {
     void account;
     await createProject(page, "Import pptx");
-    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence, Par défaut/);
+    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence ?, Par défaut/);
     await uploadExampleFile(page, FILES.pptx);
     const preview = filePanel(page).getByRole("region", { name: "Apparence proposée" });
     await expect(preview).toBeVisible();
@@ -90,7 +90,7 @@ test.describe("5. Apparence — partir d'un exemple depuis un fichier .pptx", ()
 
     await preview.getByRole("button", { name: "Appliquer l'apparence" }).click();
     await expect(filePanel(page).getByText("Apparence appliquée et enregistrée.")).toBeVisible();
-    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence, Personnalisée/);
+    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence ?, Personnalisée/);
 
     // L'éditeur, juste en dessous, est remonté sur l'apparence importée.
     await page.reload();
@@ -164,7 +164,7 @@ test.describe("5. Apparence — partir d'un exemple depuis un prompt", () => {
 
     await preview.getByRole("button", { name: "Appliquer l'apparence" }).click();
     await expect(panel.getByText("Apparence appliquée et enregistrée.")).toBeVisible();
-    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence, Personnalisée/);
+    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence ?, Personnalisée/);
 
     await page.reload();
     const main = page.getByRole("main");
@@ -204,7 +204,7 @@ test.describe("5. Sujets — importer des sujets depuis un texte", () => {
     await expect(subjectsImport(page).getByText("3 sujets importés.")).toBeVisible();
     await expect(subjectsImport(page).getByRole("link", { name: "Passer au Jour J" })).toHaveAttribute("href", `/projets/${id}/jour-j`);
     await expect(subjectTitles(page)).toHaveCount(3);
-    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence, Par défaut/);
+    await expect(appearanceStep(page)).toHaveAccessibleName(/Apparence ?, Par défaut/);
   });
 
   test("devrait importer seulement les sujets cochés", async ({ page, account }) => {
