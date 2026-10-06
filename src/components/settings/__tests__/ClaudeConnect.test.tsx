@@ -6,13 +6,14 @@ import type { ActionResult } from "@/server/actions/result";
 
 const activateClaude = vi.fn();
 const deleteAnthropicApiKey = vi.fn();
+const testAnthropicApiKey = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/server/actions/settings", () => ({
   activateClaude: (...args: unknown[]) => activateClaude(...args),
   deleteAnthropicApiKey: (...args: unknown[]) => deleteAnthropicApiKey(...args),
   setAiEngine: vi.fn(),
-  testAnthropicApiKey: vi.fn(),
+  testAnthropicApiKey: (...args: unknown[]) => testAnthropicApiKey(...args),
 }));
 
 const { ClaudeConnect } = await import("@/components/settings/ClaudeConnect");
@@ -28,7 +29,7 @@ const keySummary = (text: string) =>
 
 afterEach(() => {
   cleanup();
-  for (const fn of [activateClaude, deleteAnthropicApiKey, refresh]) fn.mockReset();
+  for (const fn of [activateClaude, deleteAnthropicApiKey, testAnthropicApiKey, refresh]) fn.mockReset();
 });
 
 const field = () => screen.getByLabelText("Clé API Anthropic");
@@ -147,16 +148,26 @@ describe("ClaudeConnect — sans clé", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("La connexion a été interrompue. Réessayez.");
   });
 
-  it("devrait expliquer la démonstration et la clé fournie par le serveur, en gardant la possibilité d'ajouter la sienne", () => {
+  it("ne devrait plus afficher de note « Mode démonstration » ni « clé du serveur », et garder le champ", () => {
     const { rerender } = render(<ClaudeConnect claude={{ available: true, source: "mock", userKey: null }} onActivated={vi.fn()} />);
-    expect(screen.getByText("Mode démonstration : aucune clé nécessaire.")).toBeInTheDocument();
+    expect(screen.queryByText(/Mode démonstration/)).not.toBeInTheDocument();
     expect(field()).toBeInTheDocument();
     rerender(<ClaudeConnect claude={{ available: true, source: "server", userKey: null }} onActivated={vi.fn()} />);
-    expect(screen.getByText("Le serveur fournit une clé : vous pouvez aussi utiliser la vôtre.")).toBeInTheDocument();
+    expect(screen.queryByText(/Le serveur fournit une clé/)).not.toBeInTheDocument();
+    expect(field()).toBeInTheDocument();
   });
 });
 
 describe("ClaudeConnect — clé présente", () => {
+  it("devrait tester la connexion de la clé enregistrée et annoncer le résultat", async () => {
+    testAnthropicApiKey.mockResolvedValue({ ok: true, data: { source: "user", model: "claude-opus-5-5" } });
+    const user = userEvent.setup();
+    render(<ClaudeConnect claude={USER_KEY} onActivated={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Tester la connexion" }));
+    expect(testAnthropicApiKey).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/Connexion à Claude réussie \(modèle claude-opus-5-5\)/)).toBeInTheDocument();
+  });
+
   it("devrait résumer la clé sans le champ, puis le révéler avec « Remplacer »", async () => {
     const user = userEvent.setup();
     render(<ClaudeConnect claude={USER_KEY} onActivated={vi.fn()} />);

@@ -2,7 +2,7 @@
 
 import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useCallback, useId, useRef, useState } from "react";
+import { startTransition, useActionState, useCallback, useId, useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
@@ -14,7 +14,7 @@ import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ANTHROPIC_KEY_MAX_LENGTH, SaveApiKeyInputSchema } from "@/domain/api-key";
-import { activateClaude, deleteAnthropicApiKey } from "@/server/actions/settings";
+import { activateClaude, deleteAnthropicApiKey, testAnthropicApiKey } from "@/server/actions/settings";
 import type { AiSetupStatus } from "./ai-status";
 import { ChoiceInfo, type ChoiceInfoItem } from "./ChoiceInfo";
 
@@ -49,11 +49,6 @@ const KEY_INFO: readonly ChoiceInfoItem[] = [
   },
 ];
 
-const SOURCE_NOTE: Partial<Record<AiSetupStatus["claude"]["source"], string>> = {
-  mock: "Mode démonstration : aucune clé nécessaire.",
-  server: "Le serveur fournit une clé : vous pouvez aussi utiliser la vôtre.",
-};
-
 /**
  * Question 2 de la Configuration IA : connecter Claude avec sa clé API.
  *
@@ -81,6 +76,26 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
   const [replacing, setReplacing] = useState(false);
   const [keyTyped, setKeyTyped] = useState(false);
   const [announce, setAnnounce] = useState("");
+  const [testing, startTest] = useTransition();
+  const [testStatus, setTestStatus] = useState<FormStatusState>(IDLE);
+
+  /** Revérifie la clé enregistrée auprès d'Anthropic (quota de vérification côté serveur). */
+  function testKey() {
+    if (testing) return;
+    setTestStatus(IDLE);
+    startTest(async () => {
+      try {
+        const result = await testAnthropicApiKey();
+        setTestStatus(
+          result.ok
+            ? { kind: "success", message: `Connexion à Claude réussie (modèle ${result.data.model}).` }
+            : { kind: "error", message: result.error },
+        );
+      } catch {
+        setTestStatus({ kind: "error", message: NETWORK_ERROR });
+      }
+    });
+  }
   // Une clé saisie mais pas activée serait perdue en quittant la page.
   useUnsavedChanges(keyTyped);
 
@@ -129,7 +144,6 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
     if (active === null || active === node.ownerDocument.body) node.focus();
   }, []);
   const keyError = firstError(state.fieldErrors, "apiKey");
-  const note = claude.userKey === null ? SOURCE_NOTE[claude.source] : undefined;
 
   return (
     <div className="flex flex-col gap-5">
@@ -169,6 +183,9 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
             >
               Remplacer
             </Button>
+            <Button type="button" variant="ghost" size="small" onClick={testKey} aria-disabled={testing || undefined}>
+              <ButtonLabel idle="Tester la connexion" busy="Test en cours…" isBusy={testing} />
+            </Button>
             <ConfirmAction
               triggerLabel="Supprimer ma clé"
               title="Supprimer votre clé ?"
@@ -186,9 +203,8 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
               onDone={() => focusLater([ids.key])}
             />
           </div>
+          <FormStatus state={testStatus} />
         </div>
-      ) : note ? (
-        <p className="rounded-lg border border-border bg-surface-2 p-4">{note}</p>
       ) : null}
 
       {showForm ? (

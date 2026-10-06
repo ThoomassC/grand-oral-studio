@@ -587,6 +587,16 @@
     height: 100%;
   }
 
+  /*
+   * Ombre de l'en-tête (Topbar d'Opale) : fine mais marquée, un filet net d'un pixel
+   * et une ombre courte, au lieu du halo large (0 20px 48px) d'Opale.
+   */
+  .opale-topbar__shell {
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--opale-text) 14%, transparent),
+      0 3px 8px -2px color-mix(in srgb, #000 22%, transparent);
+  }
+
   .project-steps {
     /* Contient les textes `sr-only` (absolus) : sinon ils débordent de la page. */
     position: relative;

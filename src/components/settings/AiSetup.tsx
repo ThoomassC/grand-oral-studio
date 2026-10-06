@@ -1,8 +1,8 @@
 "use client";
 
-import { Badge, Button, Radio, RadioGroup } from "@thomascaron/opale-ui";
+import { Button, Radio, RadioGroup } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { firstError, type FieldErrors } from "@/components/forms/validation";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
@@ -11,8 +11,8 @@ import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
-import { setAiEngine, testAnthropicApiKey } from "@/server/actions/settings";
-import { isReady, writerLabel, type AiSetupStatus, type EngineId } from "./ai-status";
+import { setAiEngine } from "@/server/actions/settings";
+import type { AiSetupStatus, EngineId } from "./ai-status";
 import type { ChoiceInfoItem } from "./ChoiceInfo";
 import { ClaudeConnect } from "./ClaudeConnect";
 
@@ -152,8 +152,7 @@ const SAVE_LABEL: Record<EngineId, string> = {
 };
 
 /**
- * Configuration IA guidée : un bandeau d'état (qui rédige le jour J, prêt ou
- * à connecter), la question 1 « Qui rédige le jour J ? » et, si Claude est
+ * Configuration IA guidée : la question 1 « Qui rédige le jour J ? » et, si Claude est
  * coché, la question 2 « Connecter Claude ». Un seul bouton d'enregistrement
  * visible à la fois, et aucun quand le choix coché est déjà enregistré.
  */
@@ -226,27 +225,6 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
     return { status: { kind: "success", message: `Choix enregistré : ${choiceLabel(engine, ollamaModel)}.` }, fieldErrors: {} };
   }, INITIAL);
 
-  const [testing, startTest] = useTransition();
-  const [testStatus, setTestStatus] = useState<FormStatusState>(IDLE);
-  const canTest = status.effective === "claude" && (status.claude.source === "user" || status.claude.source === "server");
-
-  function test() {
-    if (testing) return;
-    setTestStatus(IDLE);
-    startTest(async () => {
-      try {
-        const result = await testAnthropicApiKey();
-        setTestStatus(
-          result.ok
-            ? { kind: "success", message: `Connexion à Claude réussie (modèle ${result.data.model}).` }
-            : { kind: "error", message: result.error },
-        );
-      } catch {
-        setTestStatus({ kind: "error", message: NETWORK_ERROR });
-      }
-    });
-  }
-
   /** Coche un choix (radio ou clic sur sa carte) ; la question 2 apparaît en douceur pour Claude. */
   function pick(value: EngineId) {
     if (value === "claude" && choice !== "claude") setReveal("enter");
@@ -254,7 +232,6 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
     setChoice(value);
   }
 
-  const ready = isReady(status);
   const engineError = firstError(state.fieldErrors, "engine");
   const modelError = firstError(state.fieldErrors, "ollamaModel");
   const ollamaNote =
@@ -266,21 +243,6 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="min-w-0 flex-1">
-            Le jour J, vos diaporamas sont rédigés par <strong>{writerLabel(status)}</strong>.
-          </p>
-          <Badge tone={ready ? "success" : "warning"}>{ready ? "Prêt" : "À connecter"}</Badge>
-          {canTest ? (
-            <Button type="button" variant="ghost" size="small" onClick={test} aria-disabled={testing || undefined}>
-              <ButtonLabel idle="Tester" busy="Test en cours…" isBusy={testing} />
-            </Button>
-          ) : null}
-        </div>
-        <FormStatus state={testStatus} />
-      </div>
-
       <section aria-labelledby={ids.q1} className="opale-card opale-card--e1 block p-5 sm:p-6">
         <h2 id={ids.q1} className="text-2xl">
           1. Qui rédige le jour J ?

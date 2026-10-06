@@ -40,37 +40,14 @@ afterEach(() => {
 
 const q2 = () => screen.queryByRole("heading", { name: "2. Connecter Claude" });
 
-describe("AiSetup — bandeau d'état", () => {
-  it("devrait dire qui rédige et que c'est prêt, Sans IA", () => {
-    render(<AiSetup status={status({ selected: "free" })} />);
-    expect(screen.getByText(/Le jour J, vos diaporamas sont rédigés par/)).toHaveTextContent(
-      "Le jour J, vos diaporamas sont rédigés par Sans IA.",
-    );
-    expect(screen.getByText("Prêt")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Tester" })).not.toBeInTheDocument();
-  });
-
-  it("devrait afficher « À connecter » quand Claude est choisi sans clé", () => {
-    render(<AiSetup status={status({ selected: "claude", effective: "claude" })} />);
-    expect(screen.getByText(/rédigés par/)).toHaveTextContent("rédigés par Claude.");
-    expect(screen.getByText("À connecter")).toBeInTheDocument();
-    expect(screen.queryByText("Prêt")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Tester" })).not.toBeInTheDocument();
-  });
-
-  it("devrait proposer « Tester » avec une clé réelle et annoncer le résultat", async () => {
-    testAnthropicApiKey.mockResolvedValue({ ok: true, data: { source: "user", model: "claude-opus-5-5" } });
-    const user = userEvent.setup();
-    render(<AiSetup status={status({ selected: "claude", effective: "claude" }, WITH_USER_KEY)} />);
-    await user.click(screen.getByRole("button", { name: "Tester" }));
-    expect(testAnthropicApiKey).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/Connexion à Claude réussie/)).toBeInTheDocument();
-  });
-
-  it("ne devrait pas proposer « Tester » en démonstration", () => {
+describe("AiSetup — sans bandeau d'état", () => {
+  it("ne devrait plus afficher le bandeau « rédigés par … » ni l'état « Prêt » / « À connecter »", () => {
     render(<AiSetup status={status({ selected: "claude", effective: "mock" }, { available: true, source: "mock" })} />);
-    expect(screen.getByText(/rédigés par/)).toHaveTextContent("rédigés par Démo (contenus factices).");
-    expect(screen.queryByRole("button", { name: "Tester" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/rédigés par/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Prêt")).not.toBeInTheDocument();
+    expect(screen.queryByText("À connecter")).not.toBeInTheDocument();
+    // Le choix en vigueur se lit sur la carte cochée.
+    expect(screen.getByRole("radio", { name: "Claude" })).toBeChecked();
   });
 });
 

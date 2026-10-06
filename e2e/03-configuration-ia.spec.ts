@@ -8,11 +8,6 @@ test.afterAll(async () => {
 
 const OLLAMA_MODEL = "qwen2.5:14b";
 
-/** Bandeau d'état en tête de page : « Le jour J, vos diaporamas sont rédigés par … ». */
-function writerBanner(page: Page) {
-  return page.getByRole("main").getByText(/^Le jour J, vos diaporamas sont rédigés par/);
-}
-
 function engineGroup(page: Page) {
   return page.getByRole("main").getByRole("radiogroup", { name: "1. Qui rédige le jour J ?" });
 }
@@ -75,16 +70,15 @@ test.describe("3. Configuration IA — page guidée", () => {
     await expect(page.getByText("Étape 2 affichée plus bas : connectez Claude.")).toBeAttached();
   });
 
-  test("devrait annoncer la rédaction en démo, prête, avec Claude coché et sa connexion ouverte (AI_PROVIDER=mock)", async ({ page, account }) => {
+  test("devrait cocher Claude en démo, connexion ouverte, sans bandeau ni note de démonstration (AI_PROVIDER=mock)", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");
     const main = page.getByRole("main");
-    await expect(writerBanner(page)).toContainText("Démo (contenus factices)");
-    await expect(main.getByText("Prêt", { exact: true })).toBeVisible();
+    await expect(main.getByText(/rédigés par/)).toHaveCount(0);
     await expect(radio(page, "Sans IA")).toBeEnabled();
     await expect(radio(page, "Claude")).toBeChecked();
     await expect(main.getByRole("heading", { name: "2. Connecter Claude", level: 2 })).toBeVisible();
-    await expect(main.getByText("Mode démonstration : aucune clé nécessaire.")).toBeVisible();
+    await expect(main.getByText(/Mode démonstration/)).toHaveCount(0);
     // Le choix coché est déjà celui en vigueur : aucun bouton d'enregistrement.
     await expect(main.getByRole("button", { name: /^Choisir / })).toHaveCount(0);
   });
@@ -107,7 +101,6 @@ test.describe("3. Configuration IA — qui rédige le jour J", () => {
     await main.getByRole("button", { name: "Choisir Sans IA" }).click();
     await expect(main.getByText("Choix enregistré : Sans IA.")).toBeVisible();
     await page.reload();
-    await expect(writerBanner(page)).toContainText("Sans IA");
     await expect(radio(page, "Sans IA")).toBeChecked();
     await expect(main.getByRole("button", { name: /^Choisir / })).toHaveCount(0);
   });
@@ -123,7 +116,6 @@ test.describe("3. Configuration IA — qui rédige le jour J", () => {
     await main.getByRole("button", { name: "Choisir Claude" }).click();
     await expect(main.getByText("Choix enregistré : Claude.")).toBeVisible();
     await page.reload();
-    await expect(writerBanner(page)).toContainText("Démo (contenus factices)");
     await expect(radio(page, "Claude")).toBeChecked();
   });
 
@@ -139,7 +131,6 @@ test.describe("3. Configuration IA — qui rédige le jour J", () => {
     await main.getByRole("button", { name: "Choisir ce modèle" }).click();
     await expect(main.getByText(`Choix enregistré : Ollama · ${OLLAMA_MODEL}.`)).toBeVisible();
     await page.reload();
-    await expect(writerBanner(page)).toContainText(`Ollama · ${OLLAMA_MODEL}`);
     await expect(radio(page, "Modèle local (Ollama)")).toBeChecked();
     await expect(main.getByLabel("Modèle", { exact: true })).toHaveValue(OLLAMA_MODEL);
   });

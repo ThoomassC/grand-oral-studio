@@ -23,36 +23,6 @@ export interface AiSetupStatus {
   ollama: { reachable: boolean; models: string[]; selectedModel: string | null } | null;
 }
 
-/** « Claude », « Sans IA », « Ollama · mistral », « Démo (contenus factices) ». */
-export function writerLabel(status: AiSetupStatus): string {
-  switch (status.effective) {
-    case "claude":
-      return "Claude";
-    case "free":
-      return "Sans IA";
-    case "mock":
-      return "Démo (contenus factices)";
-    case "ollama": {
-      const model = status.ollama?.selectedModel;
-      return model ? `Ollama · ${model}` : "Ollama";
-    }
-  }
-}
-
-/** Prêt si : Sans IA ; démo ; Claude avec une clé ; Ollama joignable avec le modèle choisi installé. */
-export function isReady(status: AiSetupStatus): boolean {
-  switch (status.effective) {
-    case "free":
-    case "mock":
-      return true;
-    case "claude":
-      return status.claude.available;
-    case "ollama": {
-      const ollama = status.ollama;
-      return ollama !== null && ollama.reachable && ollama.selectedModel !== null && ollama.models.includes(ollama.selectedModel);
-    }
-  }
-}
 
 export function toAiSetupStatus(view: AiSettingsView, formatDate: (iso: string) => string): AiSetupStatus {
   const { userKey, engine } = view;
