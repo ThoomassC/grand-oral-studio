@@ -2,7 +2,8 @@ import fs from "node:fs";
 import JSZip from "jszip";
 import { test, expect, BASE_URL } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, dialog, generateFinalDeck, importThemeList, setEngine } from "./support/app";
+import { createProject, dialog, importThemeList } from "./support/app";
+import { SUBJECTS, chooseFreeWriter, generateDeck, seedLegacySkeleton } from "./support/parcours";
 import type { Page } from "@playwright/test";
 
 test.afterAll(async () => {
@@ -12,11 +13,11 @@ test.afterAll(async () => {
 const PROBLEM = "L'intelligence artificielle peut-elle remplacer le jugement humain dans les décisions de recrutement ?";
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
+/** Deck du moteur démo (compte neuf, AI_PROVIDER=mock) sur un projet à un sujet. */
 async function setupDeck(page: Page, name: string): Promise<{ programId: string; deckId: string }> {
-  await setEngine(page, "claude");
   const programId = await createProject(page, name);
-  await importThemeList(page, programId);
-  const deckId = await generateFinalDeck(page, programId, PROBLEM, "Intelligence artificielle");
+  await importThemeList(page, programId, SUBJECTS.ai);
+  const deckId = await generateDeck(page, programId, PROBLEM, "Intelligence artificielle");
   return { programId, deckId };
 }
 
@@ -25,19 +26,55 @@ async function slideCount(page: Page): Promise<number> {
   return Number(text?.match(/\d+/)?.[0]);
 }
 
+function deckItem(page: Page, linkName: string) {
+  return page.getByRole("main").getByRole("listitem").filter({ has: page.getByRole("link", { name: linkName, exact: true }) });
+}
+
+function breadcrumb(page: Page) {
+  return page.getByRole("navigation", { name: "Fil d'Ariane" });
+}
+
 test.describe("8. Decks — liste, ouverture, suppression", () => {
-  test("devrait lister le deck avec son thème et son moteur, et l'ouvrir", async ({ page, account }) => {
+  test("devrait lister le deck sous « Decks du jour J » avec son sujet et son moteur, et l'ouvrir", async ({ page, account }) => {
     void account;
     const { programId, deckId } = await setupDeck(page, "Liste des decks");
     await page.goto(`/projets/${programId}/decks`);
     const main = page.getByRole("main");
-    const item = main.getByRole("listitem").filter({ has: page.getByRole("link", { name: PROBLEM }) });
-    await expect(item).toContainText("Thème : Intelligence artificielle");
+    await expect(main.getByRole("heading", { name: "Decks du jour J", level: 2 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)" })).toHaveCount(0);
+    const item = deckItem(page, PROBLEM);
+    await expect(item).toContainText("Sujet : Intelligence artificielle");
     await expect(item.getByText("Démo")).toBeVisible();
     await expect(main.getByRole("link", { name: "Decks : 1 diaporama" })).toBeVisible();
     await item.getByRole("link", { name: /^Ouvrir le deck/ }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${deckId}`);
     await expect(main.getByText("Deck final · Intelligence artificielle")).toBeVisible();
+  });
+
+  test("devrait afficher le fil d'Ariane « Decks / {titre} » sur la page d'un deck", async ({ page, account }) => {
+    void account;
+    const { programId } = await setupDeck(page, "Fil d'Ariane du deck");
+    // Titre rédigé par le moteur démo : lu sur la page (titre du deck, cible du focus à l'arrivée).
+    const title = (await page.locator("#titre-deck").textContent())?.trim() ?? "";
+    expect(title.length).toBeGreaterThan(0);
+    await expect(breadcrumb(page)).toContainText(title);
+    await breadcrumb(page).getByRole("link", { name: "Decks", exact: true }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
+    await expect(page.getByRole("main").getByRole("heading", { name: "Decks du jour J", level: 2 })).toBeVisible();
+  });
+
+  test("devrait lister un deck sans sujet « Sans sujet » avec le bandeau « Construit sans IA »", async ({ page, account }) => {
+    void account;
+    await chooseFreeWriter(page);
+    const programId = await createProject(page, "Deck sans sujet");
+    const deckId = await generateDeck(page, programId, PROBLEM, null);
+    await expect(page.getByRole("main").getByText("Construit sans IA", { exact: true })).toBeVisible();
+    await page.goto(`/projets/${programId}/decks`);
+    const item = deckItem(page, PROBLEM);
+    await expect(item).toContainText("Sujet : Sans sujet");
+    await expect(item.getByText("Sans IA · à compléter")).toBeVisible();
+    await page.goto(`/projets/${programId}/decks/${deckId}`);
+    await expect(page.getByRole("main").getByText("Deck final · Sans sujet")).toBeVisible();
   });
 
   test("devrait supprimer un deck depuis la liste par la modale", async ({ page, account }) => {
@@ -58,6 +95,62 @@ test.describe("8. Decks — liste, ouverture, suppression", () => {
     await dialog(page, "Supprimer le deck ?").getByRole("button", { name: "Supprimer le deck" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
     await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+  });
+});
+
+test.describe("8. Decks — anciens squelettes (version 1.0)", () => {
+  const SKELETON = "Squelette hérité de la 1.0";
+
+  test("devrait lister l'ancien squelette à part, l'ouvrir en lecture et le supprimer", async ({ page, account }) => {
+    void account;
+    const { programId, deckId } = await setupDeck(page, "Anciens squelettes");
+    const skeletonId = await seedLegacySkeleton(deckId, SKELETON);
+
+    await page.goto(`/projets/${programId}/decks`);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)", level: 2 })).toBeVisible();
+    const item = deckItem(page, SKELETON);
+    await expect(item).toContainText("Sujet : Intelligence artificielle");
+    // Le squelette ne compte pas parmi les decks du jour J.
+    await expect(main.getByRole("link", { name: "Decks : 1 diaporama" })).toBeVisible();
+
+    await item.getByRole("link", { name: `Ouvrir le squelette ${SKELETON}` }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${skeletonId}`);
+    await expect(main.getByText("Squelette (version 1.0) · Intelligence artificielle")).toBeVisible();
+    await expect(main.getByText("Ancien squelette", { exact: true })).toBeVisible();
+    await expect(breadcrumb(page)).toContainText(SKELETON);
+    await expect(breadcrumb(page).getByRole("link", { name: "Decks", exact: true })).toBeVisible();
+
+    await main.getByRole("region", { name: "Supprimer ce squelette" }).getByRole("button", { name: `Supprimer le deck ${SKELETON}` }).click();
+    await dialog(page, "Supprimer le deck ?").getByRole("button", { name: "Supprimer le deck" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
+    await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)" })).toHaveCount(0);
+    await expect(deckItem(page, PROBLEM)).toBeVisible();
+  });
+});
+
+test.describe("8. Decks — écarts à la trame", () => {
+  test("devrait signaler un écart quand la trame change après la génération", async ({ page, account }) => {
+    void account;
+    await chooseFreeWriter(page);
+    const programId = await createProject(page, "Écarts à la trame");
+    const deckId = await generateDeck(page, programId, PROBLEM, null);
+    const main = page.getByRole("main");
+    // Construit depuis la trame : aucun écart.
+    await expect(main.getByRole("heading", { level: 2, name: /^\d+ diapos$/ })).toBeVisible();
+    await expect(main.getByText(/écarts? à la trame/)).toHaveCount(0);
+
+    await page.goto(`/projets/${programId}/trame`);
+    const count = main.getByLabel("Nombre de diapos de la ligne 1");
+    const before = Number(await count.inputValue());
+    await count.fill(String(before + 1));
+    await main.getByRole("button", { name: "Enregistrer la trame" }).click();
+    await expect(main.getByText("Trame enregistrée.")).toBeVisible();
+
+    await page.goto(`/projets/${programId}/decks/${deckId}`);
+    await expect(main.getByText("1 écart à la trame", { exact: true })).toBeVisible();
+    await expect(main.getByText(new RegExp(`compte ${before} diapo\\(s\\) au lieu de ${before + 1}\\.$`))).toBeVisible();
+    await expect(main.getByText("Ces écarts n'empêchent pas l'export.")).toBeVisible();
   });
 });
 

@@ -41,7 +41,7 @@ test.describe("12. Réglages — panneau", () => {
     await expect(button).toHaveAttribute("aria-expanded", "false");
 
     const dialog = await openSettings(page);
-    await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(["Apparence", "Lisibilité", "Mouvements"]);
+    await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(["Affichage", "Lisibilité", "Mouvements"]);
     await page.keyboard.press("Escape");
     await expect(panel(page)).toBeHidden();
     await expect(button).toBeFocused();
@@ -61,7 +61,7 @@ test.describe("12. Réglages — panneau", () => {
   });
 });
 
-test.describe("12. Réglages — apparence", () => {
+test.describe("12. Réglages — affichage", () => {
   test("devrait synchroniser le thème du panneau avec le bouton soleil/lune et persister", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");

@@ -59,14 +59,18 @@ test.describe("4. Projets — création et carte", () => {
     const modal = await openNewProjectDialog(page);
     await modal.getByLabel("Nom du projet").fill("Projet double clic");
     await modal.getByRole("button", { name: "Créer le projet" }).dblclick();
-    await page.waitForURL(/\/projets\/[a-z0-9]+$/);
+    await page.waitForURL(/\/projets\/[a-z0-9]+\/apparence$/);
     await page.goto("/projets");
     await expect(page.getByRole("main").getByRole("heading", { name: "Projet double clic", level: 3 })).toHaveCount(1);
   });
 
-  test("devrait créer le projet puis le montrer en carte à 0/3 avec « Reprendre »", async ({ page, account }) => {
+  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 0/3 avec « Reprendre : Apparence »", async ({
+    page,
+    account,
+  }) => {
     void account;
     const id = await createProject(page, "Master Management 2027", "Grand oral de fin d'études");
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/apparence`);
     await expect(page.getByRole("heading", { name: "Master Management 2027", level: 1 })).toBeVisible();
     await expect(page.getByText("Préparation : 0/3 étapes")).toBeVisible();
 
@@ -74,10 +78,35 @@ test.describe("4. Projets — création et carte", () => {
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Master Management 2027" }) });
     await expect(card.getByRole("img", { name: "0 étape faite sur 3" })).toBeVisible();
     await expect(card).toContainText("Grand oral de fin d'études");
-    const resume = card.getByRole("link", { name: "Reprendre : Préparer — Master Management 2027" });
-    await expect(resume).toHaveAttribute("href", `/projets/${id}`);
+    await expect(card).toContainText("Sujets :0");
+    const resume = card.getByRole("link", { name: "Reprendre : Apparence — Master Management 2027" });
+    await expect(resume).toHaveAttribute("href", `/projets/${id}/apparence`);
     await resume.click();
-    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}`);
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/apparence`);
+  });
+
+  test("devrait présenter les trois étapes Apparence, Trame, Jour J et ouvrir /projets/<id> sur l'Apparence", async ({ page, account }) => {
+    void account;
+    const id = await createProject(page, "Projet trois étapes");
+    await page.goto(`/projets/${id}`);
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/apparence`);
+    const steps = page.getByRole("navigation", { name: "Étapes du projet" }).getByRole("link");
+    await expect(steps).toHaveCount(3);
+    await expect(steps.nth(0)).toContainText("Apparence");
+    await expect(steps.nth(1)).toContainText("Trame");
+    await expect(steps.nth(2)).toContainText("Jour J");
+    await expect(steps.nth(0)).toHaveAttribute("aria-current", "step");
+    await expect(page.getByRole("navigation", { name: "Fil d'Ariane" })).toContainText("Étape 1 · Apparence");
+
+    await steps.nth(1).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/trame`);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: "Trame", level: 2 })).toBeVisible();
+    const tabs = main.getByRole("navigation", { name: "Trame : diapos et sujets" });
+    await tabs.getByRole("link", { name: /^Sujets/ }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/trame/sujets`);
+    await expect(main.getByRole("heading", { name: "Sujets", level: 2 })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Fil d'Ariane" })).toContainText("Étape 2 · Trame");
   });
 });
 
@@ -148,7 +177,7 @@ test.describe("4. Projets — duplication et suppression", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/projets");
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { level: 3 }) });
-    await expect(card.getByRole("link", { name: /^Reprendre : Préparer/ })).toBeVisible();
+    await expect(card.getByRole("link", { name: /^Reprendre : Apparence/ })).toBeVisible();
     const trigger = card.getByRole("button", { name: /^Actions du projet / });
     const box = await trigger.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -178,14 +207,14 @@ test.describe("4. Projets — duplication et suppression", () => {
     await expect(page.getByText("2 projets")).toBeVisible();
   });
 
-  test("devrait recopier les thèmes dans la copie du projet", async ({ page, account }) => {
+  test("devrait recopier les sujets dans la copie du projet", async ({ page, account }) => {
     void account;
-    const id = await createProject(page, "Source avec thèmes");
+    const id = await createProject(page, "Source avec sujets");
     await importThemeList(page, id);
     await page.goto("/projets");
-    await projectRowAction(page, "Source avec thèmes", "Dupliquer");
-    const copy = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Source avec thèmes (copie)" }) });
-    await expect(copy).toContainText("Thèmes :3");
+    await projectRowAction(page, "Source avec sujets", "Dupliquer");
+    const copy = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Source avec sujets (copie)" }) });
+    await expect(copy).toContainText("Sujets :3");
   });
 
   test("devrait bloquer la suppression tant que le nom recopié est faux, puis supprimer", async ({ page, account }) => {
