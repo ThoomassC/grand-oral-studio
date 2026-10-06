@@ -48,6 +48,6 @@ Les variables de production sont dans le projet Vercel ; ne pas les recopier ail
 
 ## Publier une version
 
-1. PR vers `develop` qui passe `package.json` à la nouvelle version (semver).
+1. PR vers `develop` qui passe `package.json` à la nouvelle version (semver) et ajoute la version en tête de `src/domain/releases.ts` (date, résumé, ajouts / modifications / retraits, en mots d'utilisateur). Puis `npm run changelog` régénère `CHANGELOG.md` : ne pas le modifier à la main, un test vérifie qu'il est à jour et que la première version est celle de `package.json`.
 2. PR `develop` → `main`.
 3. Tag annoté `vX.Y.Z` sur `main` et release GitHub.
