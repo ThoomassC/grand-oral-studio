@@ -85,9 +85,10 @@ describe("AiSetup — question 1", () => {
 
   it("devrait annoncer que Claude est facturé à l'usage sur le compte Anthropic, pas par l'abonnement Claude.ai", () => {
     render(<AiSetup status={status()} />);
-    expect(screen.getByRole("radio", { name: "Claude" })).toHaveAccessibleDescription(
-      "Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas.",
-    );
+    expect(screen.getByRole("radio", { name: "Claude" })).toHaveAccessibleDescription("Quelques centimes par diaporama.");
+    const card = screen.getByRole("radio", { name: "Claude" }).closest("[data-engine-card]") as HTMLElement;
+    expect(within(card).getByText(/facturés à l'usage sur votre compte Anthropic/)).toBeInTheDocument();
+    expect(within(card).getByText(/abonnement Claude\.ai \(Pro, Max\) ne donne pas de crédits API/)).toBeInTheDocument();
   });
 
   it("devrait proposer le modèle local quand le serveur le configure", () => {
@@ -214,39 +215,55 @@ describe("AiSetup — question 2", () => {
   });
 });
 
-describe("AiSetup — infos de chaque choix (bouton « i »)", () => {
-  const info = (label: string) => screen.getByRole("button", { name: `En savoir plus : ${label}` });
+describe("AiSetup — cartes de choix", () => {
+  const card = (label: string) => screen.getByRole("radio", { name: label }).closest("[data-engine-card]") as HTMLElement;
 
-  it("devrait proposer un bouton « i » par choix, hors du nom du radio", () => {
+  it("devrait présenter chaque choix en carte, avec son détail écrit dedans (résultat, coût, données)", () => {
     render(<AiSetup status={status({ ollama: { reachable: false, models: [], selectedModel: null } })} />);
     for (const label of ["Sans IA", "Claude", "Modèle local (Ollama)"]) {
-      expect(info(label)).toHaveAttribute("aria-expanded", "false");
+      const c = within(card(label));
+      expect(c.getByText("Ce que vous obtenez")).toBeInTheDocument();
+      expect(c.getByText("Coût")).toBeInTheDocument();
+      expect(c.getByText("Vos données")).toBeInTheDocument();
     }
-    // Le bouton ne s'ajoute pas au nom du radio.
-    expect(screen.getByRole("radio", { name: "Claude" })).toBeInTheDocument();
+    expect(within(card("Claude")).getByText(/abonnement Claude\.ai/)).toBeInTheDocument();
+    // Plus de bouton « i » pour les choix : le détail est dans la carte.
+    expect(screen.queryByRole("button", { name: /^En savoir plus : (Sans IA|Claude)/ })).not.toBeInTheDocument();
   });
 
-  it("devrait ouvrir un panneau qui dit le résultat, le coût et le devenir des données, puis se fermer par Échap", async () => {
-    const user = userEvent.setup();
+  it("devrait garder le nom du radio court (le détail ne s'ajoute pas à son nom)", () => {
     render(<AiSetup status={status()} />);
-    await user.click(info("Claude"));
-    const panel = await screen.findByRole("dialog", { name: "Claude" });
-    expect(within(panel).getByText("Ce que vous obtenez")).toBeInTheDocument();
-    expect(within(panel).getByText("Coût")).toBeInTheDocument();
-    expect(within(panel).getByText("Vos données")).toBeInTheDocument();
-    expect(within(panel).getByText(/abonnement Claude\.ai/)).toBeInTheDocument();
-    expect(info("Claude")).toHaveAttribute("aria-expanded", "true");
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Claude" })).not.toBeInTheDocument();
-    expect(info("Claude")).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Claude" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Sans IA" })).toBeInTheDocument();
   });
 
-  it("ne devrait pas changer le choix coché en ouvrant les infos", async () => {
+  it("devrait cocher le choix quand on clique n'importe où dans sa carte", async () => {
     const user = userEvent.setup();
     render(<AiSetup status={status({ selected: "free" })} />);
-    await user.click(info("Claude"));
+    await user.click(within(card("Claude")).getByText("Vos données"));
+    expect(screen.getByRole("radio", { name: "Claude" })).toBeChecked();
+    expect(card("Claude")).toHaveAttribute("data-checked", "true");
+  });
+
+  it("ne devrait pas cocher un choix indisponible en cliquant sa carte", async () => {
+    const user = userEvent.setup();
+    render(<AiSetup status={status({ selected: "free", ollama: { reachable: false, models: [], selectedModel: null } })} />);
+    await user.click(within(card("Modèle local (Ollama)")).getByText("Coût"));
     expect(screen.getByRole("radio", { name: "Sans IA" })).toBeChecked();
-    expect(q2()).not.toBeInTheDocument();
+  });
+
+  it("devrait replier le détail derrière « Afficher le détail » (téléphone), relié au détail", async () => {
+    const user = userEvent.setup();
+    render(<AiSetup status={status()} />);
+    const toggle = screen.getByRole("button", { name: "Afficher le détail : Claude" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const details = document.getElementById(toggle.getAttribute("aria-controls")!);
+    expect(details).toHaveAttribute("data-open", "false");
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: "Masquer le détail : Claude" })).toHaveAttribute("aria-expanded", "true");
+    expect(details).toHaveAttribute("data-open", "true");
+    // Déplier le détail ne coche pas le choix.
+    expect(screen.getByRole("radio", { name: "Claude" })).not.toBeChecked();
   });
 });
 

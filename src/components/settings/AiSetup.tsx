@@ -13,7 +13,7 @@ import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStat
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { setAiEngine, testAnthropicApiKey } from "@/server/actions/settings";
 import { isReady, writerLabel, type AiSetupStatus, type EngineId } from "./ai-status";
-import { ChoiceInfo, type ChoiceInfoItem } from "./ChoiceInfo";
+import type { ChoiceInfoItem } from "./ChoiceInfo";
 import { ClaudeConnect } from "./ClaudeConnect";
 
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
@@ -75,12 +75,63 @@ const ENGINE_INFO: Record<EngineId, readonly ChoiceInfoItem[]> = {
   ],
 };
 
-/** Un choix de la question 1 : le radio, puis son bouton « i » en bout de ligne (hors du label). */
-function ChoiceRow({ info, label, children }: { info: readonly ChoiceInfoItem[]; label: string; children: ReactNode }) {
+/**
+ * Un choix de la question 1 en carte : le radio (nom court + coût), puis le détail
+ * (résultat, coût, données) écrit dans la carte. Un clic n'importe où dans la carte
+ * coche le choix (le clavier passe par le radio). Sous 640 px, le détail se replie
+ * derrière « Afficher le détail » (globals.css `.engine-card`).
+ */
+function EngineCard({
+  engine,
+  label,
+  checked,
+  disabled = false,
+  info,
+  onPick,
+  children,
+}: {
+  engine: EngineId;
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  info: readonly ChoiceInfoItem[];
+  onPick: (engine: EngineId) => void;
+  children: ReactNode;
+}) {
+  const detailsId = useId();
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-0 flex-1">{children}</div>
-      <ChoiceInfo label={label} items={info} />
+    // Le clic sur la carte est un raccourci de souris : le radio reste la commande (clavier, lecteur d'écran).
+    <div
+      data-engine-card=""
+      data-checked={checked}
+      data-disabled={disabled || undefined}
+      className="engine-card"
+      onClick={(e) => {
+        if (disabled || (e.target as HTMLElement).closest("button, input, label, a, select")) return;
+        onPick(engine);
+      }}
+    >
+      {children}
+      <button
+        type="button"
+        className="engine-card__toggle"
+        aria-expanded={open}
+        aria-controls={detailsId}
+        // Nom = texte visible + le choix concerné (le texte visible reste au début du nom).
+        aria-label={`${open ? "Masquer le détail" : "Afficher le détail"} : ${label}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? "Masquer le détail" : "Afficher le détail"}
+      </button>
+      <dl id={detailsId} data-open={open} className="engine-card__details">
+        {info.map((item) => (
+          <div key={item.term}>
+            <dt>{item.term}</dt>
+            <dd>{item.detail}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -196,6 +247,13 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
     });
   }
 
+  /** Coche un choix (radio ou clic sur sa carte) ; la question 2 apparaît en douceur pour Claude. */
+  function pick(value: EngineId) {
+    if (value === "claude" && choice !== "claude") setReveal("enter");
+    if (value !== "claude") setReveal("idle");
+    setChoice(value);
+  }
+
   const ready = isReady(status);
   const engineError = firstError(state.fieldErrors, "engine");
   const modelError = firstError(state.fieldErrors, "ollamaModel");
@@ -241,32 +299,27 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
             aria-labelledby={ids.q1}
             name="engine"
             value={choice}
+            className="engine-cards"
             onValueChange={(value) => {
-              if (value !== "claude" && value !== "ollama" && value !== "free") return;
-              if (value === "claude" && choice !== "claude") setReveal("enter");
-              if (value !== "claude") setReveal("idle");
-              setChoice(value);
+              if (value === "claude" || value === "ollama" || value === "free") pick(value);
             }}
             error={engineError}
           >
-            <ChoiceRow label="Sans IA" info={ENGINE_INFO.free}>
-              <Radio
-                id={radioId("free")}
-                value="free"
-                label="Sans IA"
-                description="La trame remplie avec vos notes : le texte reste à écrire. Gratuit et instantané."
-              />
-            </ChoiceRow>
-            <ChoiceRow label="Claude" info={ENGINE_INFO.claude}>
-              <Radio
-                id={radioId("claude")}
-                value="claude"
-                label="Claude"
-                description="Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas."
-              />
-            </ChoiceRow>
+            <EngineCard engine="free" label="Sans IA" checked={choice === "free"} info={ENGINE_INFO.free} onPick={pick}>
+              <Radio id={radioId("free")} value="free" label="Sans IA" description="Gratuit et instantané." />
+            </EngineCard>
+            <EngineCard engine="claude" label="Claude" checked={choice === "claude"} info={ENGINE_INFO.claude} onPick={pick}>
+              <Radio id={radioId("claude")} value="claude" label="Claude" description="Quelques centimes par diaporama." />
+            </EngineCard>
             {ollama !== null ? (
-              <ChoiceRow label="Modèle local (Ollama)" info={ENGINE_INFO.ollama}>
+              <EngineCard
+                engine="ollama"
+                label="Modèle local (Ollama)"
+                checked={choice === "ollama"}
+                disabled={!ollamaUsable}
+                info={ENGINE_INFO.ollama}
+                onPick={pick}
+              >
                 <Radio
                   id={radioId("ollama")}
                   value="ollama"
@@ -274,12 +327,12 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
                   disabled={!ollamaUsable}
                   description={
                     <>
-                      Gratuit et privé, exécuté sur ce serveur. Plus lent, qualité variable selon le modèle.
+                      Gratuit, sur ce serveur.
                       {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
                     </>
                   }
                 />
-              </ChoiceRow>
+              </EngineCard>
             ) : null}
           </RadioGroup>
 

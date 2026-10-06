@@ -45,7 +45,7 @@ export const RELEASES: readonly Release[] = [
       ],
       changed: [
         "Étapes renommées : Apparence, Trame, Jour J ; les thèmes deviennent les sujets.",
-        "Configuration IA guidée, en deux questions : « Vérifier et activer » enregistre la clé et choisit Claude en un geste ; un bouton « i » détaille le résultat, le coût et les données de chaque choix.",
+        "Configuration IA guidée, en deux questions : « Vérifier et activer » enregistre la clé et choisit Claude en un geste ; chaque choix est une carte qui détaille le résultat, le coût et les données.",
         "Les imports (apparence, trame, sujets) se font sans IA.",
         "Les anciennes adresses (charte, gabarit, squelettes) mènent aux nouvelles pages.",
       ],

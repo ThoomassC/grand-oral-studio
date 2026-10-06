@@ -36,20 +36,31 @@ test.describe("3. Configuration IA — page guidée", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("devrait détailler un choix par son bouton « i », sans le cocher, et se fermer par Échap", async ({ page, account }) => {
+  test("devrait présenter les choix en cartes côte à côte, détail écrit dedans, cochables d'un clic sur la carte", async ({ page, account }) => {
     void account;
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/configuration-ia");
-    const main = page.getByRole("main");
-    const info = main.getByRole("button", { name: "En savoir plus : Sans IA" });
-    await info.click();
-    const panel = page.getByRole("dialog", { name: "Sans IA" });
-    await expect(panel).toBeVisible();
-    await expect(panel.getByText("Coût")).toBeVisible();
-    await expect(panel.getByText("Vos données")).toBeVisible();
-    await expect(radio(page, "Sans IA")).not.toBeChecked();
-    await page.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-    await expect(info).toBeFocused();
+    const card = (name: string) => page.locator("[data-engine-card]").filter({ has: page.getByRole("radio", { name, exact: true }) });
+    await expect(card("Claude").getByText("Coût")).toBeVisible();
+    await expect(card("Claude").getByText(/abonnement Claude\.ai/)).toBeVisible();
+    await expect(card("Sans IA").getByText("Vos données")).toBeVisible();
+    // Côte à côte : même hauteur de départ.
+    const [a, b] = await Promise.all([card("Sans IA").boundingBox(), card("Claude").boundingBox()]);
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+    await card("Sans IA").getByText("Vos données").click();
+    await expect(radio(page, "Sans IA")).toBeChecked();
+    await expect(page.getByRole("main").getByRole("button", { name: /^En savoir plus : (Sans IA|Claude)$/ })).toHaveCount(0);
+  });
+
+  test("devrait empiler les cartes à 375 px et replier le détail derrière « Afficher le détail »", async ({ page, account }) => {
+    void account;
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/configuration-ia");
+    const card = page.locator("[data-engine-card]").filter({ has: page.getByRole("radio", { name: "Claude", exact: true }) });
+    await expect(card.getByText("Coût")).toBeHidden();
+    await card.getByRole("button", { name: "Afficher le détail : Claude" }).click();
+    await expect(card.getByText("Coût")).toBeVisible();
+    await expect(card.getByRole("button", { name: "Masquer le détail : Claude" })).toHaveAttribute("aria-expanded", "true");
   });
 
   test("devrait faire apparaître « 2. Connecter Claude » quand on coche Claude, et le retirer avec Sans IA", async ({ page, account }) => {
