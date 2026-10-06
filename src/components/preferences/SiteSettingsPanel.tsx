@@ -154,7 +154,7 @@ export function SiteSettingsPanel({ open, onOpenChange }: { open: boolean; onOpe
             Agrandit tout le texte de l&apos;application, et les marges avec lui.
           </p>
           <figure aria-labelledby={ids.preview} className="mt-3 rounded-lg bg-surface-2 p-3">
-            <figcaption id={ids.preview} className="eyebrow">Aperçu</figcaption>
+            <figcaption id={ids.preview} className="text-sm font-semibold text-muted">Aperçu</figcaption>
             <p className="mt-1">Comment l&apos;intelligence artificielle transforme-t-elle le travail des organisations ?</p>
           </figure>
         </section>

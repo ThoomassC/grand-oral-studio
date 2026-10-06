@@ -55,7 +55,7 @@ export default function ReleaseNotesPage() {
                     <section key={section} aria-labelledby={`${headingId}-${section}`}>
                       <h3
                         id={`${headingId}-${section}`}
-                        className={`text-xs font-bold uppercase tracking-wider ${SECTION_TONE[section]}`}
+                        className={`text-sm font-semibold ${SECTION_TONE[section]}`}
                       >
                         {RELEASE_SECTION_LABELS[section]}
                       </h3>

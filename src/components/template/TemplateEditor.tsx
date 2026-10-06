@@ -365,7 +365,7 @@ export function TemplateEditor({
             const range = ranges[index];
             const name = lineName(index, section);
             return (
-              <li key={section.id} className="opale-card opale-card--e1 block p-4">
+              <li key={section.id} className="opale-card opale-card--e1 fiche block p-4 pl-6">
                 <fieldset className="flex flex-col gap-4 md:flex-row md:items-start">
                   <legend className="sr-only">
                     Ligne {n}
@@ -430,6 +430,7 @@ export function TemplateEditor({
                       </label>
                       <TextArea
                         id={guidanceId}
+                        shellClassName="fiche-ruled"
                         rows={2}
                         maxLength={600}
                         value={section.guidance}
@@ -516,6 +517,7 @@ export function TemplateEditor({
           </label>
           <TextArea
             id={ids.constraints}
+            shellClassName="fiche-ruled"
             rows={3}
             value={template.constraints}
             maxLength={2000}

@@ -48,7 +48,7 @@ export default async function ProgramsPage() {
                 // `flex-row` : la carte Opale impose `flex-direction: column`. `flex-wrap` : l'annonce de la duplication (dans ProgramActions) passe dessous, sur toute la largeur.
                 <li
                   key={p.id}
-                  className="opale-card opale-card--e1 flex flex-row flex-wrap items-start gap-x-2 gap-y-3 p-5 pt-7 sm:gap-x-3 sm:p-6 sm:pt-8"
+                  className="opale-card opale-card--e1 fiche flex flex-row flex-wrap items-start gap-x-2 gap-y-3 p-5 pt-7 pl-7 sm:gap-x-3 sm:p-6 sm:pt-8 sm:pl-8"
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">

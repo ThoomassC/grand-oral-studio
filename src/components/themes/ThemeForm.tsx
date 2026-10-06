@@ -172,6 +172,7 @@ export function ThemeForm({
         </label>
         <TextArea
           id={ids.description}
+          shellClassName="fiche-ruled"
           rows={3}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -199,6 +200,7 @@ export function ThemeForm({
         </label>
         <TextArea
           id={ids.notes}
+          shellClassName="fiche-ruled"
           rows={5}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

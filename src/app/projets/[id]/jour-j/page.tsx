@@ -65,7 +65,7 @@ export default async function DayPage({ params }: PageProps<"/projets/[id]/jour-
           </p>
         </div>
         {/* Repère du temps de préparation : rappel visuel, ne décompte rien. */}
-        <p className="flex items-center gap-3 rounded-lg border border-border bg-surface py-2 pr-4 pl-2 shadow-card">
+        <p className="flex items-center gap-3 rounded-lg border border-border bg-surface py-2 pr-4 pl-2">
           <PrepDial usedMinutes={0} className="h-10 w-10 shrink-0" />
           <span className="leading-tight">
             <span className="block text-lg font-bold">

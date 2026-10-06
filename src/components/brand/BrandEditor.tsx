@@ -237,7 +237,7 @@ export function BrandEditor({
                     />
                     <TextInput
                       id={id}
-                      className="font-mono uppercase" shellClassName="min-w-0 flex-1"
+                      className="num uppercase" shellClassName="min-w-0 flex-1"
                       value={value}
                       maxLength={7}
                       spellCheck={false}

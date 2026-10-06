@@ -78,7 +78,7 @@ export function PrepDial({ usedMinutes = 3, className = "h-28 w-28" }: { usedMin
 /** Pastille sobre « Préparation 1 h 30 » avec une petite icône de chronomètre. */
 export function PrepTimeBadge({ minutes = PREP_MINUTES }: { minutes?: number }) {
   return (
-    <p className="inline-flex items-center gap-2 rounded-full border border-border-strong bg-surface px-3 py-1 text-sm">
+    <p className="inline-flex items-center gap-2 rounded-md border border-border-strong bg-surface px-3 py-1 text-sm">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <circle cx="12" cy="13.5" r="7.5" />
         <path d="M12 13.5V9.5M10 2.5h4M18.5 6l1.5-1.5" />

@@ -75,9 +75,9 @@ function StepTitle({
     <h3 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
       <span
         aria-hidden="true"
-        className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
+        className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-bold ${
           state === "current"
-            ? "bg-highlight text-on-highlight ring-2 ring-highlight ring-offset-2 ring-offset-surface"
+            ? "bg-accent text-on-accent"
             : state === "done"
               ? "bg-success-soft text-success ring-1 ring-success"
               : "bg-surface-2 text-muted ring-1 ring-border-strong"
@@ -416,6 +416,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               <TextArea
                 id={ids.problem}
                 className="text-lg"
+                shellClassName="fiche-ruled"
                 rows={4}
                 value={problem}
                 maxLength={PROBLEM_MAX}
@@ -573,7 +574,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                             {isHinted ? (
                               <span
                                 id={`${cid}-badge`}
-                                className="rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40"
+                                className="rounded-sm bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40"
                               >
                                 Indiqué sur l&apos;énoncé
                               </span>
@@ -611,7 +612,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                       />
                       <span className="font-semibold">{directTheme.name}</span>
                       {directTheme.id === hintedThemeId ? (
-                        <span className="rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40">
+                        <span className="rounded-sm bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40">
                           Indiqué sur l&apos;énoncé
                         </span>
                       ) : mode === "single" ? (

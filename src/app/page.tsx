@@ -27,9 +27,9 @@ const DAY_TIMELINE = [
   { at: "0:03", text: "Le deck complet, notes d'orateur comprises, est prêt à relire et à exporter." },
 ] as const;
 
-/** Apparence d'exemple dans la palette d'Opale, pour les miniatures de l'accueil. */
+/** Apparence d'exemple dans la palette de la fiche, pour les miniatures de l'accueil. */
 const SAMPLE_BRAND: SlideBrand = {
-  colors: { primary: "#23457A", secondary: "#5C574D", accent: "#F4AD15", background: "#FFFFFF", text: "#14100B" },
+  colors: { primary: "#2A4DB3", secondary: "#55607A", accent: "#C8372D", background: "#FFFFFF", text: "#14213D" },
   fonts: { heading: "Georgia", body: "Arial" },
   logoDataUrl: null,
 };
@@ -64,8 +64,7 @@ export default async function HomePage() {
       <section aria-labelledby="accroche" className="grid items-center gap-12 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-14">
         <div>
           <h1 id="accroche" className="text-4xl leading-[1.05] sm:text-5xl xl:text-[3.75rem]">
-            Une problématique <span className="marker">tirée au sort</span>, un diaporama{" "}
-            <span className="marker">prêt</span> en quelques minutes.
+            Une problématique tirée au sort, un diaporama prêt en quelques minutes.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted">
             Grand Oral Studio vous aide à préparer l&apos;apparence et la trame de vos diaporamas à l&apos;avance, puis à
@@ -146,7 +145,7 @@ export default async function HomePage() {
         </div>
         <div>
           <h2 id="jour-j" className="text-2xl sm:text-3xl">
-            Le jour J en <span className="marker">3 minutes</span>
+            Le jour J en 3 minutes
           </h2>
           <ol className="mt-6 flex flex-col gap-4">
             {DAY_TIMELINE.map((item) => (

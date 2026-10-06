@@ -25,9 +25,9 @@ export function Meter({
         aria-valuemax={max}
         aria-valuenow={value}
         aria-valuetext={valueText}
-        className="h-2 w-full overflow-hidden rounded-full bg-surface-2 ring-1 ring-inset ring-border"
+        className="h-2 w-full overflow-hidden rounded-xs bg-surface-2 ring-1 ring-inset ring-border"
       >
-        <div className="h-full rounded-full bg-accent" style={{ width: `${ratio * 100}%` }} />
+        <div className="h-full rounded-xs bg-accent" style={{ width: `${ratio * 100}%` }} />
       </div>
     </div>
   );

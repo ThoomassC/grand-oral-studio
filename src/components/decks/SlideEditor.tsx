@@ -270,6 +270,7 @@ export function SlideEditor({
         </label>
         <TextArea
           id={ids.notes}
+          shellClassName="fiche-ruled"
           rows={5}
           value={notes}
           maxLength={LIMITS.notes}

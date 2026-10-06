@@ -260,7 +260,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             const neighbour = optimisticThemes[index + 1] ?? optimisticThemes[index - 1];
             const { question, confirm } = deleteQuestion(theme);
             return (
-              <li key={theme.id} className="opale-card opale-card--e1 block p-4 pt-6 sm:p-5 sm:pt-7">
+              <li key={theme.id} className="opale-card opale-card--e1 fiche block p-4 pt-6 pl-6 sm:p-5 sm:pt-7 sm:pl-7">
                 {editingId === theme.id ? (
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm

@@ -47,7 +47,7 @@ export function BrandPreview({
                     style={{ backgroundColor: brand.colors[key] }}
                   />
                   <span>
-                    {label} : <span className="font-mono uppercase">{brand.colors[key]}</span>
+                    {label} : <span className="num uppercase">{brand.colors[key]}</span>
                   </span>
                 </li>
               ))}
