@@ -2,6 +2,23 @@
 
 <!-- Généré par `npm run changelog` depuis src/domain/releases.ts : ne pas modifier à la main. -->
 
+## 1.2.0 — 6 octobre 2026
+
+Une nouvelle apparence, inspirée des fiches bristol qu'on garde en main devant le jury.
+
+### Ajouts
+
+- Les blocs que vous rédigez (lignes de trame, sujets) prennent l'allure d'une fiche, avec sa marge.
+- Les textes longs (contenu type, notes, problématique, notes d'orateur) sont réglés comme une fiche.
+- Les « À compléter » des diaporamas sont surlignés en jaune.
+
+### Modifications
+
+- Nouvelles couleurs : papier, encre marine et bleu de réglure, en clair comme en sombre (ardoise).
+- Nouvelles polices, choisies pour la lisibilité : Schibsted Grotesk pour les titres, Atkinson Hyperlegible Next pour le texte.
+- Formes plus nettes : angles légèrement arrondis, filets fins, plus d'ombres diffuses.
+- Le champ actif est mieux signalé au clavier, et les exemples des champs sont plus lisibles.
+
 ## 1.1.0 — 5 octobre 2026
 
 Un parcours en trois temps, l'IA seulement le jour J.

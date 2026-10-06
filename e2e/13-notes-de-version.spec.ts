@@ -12,7 +12,7 @@ test.afterAll(async () => {
   await deleteE2eUsers();
 });
 
-const VERSIONS = ["1.1.0", "1.0.1", "1.0.0"];
+const VERSIONS = ["1.2.0", "1.1.0", "1.0.1", "1.0.0"];
 
 function mainNav(page: Page) {
   return page.getByRole("banner").getByRole("navigation", { name: "Navigation principale" });
@@ -27,7 +27,7 @@ test.describe("13. Notes de version", () => {
     await expect(page).toHaveTitle(/Notes de version/);
   });
 
-  test("devrait lister les versions 1.1.0, 1.0.1 et 1.0.0, de la plus récente à la plus ancienne", async ({ page }) => {
+  test("devrait lister les versions 1.2.0, 1.1.0, 1.0.1 et 1.0.0, de la plus récente à la plus ancienne", async ({ page }) => {
     await page.goto("/notes-de-version");
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { level: 2 })).toHaveText(VERSIONS);
