@@ -4,6 +4,7 @@ import { toAiSetupStatus } from "@/components/settings/ai-status";
 import { formatDateTime } from "@/components/ui/format";
 import { getAiSettings } from "@/server/queries";
 import { requireUser } from "@/server/session";
+import { SETTINGS_CONTAINER } from "./container";
 
 export const metadata: Metadata = { title: "Configuration IA" };
 
@@ -14,7 +15,7 @@ export default async function AiConfigurationPage() {
   const status = toAiSetupStatus(settings, (iso) => formatDateTime(new Date(iso)));
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className={SETTINGS_CONTAINER}>
       <p className="eyebrow">Compte</p>
       <h1 className="mt-2 text-3xl sm:text-4xl">Configuration IA</h1>
       <p className="mt-2 text-muted">

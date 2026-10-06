@@ -1,6 +1,8 @@
+import { SETTINGS_CONTAINER } from "./container";
+
 export default function Loading() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10" aria-busy="true">
+    <div className={SETTINGS_CONTAINER} aria-busy="true">
       <p role="status" className="sr-only">
         Chargement de la configuration IA…
       </p>
