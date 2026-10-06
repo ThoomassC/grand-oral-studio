@@ -255,6 +255,14 @@ describe("parseTemplateText — colonne Durée du tableau de diapos", () => {
     expect(r.found).not.toContain("Durées des diapos");
   });
 
+  it("devrait ignorer les durées qui ne laissent pas 10 s par diapo aux lignes sans durée", () => {
+    // 20 min : 0:30 de couverture + 19:30 de lignes fixées = 0:00 pour la conclusion, sans durée.
+    const r = parse(trame({ lead: "Oral de 20 min.", stateOfPlay: "7:00", conclusion: "" }));
+    expect(r.template.durationMinutes).toBe(20);
+    expect(r.template.sections.every((s) => s.seconds === undefined)).toBe(true);
+    expect(r.warnings.some((w) => /Durées des diapos ignorées/.test(w))).toBe(true);
+  });
+
   it("devrait compter la durée de la couverture du tableau dans la durée de l'oral", () => {
     const r = parse(trame({ cover: "1:00" }));
     // 19:30 de lignes + 1:00 de couverture = 20:30 → 21 min.

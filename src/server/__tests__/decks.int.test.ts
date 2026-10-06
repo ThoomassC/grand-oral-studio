@@ -250,6 +250,19 @@ describe("repo decks — decks finaux sans sujet", () => {
     expect(await decks.findRecentFinalDeck(a.id, { programId, themeId: null, problem, sinceMs: 60_000 })).toEqual(withoutSubject);
   });
 
+  it("findRecentFinalDeck ne devrait pas rejouer un deck produit avant une modification du projet (notes, trame)", async () => {
+    const { a, programId, themeId } = await ownedSetup();
+    const problem = "Même problématique";
+    const before = await decks.createFinalDeck(a.id, { programId, themeId, problem, spec: makeConformingDeck() });
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId, problem, sinceMs: 60_000 })).toEqual(before);
+
+    // Les notes du sujet changent (comme updateTheme : Program.updatedAt avance).
+    await db().theme.update({ where: { id: themeId }, data: { notes: "Chiffre clé : 42 %" } });
+    await db().program.update({ where: { id: programId }, data: { updatedAt: new Date(Date.now() + 1000) } });
+
+    expect(await decks.findRecentFinalDeck(a.id, { programId, themeId, problem, sinceMs: 60_000 })).toBeNull();
+  });
+
   it("ne devrait pas retrouver le deck sans sujet de A pour B", async () => {
     const { a, b, programId } = await ownedSetup();
     await decks.createFinalDeck(a.id, { programId, themeId: null, problem: "Même problématique", spec: makeConformingDeck() });

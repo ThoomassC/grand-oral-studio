@@ -104,28 +104,30 @@ export function formatSeconds(totalSeconds: number): string {
 
 /** Formes reconnues, sur le texte en minuscules et sans espaces. */
 const DURATION_PATTERNS: readonly { pattern: RegExp; toSeconds: (m: RegExpMatchArray) => number }[] = [
-  // 3:30
-  { pattern: /^(\d{1,3}):([0-5]\d)$/, toSeconds: (m) => Number(m[1]) * 60 + Number(m[2]) },
+  // 3:30, 3:30min
+  { pattern: /^(\d{1,3}):([0-5]\d)(?:min|mn)?$/, toSeconds: (m) => Number(m[1]) * 60 + Number(m[2]) },
   // 3'30, 3’30, 3'
   { pattern: /^(\d{1,3})['’]([0-5]\d)?$/, toSeconds: (m) => Number(m[1]) * 60 + Number(m[2] ?? 0) },
-  // 3min, 3min30, 3min30s, 3minutes
+  // 3min, 3mins, 3m, 3min30, 3m30, 3min30s, 3minutes
   {
-    pattern: /^(\d{1,3})(?:min|mn|minutes?)(?:([0-5]?\d)(?:s|sec|secondes?)?)?$/,
+    pattern: /^(\d{1,3})(?:minutes?|mins?|mn|m)(?:([0-5]?\d)(?:secondes?|secs?|s)?)?$/,
     toSeconds: (m) => Number(m[1]) * 60 + Number(m[2] ?? 0),
   },
-  // 90s, 90sec, 90secondes
-  { pattern: /^(\d{1,4})(?:s|sec|secondes?)$/, toSeconds: (m) => Number(m[1]) },
+  // 90s, 90sec, 90secs, 90secondes
+  { pattern: /^(\d{1,4})(?:secondes?|secs?|s)$/, toSeconds: (m) => Number(m[1]) },
   // 1h05, 1h
   { pattern: /^(\d{1,2})h([0-5]\d)?$/, toSeconds: (m) => Number(m[1]) * 3600 + Number(m[2] ?? 0) * 60 },
 ];
 
 /**
  * Durée saisie ou lue dans un tableau → secondes, ou null si illisible. Accepte : "3:30", "3 min",
- * "3 min 30", "3 min 30 s", "3'30", "3’30", "90 s", "90 sec", "1h05", "1 h 05" ; espaces et casse
+ * "3 min 30", "3 min 30 s", "3 mins", "3m30", "3 min.", "1:30 min", "3'30", "3’30", "90 s", "90 sec", "30 secs", "1h05",
+ * "1 h 05" ; espaces et casse
  * indifférents ; "0:00" et valeurs négatives → null. Un nombre seul ("3") est ambigu → null.
  */
 export function parseDurationText(text: string): number | null {
-  const compact = text.toLowerCase().replace(/\s+/g, "");
+  // Point final d'abréviation (« 3 min. ») ignoré.
+  const compact = text.toLowerCase().replace(/\s+/g, "").replace(/\.$/, "");
   for (const { pattern, toSeconds } of DURATION_PATTERNS) {
     const match = compact.match(pattern);
     if (!match) continue;

@@ -903,7 +903,9 @@ function fitDurations(
 
   const minutes = patch.durationMinutes ?? base.durationMinutes;
   const cover = appCoverSeconds(minutes, sections);
-  if (fixed <= minutes * 60 - cover) {
+  // Même règle que PromptTemplateSchema : 10 s par diapo au moins pour les lignes sans durée.
+  const freeSlides = sections.reduce((sum, s) => sum + (s.seconds === undefined ? s.slides : 0), 0);
+  if (fixed + freeSlides * LIMITS.minSectionSeconds <= minutes * 60 - cover) {
     if (fromText) found.push("Durées des diapos");
     return;
   }

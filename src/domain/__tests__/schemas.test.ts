@@ -183,8 +183,27 @@ describe("PromptTemplateSchema — somme des durées", () => {
     return { ...defaultTemplate(), sections };
   }
 
-  it("devrait accepter des durées qui remplissent exactement le temps disponible (1170 s)", () => {
-    expect(PromptTemplateSchema.safeParse(withSeconds(1170)).success).toBe(true);
+  /** Diapos des lignes sans durée quand seule la première ligne en a une. */
+  const freeSlides = defaultTemplate().sections.slice(1).reduce((sum, s) => sum + s.slides, 0);
+
+  it("devrait accepter des durées qui remplissent exactement le temps disponible quand toutes les lignes en ont une", () => {
+    const template = defaultTemplate();
+    const per = Math.floor(1170 / template.sections.length);
+    const sections = template.sections.map((s, i) => ({
+      ...s,
+      seconds: i === 0 ? 1170 - per * (template.sections.length - 1) : per,
+    }));
+    expect(PromptTemplateSchema.safeParse({ ...template, sections }).success).toBe(true);
+  });
+
+  it("devrait laisser au moins 10 s par diapo aux lignes sans durée", () => {
+    expect(PromptTemplateSchema.safeParse(withSeconds(1170 - freeSlides * 10)).success).toBe(true);
+    const result = PromptTemplateSchema.safeParse(withSeconds(1170 - freeSlides * 10 + 1));
+    expect(result.success).toBe(false);
+    expect(firstMessage(result)).toMatchObject({
+      path: ["sections"],
+      message: "Les lignes sans durée n'ont plus assez de temps (10 s par diapo au moins) : réduisez les durées fixées ou allongez l'oral.",
+    });
   });
 
   it("devrait refuser des durées qui dépassent le temps disponible (1171 s) sur le chemin sections", () => {
@@ -198,10 +217,13 @@ describe("PromptTemplateSchema — somme des durées", () => {
 
   it("devrait additionner les durées de plusieurs lignes", () => {
     const template = defaultTemplate();
+    // Les lignes suivantes, sans durée, gardent 10 s par diapo.
+    const reserved = template.sections.slice(2).reduce((sum, s) => sum + s.slides, 0) * 10;
+    const second = 1170 - 600 - reserved;
     template.sections[0] = { ...template.sections[0]!, seconds: 600 };
-    template.sections[1] = { ...template.sections[1]!, seconds: 571 };
+    template.sections[1] = { ...template.sections[1]!, seconds: second + 1 };
     expect(PromptTemplateSchema.safeParse(template).success).toBe(false);
-    template.sections[1] = { ...template.sections[1]!, seconds: 570 };
+    template.sections[1] = { ...template.sections[1]!, seconds: second };
     expect(PromptTemplateSchema.safeParse(template).success).toBe(true);
   });
 });

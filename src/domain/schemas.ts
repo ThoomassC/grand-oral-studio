@@ -183,6 +183,23 @@ export const PromptTemplateSchema = z
       message: "La durée des lignes dépasse celle de l'oral : réduisez les durées ou allongez l'oral.",
       path: ["sections"],
     },
+  )
+  // Les lignes sans durée se partagent le reste : il leur faut au moins 10 s par diapo (sinon minutage 0:00).
+  .refine(
+    (t) => {
+      const fixed = t.sections.reduce((sum, s) => sum + (s.seconds ?? 0), 0);
+      const freeSlides = t.sections.reduce((sum, s) => sum + (s.seconds === undefined ? s.slides : 0), 0);
+      if (fixed === 0 || freeSlides === 0) return true;
+      const total = t.durationMinutes * 60;
+      const slides = 1 + t.sections.reduce((sum, s) => sum + s.slides, 0);
+      const cover = Math.min(30, total / slides);
+      return fixed + freeSlides * LIMITS.minSectionSeconds <= total - cover;
+    },
+    {
+      message:
+        "Les lignes sans durée n'ont plus assez de temps (10 s par diapo au moins) : réduisez les durées fixées ou allongez l'oral.",
+      path: ["sections"],
+    },
   );
 export type PromptTemplate = z.infer<typeof PromptTemplateSchema>;
 

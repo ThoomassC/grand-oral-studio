@@ -188,6 +188,12 @@ describe("parseDurationText", () => {
     ["1 h 05", 3900],
     ["1H05", 3900],
     ["  3:30  ", 210],
+    ["3 mins", 180],
+    ["3m", 180],
+    ["3m30", 210],
+    ["3 min.", 180],
+    ["30 secs", 30],
+    ["1:30 min", 90],
   ] as const)("devrait lire « %s » comme %i s", (text, expected) => {
     expect(parseDurationText(text)).toBe(expected);
   });

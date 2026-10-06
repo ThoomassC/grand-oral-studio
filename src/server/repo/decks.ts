@@ -138,9 +138,12 @@ export async function findRecentFinalDeck(
       program: ownedProgram(userId),
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true },
+    select: { id: true, createdAt: true, program: { select: { updatedAt: true } } },
   });
-  return row ? { deckId: row.id } : null;
+  // Projet modifié depuis (notes d'un sujet, trame, apparence : Program.updatedAt avance) :
+  // le deck récent ne reflète plus le contexte, on régénère.
+  if (!row || row.createdAt < row.program.updatedAt) return null;
+  return { deckId: row.id };
 }
 
 export const DECK_CHANGED_MESSAGE =
