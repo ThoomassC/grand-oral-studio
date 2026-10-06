@@ -55,7 +55,7 @@ export function CreateProgramDialog({
       <Modal
         open={open}
         title="Nouveau projet"
-        description="Une charte neutre et un gabarit par défaut sont créés ; vous les ajusterez ensuite."
+        description="Une apparence neutre et une trame par défaut sont créées ; vous les ajusterez ensuite."
         size="medium"
         closeOnEsc={!busy}
         closeOnOverlay={!busy}

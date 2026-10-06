@@ -44,7 +44,7 @@ describe("Modale de création d'un projet", () => {
     render(<CreateProgramDialog />);
     const dialog = await openDialog(user);
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toHaveAccessibleDescription(/charte neutre et un gabarit par défaut/);
+    expect(dialog).toHaveAccessibleDescription(/apparence neutre et une trame par défaut/);
     const name = within(dialog).getByLabelText("Nom du projet");
     await waitFor(() => expect(name).toHaveFocus());
     expect(within(dialog).getByLabelText(/^Description/)).toBeInTheDocument();
