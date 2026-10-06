@@ -1,6 +1,7 @@
 import { test, expect, loggedInContext } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, generateFinalDeck, generateMissingSkeletons, importThemeList, setEngine } from "./support/app";
+import { createProject, importThemeList } from "./support/app";
+import { SUBJECTS, chooseFreeWriter, generateDeck, seedLegacySkeleton } from "./support/parcours";
 import type { Browser, Page } from "@playwright/test";
 
 test.afterAll(async () => {
@@ -18,14 +19,13 @@ interface OwnerData {
 
 async function ownerWithContent(browser: Browser): Promise<OwnerData & { owner: Page; close: () => Promise<void> }> {
   const { context, page } = await loggedInContext(browser, "securite-a");
-  await setEngine(page, "free");
+  await chooseFreeWriter(page);
   const programId = await createProject(page, SECRET_NAME);
-  await importThemeList(page, programId);
-  await generateMissingSkeletons(page, programId);
-  await page.getByRole("link", { name: "Ouvrir le squelette Cybersécurité" }).click();
-  await page.waitForURL(/\/squelettes\/[a-z0-9]+$/);
-  const skeletonUrl = new URL(page.url()).pathname;
-  const deckId = await generateFinalDeck(page, programId, PROBLEM, "Cybersécurité");
+  await importThemeList(page, programId, SUBJECTS.cyber);
+  const deckId = await generateDeck(page, programId, PROBLEM, "Cybersécurité");
+  // Ancien squelette (version 1.0) : semé en base, il ne se génère plus.
+  const skeletonId = await seedLegacySkeleton(deckId, "Squelette confidentiel de A");
+  const skeletonUrl = `/projets/${programId}/decks/${skeletonId}`;
   return { programId, deckId, skeletonUrl, owner: page, close: () => context.close() };
 }
 
@@ -35,18 +35,21 @@ async function expectNotFoundWithoutLeak(page: Page, path: string) {
   await expect(main.getByRole("heading", { name: "Introuvable" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(SECRET_NAME);
   await expect(page.locator("body")).not.toContainText("Cybersécurité");
+  await expect(page.locator("body")).not.toContainText("confidentiel");
   await expect(page).toHaveTitle(/^(?!.*confidentiel).*$/);
 }
 
 test.describe("9. Sécurité — cloisonnement entre comptes", () => {
-  test("un utilisateur B ne voit ni le projet, ni le squelette, ni le deck de A par URL directe", async ({ browser, page, account }) => {
+  test("un utilisateur B ne voit ni le projet, ni ses étapes, ni le squelette, ni le deck de A par URL directe", async ({ browser, page, account }) => {
     void account;
     const a = await ownerWithContent(browser);
     try {
       for (const path of [
         `/projets/${a.programId}`,
+        `/projets/${a.programId}/apparence`,
+        `/projets/${a.programId}/trame`,
+        `/projets/${a.programId}/trame/sujets`,
         `/projets/${a.programId}/charte`,
-        `/projets/${a.programId}/gabarit`,
         `/projets/${a.programId}/squelettes`,
         a.skeletonUrl,
         `/projets/${a.programId}/jour-j`,

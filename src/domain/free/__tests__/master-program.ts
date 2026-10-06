@@ -14,6 +14,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Protection des systèmes d'information face aux menaces : attaques, vulnérabilités, continuité d'activité et gouvernance de la sécurité.",
       keywords: ["cyberattaque", "rançongiciel", "vulnérabilité", "gestion des risques", "phishing", "sécurité informatique", "piratage"],
+      notes: "",
     },
     {
       id: "transfo",
@@ -21,6 +22,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Comment les technologies numériques modifient les processus, les métiers, les modèles d'affaires et la relation client des entreprises et des administrations.",
       keywords: ["digitalisation", "dématérialisation", "processus", "outils collaboratifs", "relation client", "télétravail", "numérisation"],
+      notes: "",
     },
     {
       id: "ia",
@@ -28,6 +30,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Apports et risques des systèmes d'intelligence artificielle : apprentissage automatique, biais des algorithmes, responsabilité, transparence et régulation.",
       keywords: ["algorithme", "biais", "apprentissage automatique", "IA générative", "explicabilité", "automatisation", "régulation"],
+      notes: "",
     },
     {
       id: "agile",
@@ -35,6 +38,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Méthodes et pratiques de pilotage de projet itératif : organisation des équipes, livraisons fréquentes, rôle du client et comparaison avec le cycle en V.",
       keywords: ["Scrum", "sprint", "méthode agile", "équipe", "cycle en V", "chef de projet", "itération", "planning"],
+      notes: "",
     },
     {
       id: "cloud",
@@ -42,6 +46,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Hébergement et exploitation des systèmes : informatique en nuage, centres de données, serveurs, virtualisation, souveraineté et coûts d'infrastructure.",
       keywords: ["cloud", "hébergement", "serveur", "datacenter", "virtualisation", "souveraineté", "SaaS", "migration"],
+      notes: "",
     },
     {
       id: "rgpd",
@@ -49,6 +54,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Collecte, exploitation et protection des données personnelles : cadre du règlement européen, consentement, droits des personnes, valorisation des données.",
       keywords: ["données personnelles", "RGPD", "vie privée", "consentement", "CNIL", "big data", "conformité"],
+      notes: "",
     },
     {
       id: "green",
@@ -56,6 +62,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Impact environnemental du numérique et leviers de sobriété : consommation d'énergie, empreinte carbone, fabrication et recyclage des équipements, écoconception.",
       keywords: ["sobriété", "empreinte carbone", "écoconception", "énergie", "recyclage", "Green IT", "environnement", "RSE"],
+      notes: "",
     },
     {
       id: "innov",
@@ -63,6 +70,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Création et croissance d'entreprises innovantes : start-up, financement, levée de fonds, modèle économique, propriété intellectuelle et écosystèmes d'innovation.",
       keywords: ["start-up", "levée de fonds", "business model", "créer une entreprise", "incubateur", "brevet", "innovation", "investisseur"],
+      notes: "",
     },
     {
       id: "change",
@@ -70,6 +78,7 @@ export function makeMasterThemes(): ThemeRef[] {
       description:
         "Accompagner les collaborateurs lors d'une réorganisation ou d'un nouveau projet : résistance au changement, communication, formation, adhésion et culture d'entreprise.",
       keywords: ["résistance", "accompagnement", "adhésion", "formation", "communication interne", "culture d'entreprise", "collaborateurs"],
+      notes: "",
     },
   ];
 }

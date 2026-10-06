@@ -101,12 +101,17 @@ describe("repo thèmes — ajout, modification, suppression", () => {
     expect(await db().theme.count({ where: { programId } })).toBe(MAX_THEMES_PER_PROGRAM);
   });
 
-  it("devrait modifier nom, description et mots-clés sans changer la position", async () => {
+  it("devrait modifier nom, description, mots-clés et notes sans changer la position", async () => {
     const a = await createUser("a");
     const programId = await seedProgram(a.id);
-    const [, second] = await seedThemes(programId, [themeInput("Un"), themeInput("Deux")]);
-    const updated = await themes.updateTheme(a.id, second!, { name: "Renommé", description: "Neuve", keywords: ["k"] });
-    expect(updated).toMatchObject({ name: "Renommé", description: "Neuve", keywords: ["k"], position: 1 });
+    const [, second] = await seedThemes(programId, [themeInput("Un"), themeInput("Deux", [], "Anciennes notes")]);
+    const updated = await themes.updateTheme(a.id, second!, {
+      name: "Renommé",
+      description: "Neuve",
+      keywords: ["k"],
+      notes: "Nouvelles notes",
+    });
+    expect(updated).toMatchObject({ name: "Renommé", description: "Neuve", keywords: ["k"], notes: "Nouvelles notes", position: 1 });
   });
 
   it("devrait recompacter les positions et supprimer les decks du thème quand on le supprime", async () => {
@@ -216,5 +221,54 @@ describe("repo thèmes — import", () => {
     const programId = await seedProgram(a.id);
     await seedThemes(programId, [themeInput("Un")]);
     expect(await themes.importThemes(a.id, programId, parsedOrFail("Un"))).toEqual({ created: 0, skipped: ["Un"] });
+  });
+});
+
+describe("repo sujets — notes", () => {
+  const NOTES = "42 % d'EnR en 2030 (source : ADEME)\n- Exemple : la Bretagne\n\n- Contre-exemple : le charbon";
+
+  it("devrait écrire les notes à l'ajout et les relire avec leurs sauts de ligne", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    const created = await themes.addTheme(a.id, programId, themeInput("Énergie", [], NOTES));
+    expect(created.notes).toBe(NOTES);
+    expect((await themes.listThemes(a.id, programId))[0]?.notes).toBe(NOTES);
+  });
+
+  it("devrait donner des notes vides à un sujet ajouté sans notes", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    await themes.addTheme(a.id, programId, themeInput("Ville"));
+    expect((await themes.listThemes(a.id, programId))[0]?.notes).toBe("");
+  });
+
+  it("devrait remplacer les notes à la modification", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    const [id] = await seedThemes(programId, [themeInput("Énergie", [], "Avant")]);
+    await themes.updateTheme(a.id, id!, themeInput("Énergie", [], "Après"));
+    expect((await themes.listThemes(a.id, programId))[0]?.notes).toBe("Après");
+  });
+
+  it("devrait écrire les notes de la 4e colonne d'un import", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    await themes.importThemes(a.id, programId, parsedOrFail("Énergie | | climat | Source : ADEME 2024\nVille"));
+    expect((await themes.listThemes(a.id, programId)).map((t) => [t.name, t.notes])).toEqual([
+      ["Énergie", "Source : ADEME 2024"],
+      ["Ville", ""],
+    ]);
+  });
+
+  it("devrait refuser en base des notes de 4001 caractères (CHECK Theme_notes_length), y compris hors du code", async () => {
+    const a = await createUser("a");
+    const programId = await seedProgram(a.id);
+    const insert = (notes: string, position: number) => db().$executeRaw`
+      INSERT INTO "Theme" ("id", "programId", "position", "name", "notes")
+      VALUES (${`brut-${position}`}, ${programId}, ${position}, ${`Brut ${position}`}, ${notes})`;
+
+    await expect(insert("é".repeat(4000), 0)).resolves.toBe(1);
+    await expect(insert("é".repeat(4001), 1)).rejects.toThrow(/Theme_notes_length/);
+    expect(await db().theme.count({ where: { programId } })).toBe(1);
   });
 });

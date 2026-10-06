@@ -2,10 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultTemplate } from "@/domain/defaults";
-import { buildTemplateDraftPrompt } from "@/domain/import/prompts";
-import { normalizeTemplateDraft, normalizeTone, parseTemplateText } from "@/domain/import/template-from-text";
+import { normalizeTone, parseTemplateText } from "@/domain/import/template-from-text";
 import { LIMITS, PromptTemplateSchema } from "@/domain/schemas";
-import { totalSlides } from "@/domain/slides";
+import { templateTimings, totalSlides } from "@/domain/slides";
 
 /**
  * Prompts Markdown structurés (cas réel : « Générer un deck d'oral dans Canva »,
@@ -133,124 +132,29 @@ describe("parseTemplateText — titres numérotés « ## 1. … »", () => {
   });
 });
 
-describe("bornes des sections : jamais de coupe silencieuse", () => {
-  it("devrait accepter jusqu'à 30 sections", () => {
+describe("bornes des lignes de la trame : jamais de coupe silencieuse", () => {
+  it("devrait accepter jusqu'à 30 lignes", () => {
     const many = Array.from({ length: 30 }, (_, i) => `${i + 1}. Partie ${i + 1}`).join("\n");
     const r = parse(many);
     expect(r.template.sections).toHaveLength(LIMITS.maxSections);
-    expect(r.warnings.filter((w) => /section/.test(w))).toEqual([]);
+    expect(r.warnings.filter((w) => /ligne/.test(w))).toEqual([]);
   });
 
-  it("au-delà, devrait garder la fin du plan (conclusion) et lister les sections coupées", () => {
+  it("au-delà, devrait garder la fin du plan (conclusion) et lister les lignes coupées", () => {
     const many = [...Array.from({ length: 33 }, (_, i) => `${i + 1}. Partie ${i + 1}`), "34. Conclusion", "35. Ouverture"].join("\n");
     const r = parse(many);
     const titles = r.template.sections.map((s) => s.title);
     expect(titles).toHaveLength(30);
     expect(titles.slice(-2)).toEqual(["Conclusion", "Ouverture"]);
-    const warning = r.warnings.find((w) => /30 sections/.test(w));
+    const warning = r.warnings.find((w) => /La trame compte au plus 30 lignes/.test(w));
     expect(warning).toBeDefined();
     expect(warning).toMatch(/Partie 33/);
   });
 
-  it("devrait signaler une section ramenée à 8 diapos", () => {
+  it("devrait signaler une ligne ramenée à 8 diapos", () => {
     const r = parse("1. Intro\n2. Développement (12 diapos)\n3. Conclusion");
     expect(r.template.sections[1]!.slides).toBe(8);
-    expect(r.warnings.some((w) => /Développement/.test(w) && /8/.test(w))).toBe(true);
-  });
-});
-
-describe("normalizeTemplateDraft — réponse IA (cas Ollama réel)", () => {
-  // Réponse brute observée de qwen2.5:14b sur le prompt réel (17 sections, durée recopiée, ton en anglais).
-  const raw = {
-    durationMinutes: 20,
-    format: "16:9",
-    language: "fr",
-    tone: "Formal",
-    sections: [
-      ["Couverture", 1], ["Présentation", 1], ["Sommaire", 1], ["Chiffre d'accroche", 1], ["Définitions", 1],
-      ["Frise historique", 1], ["Problématique", 1], ["Intercalaire Partie I", 1], ["État des lieux", 4],
-      ["Intercalaire Partie II", 1], ["Déplacement", 5], ["Intercalaire Partie III", 1], ["Enjeux", 1],
-      ["Fronts", 8], ["Réponses", 1], ["Conclusion", 1], ["Ouverture", 1],
-    ].map(([title, slides]) => ({ title: String(title), slides: Number(slides), guidance: "" })),
-  };
-
-  it("devrait garder Conclusion et Ouverture et retirer la Couverture", () => {
-    const r = normalizeTemplateDraft(raw, base, canva);
-    const titles = r.template.sections.map((s) => s.title);
-    expect(titles.slice(-2)).toEqual(["Conclusion", "Ouverture"]);
-    expect(titles).not.toContain("Couverture");
-    expect(totalSlides(r.template)).toBe(31);
-    expect(r.warnings.some((w) => /Couverture/.test(w))).toBe(true);
-  });
-
-  it("ne devrait pas annoncer reconnue une durée que le texte ne fixe pas", () => {
-    const r = normalizeTemplateDraft(raw, base, canva);
-    expect(r.recognized).not.toContain("durationMinutes");
-    expect(r.found.some((f) => f.startsWith("Durée"))).toBe(false);
-    expect(r.template.durationMinutes).toBe(base.durationMinutes);
-    expect(r.warnings.some((w) => /durée/i.test(w))).toBe(true);
-  });
-
-  it("devrait garder une durée que le texte fixe", () => {
-    const r = normalizeTemplateDraft({ durationMinutes: 15 }, base, "Oral de 15 minutes.");
-    expect(r.recognized).toContain("durationMinutes");
-    expect(r.template.durationMinutes).toBe(15);
-  });
-
-  it("devrait ramener un ton anglais en français pour un deck français", () => {
-    const r = normalizeTemplateDraft(raw, base, canva);
-    expect(r.template.tone).toBe("formel");
-  });
-});
-
-describe("normalizeTemplateDraft — le tableau de diapos du texte prime sur la structure de l'IA", () => {
-  const draft = (sections: [string, number, string?][]) => ({
-    format: "16:9",
-    language: "fr",
-    sections: sections.map(([title, slides, guidance]) => ({ title, slides, guidance: guidance ?? "" })),
-  });
-  // 1er essai réel : intercalaires perdus, Présentation à 2 diapos (29 diapos au lieu de 31).
-  const lossy = draft([
-    ["Couverture", 1], ["Présentation", 2], ["Chiffre d'accroche", 1], ["Définitions", 1], ["Frise historique", 1],
-    ["Problématique", 1], ["État des lieux", 4], ["Déplacement", 5], ["Enjeux", 1], ["Fronts", 8], ["Réponses", 1],
-    ["Conclusion", 1], ["Ouverture", 1],
-  ]);
-  // 2e essai réel : 16 sections, mais titres reformulés.
-  const faithful = draft([
-    ["Présentation", 1], ["Sommaire", 1], ["Chiffre d'accroche", 1], ["Définitions", 1], ["Frise historique", 1],
-    ["Problématique", 1], ["Intercalaire Partie I", 1], ["État des lieux", 4], ["Intercalaire Partie II", 1, "Titre de la partie II et ses diapos"],
-    ["Déplacement", 5], ["Intercalaire Partie III", 1], ["Enjeux", 1], ["Fronts", 8], ["Réponses", 1], ["Conclusion", 1], ["Ouverture", 1],
-  ]);
-  const structure = (r: ReturnType<typeof normalizeTemplateDraft>) => r.template.sections.map(({ id, title, slides }) => ({ id, title, slides }));
-
-  it("devrait reprendre les 16 sections et 31 diapos du tableau, intercalaires compris, quand l'IA en perd", () => {
-    const r = normalizeTemplateDraft(lossy, base, canva);
-    expect(r.template.sections).toHaveLength(16);
-    expect(totalSlides(r.template)).toBe(31);
-    expect(r.template.sections.map((s) => s.title)).toEqual(expect.arrayContaining(["Intercalaire Partie I", "Intercalaire Partie II", "Intercalaire Partie III"]));
-  });
-
-  it("devrait avertir que la structure proposée par l'IA divergeait du tableau", () => {
-    const r = normalizeTemplateDraft(lossy, base, canva);
-    expect(r.warnings.some((w) => /L'IA proposait 12 sections \/ 28 diapos/.test(w) && /tableau/.test(w) && /16 sections \/ 31 diapos/.test(w))).toBe(true);
-  });
-
-  it("devrait produire la même structure quelle que soit la réponse de l'IA (reproductible)", () => {
-    expect(structure(normalizeTemplateDraft(lossy, base, canva))).toEqual(structure(normalizeTemplateDraft(faithful, base, canva)));
-    expect(structure(normalizeTemplateDraft(lossy, base, canva))).toEqual(structure(parseTemplateText(canva, base)));
-  });
-
-  it("devrait compléter par l'IA la consigne d'une section que le tableau laisse vide", () => {
-    const r = normalizeTemplateDraft(faithful, base, canva);
-    expect(r.template.sections.find((s) => s.title === "Intercalaire Partie II")?.guidance).toBe("Titre de la partie II et ses diapos");
-    // Une consigne présente dans le tableau n'est pas remplacée.
-    expect(r.template.sections.find((s) => s.title === "Problématique")?.guidance).toMatch(/La question, seule au centre/);
-  });
-
-  it("devrait garder la structure de l'IA quand le texte n'a pas de tableau de diapos", () => {
-    const r = normalizeTemplateDraft(lossy, base, "Oral de 20 minutes en 16:9, ton formel.");
-    expect(r.template.sections.map((s) => s.title)).toContain("Définitions");
-    expect(r.warnings.some((w) => /L'IA proposait/.test(w))).toBe(false);
+    expect(r.warnings.some((w) => /Développement/.test(w) && /8/.test(w) && /maximum par ligne/.test(w))).toBe(true);
   });
 });
 
@@ -270,17 +174,127 @@ describe("normalizeTone", () => {
   });
 });
 
-describe("buildTemplateDraftPrompt — consignes au modèle", () => {
-  it("ne devrait pas souffler la durée ni le format du gabarit actuel (le modèle les recopiait)", () => {
-    const p = buildTemplateDraftPrompt("Oral sans durée", { ...base, durationMinutes: 20 });
-    expect(p.user).not.toMatch(/20 min|16:9/);
+describe("parseTemplateText — colonne Durée du tableau de diapos", () => {
+  /** Le tableau de la maquette 1.1.0 (couverture comprise), avec une ligne de Conclusion paramétrable. */
+  function trame({ lead = "", conclusion = "3:00", stateOfPlay = "4:00", cover = "0:30" } = {}) {
+    return [
+      lead,
+      "| Diapo | Titre | Contenu type | Durée |",
+      "|-------|-------|--------------|-------|",
+      `| 1 | Titre | La problématique tirée, mon nom, la date | ${cover} |`,
+      "| 2-3 | Contexte | Pourquoi la question se pose : enjeu, deux chiffres clés sourcés | 3:00 |",
+      `| 4-5 | État des lieux | Acteurs, contraintes, risques ; un schéma si possible | ${stateOfPlay} |`,
+      "| 6-8 | Pistes | Deux ou trois solutions, avec avantages et limites | 6:00 |",
+      "| 9 | Recommandation | La piste retenue, sa mise en œuvre et son coût | 3:30 |",
+      `| 10 | Conclusion | Réponse directe à la problématique, puis une ouverture | ${conclusion} |`,
+    ].join("\n");
+  }
+
+  it("devrait lire durées, plages et contenu type, et déduire la durée de l'oral de leur somme", () => {
+    const r = parse(trame());
+    expect(r.template.sections.map((s) => [s.title, s.slides, s.seconds])).toEqual([
+      ["Contexte", 2, 180],
+      ["État des lieux", 2, 240],
+      ["Pistes", 3, 360],
+      ["Recommandation", 1, 210],
+      ["Conclusion", 1, 180],
+    ]);
+    expect(r.template.sections[0]!.guidance).toBe("Pourquoi la question se pose : enjeu, deux chiffres clés sourcés");
+    expect(r.template.durationMinutes).toBe(20);
+    expect(r.recognized).toEqual(expect.arrayContaining(["durationMinutes", "sections"]));
+    expect(r.found).toEqual(expect.arrayContaining(["Durée : 20 min (somme des diapos)", "5 lignes", "Durées des diapos"]));
+    expect(r.warnings.some((w) => /Durée non précisée/.test(w))).toBe(false);
+    // Le minutage de la trame retombe sur les durées du tableau : 0:30 de couverture, puis 3:00, 4:00…
+    expect(templateTimings(r.template).sections.map((s) => [s.start, s.end])).toEqual([
+      [30, 210],
+      [210, 450],
+      [450, 810],
+      [810, 1020],
+      [1020, 1200],
+    ]);
   });
 
-  it("devrait annoncer la borne de sections, écarter la couverture et imposer la fin du plan", () => {
-    const p = buildTemplateDraftPrompt("x", base);
-    expect(p.system).toContain(`At most ${LIMITS.maxSections} sections`);
-    expect(p.system).toMatch(/cover .*never list it as a section/i);
-    expect(p.system).toMatch(/never drop the end of the plan/i);
-    expect(p.system).toMatch(/9-12/);
+  it("ne devrait jamais prendre la colonne Durée pour le contenu type", () => {
+    const r = parse(["| # | Titre | Durée |", "|---|---|---|", "| 1 | Intro | 2:00 |", "| 2 | Conclusion | 1:00 |"].join("\n"));
+    expect(r.template.sections.map((s) => [s.title, s.guidance, s.seconds])).toEqual([
+      ["Intro", "", 120],
+      ["Conclusion", "", 60],
+    ]);
+  });
+
+  it("devrait garder la durée d'oral écrite dans le texte, sans mention de somme", () => {
+    const r = parse(trame({ lead: "Oral de 25 min, 16:9." }));
+    expect(r.template.durationMinutes).toBe(25);
+    expect(r.found).toContain("Durée : 25 min");
+    expect(r.found.some((f) => /somme des diapos/.test(f))).toBe(false);
+    expect(r.template.sections.map((s) => s.seconds)).toEqual([180, 240, 360, 210, 180]);
+  });
+
+  it("devrait signaler une durée illisible et laisser la ligne en calcul automatique", () => {
+    const r = parse(trame({ stateOfPlay: "bientôt" }));
+    const line = r.template.sections.find((s) => s.title === "État des lieux")!;
+    expect(line.seconds).toBeUndefined();
+    expect(r.warnings).toContain("Durée « bientôt » illisible pour « État des lieux » : calculée automatiquement.");
+    expect(r.template.sections.filter((s) => s.seconds !== undefined)).toHaveLength(4);
+    // Toutes les lignes n'ont pas de durée : la durée de l'oral n'est pas déduite (valeur actuelle de la trame).
+    expect(r.recognized).not.toContain("durationMinutes");
+    expect(r.template.durationMinutes).toBe(base.durationMinutes);
+  });
+
+  it("devrait signaler une durée hors limites (moins de 10 s) et la calculer automatiquement", () => {
+    const r = parse(trame({ conclusion: "0:05" }));
+    expect(r.template.sections.at(-1)!.seconds).toBeUndefined();
+    expect(r.warnings).toContain("Durée « 0:05 » hors limites pour « Conclusion » (10 s à 90 min) : calculée automatiquement.");
+  });
+
+  it("devrait ignorer toutes les durées si leur total dépasse la durée d'oral écrite dans le texte", () => {
+    const r = parse(trame({ lead: "Oral de 20 min.", conclusion: "4:00" }));
+    expect(r.template.durationMinutes).toBe(20);
+    expect(r.template.sections.every((s) => s.seconds === undefined)).toBe(true);
+    expect(r.warnings).toContain("Durées des diapos ignorées : leur total (21:00) dépasse la durée de l'oral (20 min).");
+    expect(r.found).not.toContain("Durées des diapos");
+  });
+
+  it("devrait ignorer les durées qui ne laissent pas 10 s par diapo aux lignes sans durée", () => {
+    // 20 min : 0:30 de couverture + 19:30 de lignes fixées = 0:00 pour la conclusion, sans durée.
+    const r = parse(trame({ lead: "Oral de 20 min.", stateOfPlay: "7:00", conclusion: "" }));
+    expect(r.template.durationMinutes).toBe(20);
+    expect(r.template.sections.every((s) => s.seconds === undefined)).toBe(true);
+    expect(r.warnings.some((w) => /Durées des diapos ignorées/.test(w))).toBe(true);
+  });
+
+  it("devrait compter la durée de la couverture du tableau dans la durée de l'oral", () => {
+    const r = parse(trame({ cover: "1:00" }));
+    // 19:30 de lignes + 1:00 de couverture = 20:30 → 21 min.
+    expect(r.template.durationMinutes).toBe(21);
+    expect(r.template.sections.map((s) => s.seconds)).toEqual([180, 240, 360, 210, 180]);
+  });
+
+  it("devrait réserver au moins les 30 s de la couverture de l'application, même si le tableau en prévoit moins", () => {
+    const r = parse(trame({ cover: "0:10", conclusion: "3:20" }));
+    // 19:50 de lignes : avec 0:10 de couverture, 20 min ne laisseraient que 19:30 aux lignes (couverture de 30 s).
+    expect(r.template.durationMinutes).toBe(21);
+    expect(r.template.sections.at(-1)!.seconds).toBe(200);
+  });
+
+  it("devrait rester dans les bornes de l'oral (90 min) et alors ignorer des durées qui ne tiennent plus", () => {
+    const r = parse(
+      ["| # | Titre | Durée |", "|---|---|---|", "| 1 | Partie A | 40:00 |", "| 2 | Partie B | 40:00 |", "| 3 | Partie C | 40:00 |"].join("\n"),
+    );
+    expect(r.template.durationMinutes).toBe(90);
+    expect(r.template.sections.every((s) => s.seconds === undefined)).toBe(true);
+    expect(r.warnings.some((w) => /Durées des diapos ignorées/.test(w))).toBe(true);
+  });
+
+  it("devrait retirer les durées de la trame actuelle qui ne tiennent plus dans une durée d'oral plus courte, sans les dire reconnues", () => {
+    const timed = { ...base, sections: base.sections.map((sec) => ({ ...sec, seconds: 60 })) };
+    const r = parseTemplateText("Oral de 5 min.", timed);
+    expect(PromptTemplateSchema.safeParse(r.template).success).toBe(true);
+    expect(r.template.durationMinutes).toBe(5);
+    expect(r.template.sections.map((sec) => sec.title)).toEqual(base.sections.map((sec) => sec.title));
+    expect(r.template.sections.every((sec) => sec.seconds === undefined)).toBe(true);
+    expect(r.recognized).toContain("durationMinutes");
+    expect(r.recognized).not.toContain("sections");
+    expect(r.warnings.some((w) => /Durées des lignes actuelles ignorées/.test(w))).toBe(true);
   });
 });

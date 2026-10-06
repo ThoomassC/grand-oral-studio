@@ -1,20 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Slide } from "@/domain/schemas";
-import { createMockProvider } from "@/server/ai/mock";
 import { db } from "@/server/db/client";
 import { ConflictError, RateLimitedError } from "@/server/errors";
 import { AI_GLOBAL_QUOTA_KEY, consumeAiQuota } from "@/server/rate-limit";
 import * as decks from "@/server/repo/decks";
 import * as programs from "@/server/repo/programs";
-import * as gen from "@/server/services/generation";
 import { createUser, setupTestDatabase } from "@/test/db";
-import { makeConformingDeck } from "@/test/fixtures";
-import { recordingLogger, seedDeck, seedProgram, seedThemes, themeInput } from "./helpers";
+import { seedDeck, seedProgram, seedThemes, themeInput } from "./helpers";
 
 setupTestDatabase();
 
 const CONFLICT_MESSAGE =
-  "Ce diaporama a changé entre-temps (régénération ou autre onglet). Rechargez la page pour voir la dernière version.";
+  "Ce diaporama a changé entre-temps (autre onglet). Rechargez la page pour voir la dernière version.";
 
 const edited: Slide = { layout: "content", sectionId: "part1", title: "Modifiée", subtitle: "", bullets: ["Puce"], notes: "" };
 
@@ -58,44 +55,16 @@ describe("updateDeckSlide — concurrence optimiste", () => {
     const first = await decks.updateDeckSlide(a.id, deckId, 1, edited, updatedAt);
     await expect(decks.updateDeckSlide(a.id, deckId, 2, edited, first.updatedAt)).resolves.toBeDefined();
   });
-
-  it("devrait refuser une édition quand le deck a été régénéré entre-temps", async () => {
-    const { a, themeIds } = await setup();
-    const { deckId } = await decks.upsertSkeleton(a.id, themeIds[0], makeConformingDeck());
-    const { updatedAt } = await decks.getDeck(a.id, deckId);
-    await new Promise((r) => setTimeout(r, 5));
-    await decks.upsertSkeleton(a.id, themeIds[0], { ...makeConformingDeck(), title: "Régénéré" });
-    await expect(decks.updateDeckSlide(a.id, deckId, 1, edited, updatedAt)).rejects.toBeInstanceOf(ConflictError);
-  });
-});
-
-describe("generateAllSkeletons — mode", () => {
-  it("devrait ne traiter que les thèmes sans squelette en mode missing", async () => {
-    const { a, programId, themeIds } = await setup();
-    await seedDeck(programId, themeIds[1], "SKELETON");
-    const before = await db().deck.findFirstOrThrow({ where: { themeId: themeIds[1], kind: "SKELETON" } });
-    const results = await gen.generateAllSkeletons(a.id, programId, { ai: createMockProvider(), log: recordingLogger() }, "missing");
-    expect(results.map((r) => r.themeId).sort()).toEqual([themeIds[0], themeIds[2]].sort());
-    const after = await db().deck.findFirstOrThrow({ where: { themeId: themeIds[1], kind: "SKELETON" } });
-    expect(after.updatedAt).toEqual(before.updatedAt);
-  });
-
-  it("devrait tout régénérer en mode all", async () => {
-    const { a, programId, themeIds } = await setup();
-    await seedDeck(programId, themeIds[1], "SKELETON");
-    const results = await gen.generateAllSkeletons(a.id, programId, { ai: createMockProvider(), log: recordingLogger() }, "all");
-    expect(results).toHaveLength(3);
-  });
 });
 
 describe("compteurs de lecture", () => {
-  it("devrait exposer themeCount et skeletonCount dans listPrograms", async () => {
+  it("devrait exposer themeCount (sujets) dans listPrograms, sans compteur de squelettes", async () => {
     const { a, programId, themeIds } = await setup();
     await seedDeck(programId, themeIds[0], "SKELETON");
-    await seedDeck(programId, themeIds[1], "SKELETON");
     await seedDeck(programId, themeIds[1], "FINAL");
     const [summary] = await programs.listPrograms(a.id);
-    expect(summary).toMatchObject({ id: programId, themeCount: 3, skeletonCount: 2 });
+    expect(summary).toMatchObject({ id: programId, themeCount: 3 });
+    expect(summary).not.toHaveProperty("skeletonCount");
   });
 
   it("devrait exposer finalDeckCount par thème dans getProgram", async () => {

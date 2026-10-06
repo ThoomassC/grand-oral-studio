@@ -11,17 +11,19 @@ import type { ClassificationOutcome } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { classifyProblem, generateFinalDeck } from "@/server/actions/generation";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
+import { pageHref } from "@/components/projects/steps";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { ElapsedTime, useElapsed } from "@/components/ui/ElapsedTime";
 import { FieldError } from "@/components/ui/FieldError";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { Meter } from "@/components/ui/Meter";
+import { NONE, OTHER, parseDraft, restoreDraft, selectedSubject, subjectMode, type Draft } from "./journey";
 
+/** Sujet du projet proposé le jour J (identifiant de code historique : « theme »). */
 export interface DayTheme {
   id: string;
   name: string;
-  hasSkeleton: boolean;
 }
 
 export interface RecentDeck {
@@ -30,47 +32,17 @@ export interface RecentDeck {
   minutesAgo: number;
 }
 
-const OTHER = "__other__";
 /** Horloge lue dans les gestionnaires d'événements uniquement. */
 const clock = () => Date.now();
 const PROBLEM_MAX = 1500;
 const SLOW_AFTER_MS = 3 * 60 * 1000;
 const NETWORK_ERROR = "La connexion a été interrompue. Votre problématique est conservée : relancez la génération.";
-
-/** Ce qui est conservé dans sessionStorage (rechargement, onglet fermé par erreur). */
-interface Draft {
-  problem: string;
-  hintedThemeId: string;
-  stage: "input" | "chosen";
-  result: ClassificationOutcome | null;
-  choice: string;
-  otherThemeId: string;
-}
+const NONE_LABEL = "Sans sujet (problématique et trame seules)";
 
 function readDraft(key: string): Draft | null {
   try {
     const raw = window.sessionStorage.getItem(key);
-    if (!raw) return null;
-    const value: unknown = JSON.parse(raw);
-    if (typeof value !== "object" || value === null) return null;
-    const d = value as Partial<Draft>;
-    if (typeof d.problem !== "string") return null;
-    return {
-      problem: d.problem,
-      hintedThemeId: typeof d.hintedThemeId === "string" ? d.hintedThemeId : "",
-      stage: d.stage === "chosen" ? "chosen" : "input",
-      result:
-        d.result && Array.isArray(d.result.ranked)
-          ? {
-              ...d.result,
-              // Brouillon antérieur au moteur gratuit : reconnaissance par IA, sans repli.
-              source: d.result.source === "free" ? "free" : "ai",
-              fallbackReason: typeof d.result.fallbackReason === "string" ? d.result.fallbackReason : null,
-            }
-          : null,
-      choice: typeof d.choice === "string" ? d.choice : "",
-      otherThemeId: typeof d.otherThemeId === "string" ? d.otherThemeId : "",
-    };
+    return raw ? parseDraft(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -85,9 +57,22 @@ function writeDraft(key: string, draft: Draft | null): void {
   }
 }
 
-function StepTitle({ n, children, id, state }: { n: number; children: React.ReactNode; id: string; state: "current" | "done" | "todo" }) {
+function StepTitle({
+  n,
+  total,
+  children,
+  id,
+  state,
+}: {
+  n: number;
+  total: number;
+  children: React.ReactNode;
+  id: string;
+  state: "current" | "done" | "todo";
+}) {
   return (
-    <h2 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
+    // h3 : les étapes sont des sous-blocs du titre « Jour J » (h2) de la page.
+    <h3 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
       <span
         aria-hidden="true"
         className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
@@ -101,13 +86,24 @@ function StepTitle({ n, children, id, state }: { n: number; children: React.Reac
         {state === "done" ? "✓" : n}
       </span>
       <span>
-        <span className="sr-only">Étape {n} sur 3 : </span>
+        <span className="sr-only">
+          Étape {n} sur {total} :{" "}
+        </span>
         {children}
         {state === "done" ? <span className="sr-only"> (terminée)</span> : null}
       </span>
-    </h2>
+    </h3>
   );
 }
+
+/** Cadre d'une option à cocher : le choix coché se lit à la bordure ET à la case cochée. */
+function optionClass(checked: boolean): string {
+  return `rounded-lg border p-4 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
+    checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border-strong hover:border-text"
+  }`;
+}
+
+const RADIO_CLASS = "h-4 w-4 shrink-0 accent-[var(--opale-primary)]";
 
 interface DayJourneyProps {
   programId: string;
@@ -115,8 +111,9 @@ interface DayJourneyProps {
   recentDeck: RecentDeck | null;
   /**
    * Moteur qui rédigera le deck : libellé prêt à afficher (ex. « Ollama · mistral »)
-   * et `outlineOnly` pour le moteur gratuit (trame à compléter, pas de rédaction) ;
-   * `waitHint` : durée d'attente annoncée, qui dépend du moteur (cf. generationWaitHint).
+   * et `outlineOnly` pour le moteur sans IA (trame remplie avec les notes, texte à
+   * compléter) ; `waitHint` : durée d'attente annoncée, qui dépend du moteur
+   * (cf. generationWaitHint).
    */
   writer: { label: string; outlineOnly: boolean; waitHint: string };
 }
@@ -127,7 +124,8 @@ const noopSubscribe = () => () => {};
 /**
  * Le brouillon vit dans sessionStorage, inconnu du serveur : le rendu serveur
  * et l'hydratation partent d'un état vide, puis, une fois côté client, le
- * parcours est remonté (clé) avec le brouillon restauré comme état initial.
+ * parcours est remonté (clé) avec le brouillon restauré comme état initial
+ * (confronté aux sujets actuels : un sujet supprimé ramène à l'étape 1).
  */
 export function DayJourney(props: DayJourneyProps) {
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
@@ -135,7 +133,14 @@ export function DayJourney(props: DayJourneyProps) {
     <DayJourneyInner
       key={hydrated ? "client" : "server"}
       {...props}
-      initialDraft={hydrated ? readDraft(draftKey(props.programId)) : null}
+      initialDraft={
+        hydrated
+          ? restoreDraft(
+              readDraft(draftKey(props.programId)),
+              props.themes.map((t) => t.id),
+            )
+          : null
+      }
     />
   );
 }
@@ -147,7 +152,6 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     problem: `${baseId}-problem`,
     hint: `${baseId}-hint`,
     other: `${baseId}-other`,
-    direct: `${baseId}-direct`,
     s1: `${baseId}-s1`,
     s2: `${baseId}-s2`,
     s3: `${baseId}-s3`,
@@ -156,6 +160,8 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   };
   const storageKey = draftKey(programId);
   const submittedRef = useRef(false);
+  const mode = subjectMode(themes.length);
+  const totalSteps = mode === "none" ? 2 : 3;
 
   const [problem, setProblem] = useState(initialDraft?.problem ?? "");
   const [hintedThemeId, setHintedThemeId] = useState(initialDraft?.hintedThemeId ?? "");
@@ -171,13 +177,15 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   const [classifying, startClassify] = useTransition();
   const [, startGenerate] = useTransition();
 
-
   const generating = generation.kind === "running";
   const elapsed = useElapsed(generation.kind === "running" ? generation.startedAt : null);
   const themeById = new Map(themes.map((t) => [t.id, t]));
-  const selectedThemeId = choice === OTHER ? otherThemeId : choice;
-  const selectedTheme = selectedThemeId ? themeById.get(selectedThemeId) : undefined;
-  const hintedTheme = hintedThemeId ? themeById.get(hintedThemeId) : undefined;
+  const subjectId = selectedSubject(choice, otherThemeId);
+  const selectedTheme = subjectId ? themeById.get(subjectId) : undefined;
+  const hintedTheme = mode === "many" && hintedThemeId ? themeById.get(hintedThemeId) : undefined;
+  /** Sujet proposé sans reconnaissance : le seul du projet, ou celui indiqué sur l'énoncé. */
+  const directTheme =
+    mode === "single" ? themes[0] : (hintedTheme ?? (choice !== OTHER && choice !== NONE ? themeById.get(choice) : undefined));
   const problemLength = problem.trim().length;
 
   /** Met à jour l'état et le brouillon en une fois (pas d'effet de synchronisation). */
@@ -213,8 +221,9 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     return false;
   }
 
+  /** Reconnaissance du sujet : seulement à partir de deux sujets (le serveur la refuse sans sujet). */
   function classify() {
-    if (classifying || generating) return;
+    if (mode !== "many" || classifying || generating) return;
     setClassifyError(null);
     if (!validateProblem()) return;
     startClassify(async () => {
@@ -241,12 +250,22 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     });
   }
 
-  /** Thème indiqué sur le sujet : on passe directement à la génération. */
-  function continueWithHint() {
-    if (classifying || generating || !hintedTheme) return;
+  /**
+   * Sans reconnaissance : sans sujet (directement au diaporama), avec le seul
+   * sujet du projet, ou avec le sujet indiqué sur l'énoncé.
+   */
+  function continueDirect() {
+    if (classifying || generating) return;
     if (!validateProblem()) return;
-    update({ stage: "chosen", result: null, choice: OTHER, otherThemeId: hintedTheme.id });
-    focusLater([ids.generate]);
+    if (mode === "none") {
+      update({ stage: "chosen", result: null, choice: NONE, otherThemeId: "" });
+      focusLater([ids.generate]);
+      return;
+    }
+    const theme = mode === "single" ? themes[0] : hintedTheme;
+    if (!theme) return;
+    update({ stage: "chosen", result: null, choice: theme.id, otherThemeId: "" });
+    focusLater([ids.s2]);
   }
 
   function editProblem() {
@@ -257,13 +276,13 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   }
 
   function generate() {
-    if (submittedRef.current || !selectedThemeId) return;
+    if (submittedRef.current || subjectId === undefined) return;
     submittedRef.current = true;
     setGeneration({ kind: "running", startedAt: clock() });
     startGenerate(async () => {
       let res: Awaited<ReturnType<typeof generateFinalDeck>>;
       try {
-        res = await generateFinalDeck(programId, selectedThemeId, problem.trim());
+        res = await generateFinalDeck(programId, subjectId, problem.trim());
       } catch {
         submittedRef.current = false;
         setGeneration({ kind: "error", message: NETWORK_ERROR });
@@ -280,21 +299,86 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     });
   }
 
-  if (themes.length === 0) {
-    return (
-      <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
-        <h2 className="font-display text-lg font-semibold">Aucun thème dans ce projet</h2>
-        <p className="mt-1 text-muted">La reconnaissance a besoin des thèmes du projet. Ajoutez-les d&apos;abord.</p>
-        <ButtonLink href={`/projets/${programId}`} className="mt-4">
-          Ajouter des thèmes
-        </ButtonLink>
-      </div>
-    );
+  function pick(next: string) {
+    if (!generating) update({ choice: next });
   }
 
-  const step1State = stage === "chosen" ? "done" : "current";
-  const step2State = stage === "chosen" ? (selectedThemeId ? "done" : "current") : "todo";
-  const step3State = stage === "chosen" && selectedThemeId ? "current" : "todo";
+  const chosen = stage === "chosen";
+  const step1State = chosen ? "done" : "current";
+  const step2State = chosen ? (subjectId !== undefined ? "done" : "current") : "todo";
+  const lastState = chosen && subjectId !== undefined ? "current" : "todo";
+
+  /** Ce que produira la génération, selon le moteur et le sujet retenu. */
+  const outcomeText = selectedTheme ? (
+    <>
+      {writer.outlineOnly
+        ? "Trame du diaporama remplie avec vos notes, texte à compléter, pour le sujet "
+        : "Deck complet avec notes d'orateur pour le sujet "}
+      <strong>{selectedTheme.name}</strong>, à partir de la trame et des notes du sujet.
+    </>
+  ) : subjectId === null ? (
+    writer.outlineOnly ? (
+      "Trame du diaporama, texte à compléter, sans sujet : à partir de la problématique et de la trame."
+    ) : (
+      "Deck complet avec notes d'orateur, sans sujet : à partir de la problématique et de la trame."
+    )
+  ) : null;
+
+  const noneOption = (
+    <label className={`flex cursor-pointer items-center gap-3 ${optionClass(choice === NONE)}`}>
+      <input
+        type="radio"
+        name="theme-choice"
+        value={NONE}
+        checked={choice === NONE}
+        onChange={() => pick(NONE)}
+        aria-disabled={generating || undefined}
+        className={RADIO_CLASS}
+      />
+      <span className="font-semibold">{NONE_LABEL}</span>
+    </label>
+  );
+
+  const otherOption =
+    mode === "many" ? (
+      <div className={optionClass(choice === OTHER)}>
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="radio"
+            name="theme-choice"
+            value={OTHER}
+            checked={choice === OTHER}
+            onChange={() => {
+              if (generating) return;
+              update({ choice: OTHER, otherThemeId: otherThemeId || themes[0]?.id || "" });
+            }}
+            aria-disabled={generating || undefined}
+            className={RADIO_CLASS}
+          />
+          <span className="font-semibold">Un autre sujet du projet</span>
+        </label>
+        {choice === OTHER ? (
+          <div className="mt-3 pl-7">
+            <label htmlFor={ids.other} className="opale-field__label">
+              Sujet
+            </label>
+            <SelectInput
+              id={ids.other}
+              value={otherThemeId}
+              onChange={(e) => {
+                if (!generating) update({ otherThemeId: e.target.value });
+              }}
+            >
+              {themes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </SelectInput>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -312,7 +396,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
 
       {/* Étape 1 */}
       <section aria-labelledby={ids.s1} className="opale-card opale-card--e1 block p-5 sm:p-6">
-        <StepTitle n={1} id={ids.s1} state={step1State}>
+        <StepTitle n={1} total={totalSteps} id={ids.s1} state={step1State}>
           La problématique
         </StepTitle>
         {stage === "input" ? (
@@ -320,8 +404,8 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              if (hintedTheme) continueWithHint();
-              else classify();
+              if (mode === "many" && !hintedTheme) classify();
+              else continueDirect();
             }}
             className="mt-4 flex flex-col gap-4"
           >
@@ -344,23 +428,36 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               </p>
               <FieldError id={`${ids.problem}-err`} message={firstError(fieldErrors, "problem")} />
             </div>
-            <div>
-              <label htmlFor={ids.hint} className="opale-field__label">
-                Thème indiqué sur le sujet <span className="font-normal text-muted">(facultatif)</span>
-              </label>
-              <SelectInput
-                id={ids.hint}
-                value={hintedThemeId}
-                onChange={(e) => update({ hintedThemeId: e.target.value })}
-              >
-                <option value="">Aucun thème indiqué</option>
-                {themes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </SelectInput>
-            </div>
+            {mode === "none" ? (
+              <p className="flex gap-2 rounded-lg border border-border-strong bg-surface p-3 text-sm">
+                <InfoIcon />
+                <span>
+                  Sans sujet : le diaporama part de la problématique et de la trame.{" "}
+                  <Link href={pageHref(programId, "subjects")} className="opale-link">
+                    Ajouter des sujets
+                  </Link>
+                </span>
+              </p>
+            ) : null}
+            {mode === "many" ? (
+              <div>
+                <label htmlFor={ids.hint} className="opale-field__label">
+                  Sujet indiqué sur l&apos;énoncé <span className="font-normal text-muted">(facultatif)</span>
+                </label>
+                <SelectInput
+                  id={ids.hint}
+                  value={hintedThemeId}
+                  onChange={(e) => update({ hintedThemeId: e.target.value })}
+                >
+                  <option value="">Aucun sujet indiqué</option>
+                  {themes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+            ) : null}
             <LiveRegion role="alert">
               {classifyError ? (
                 <Notice tone="error">
@@ -369,10 +466,12 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               ) : null}
             </LiveRegion>
             <div className="flex flex-wrap items-center gap-3">
-              {hintedTheme ? (
+              {mode !== "many" ? (
+                <Button type="submit">Continuer</Button>
+              ) : hintedTheme ? (
                 <>
                   <Button type="submit" aria-disabled={classifying || undefined}>
-                    Continuer avec ce thème
+                    Continuer avec ce sujet
                   </Button>
                   <Button
                     type="button"
@@ -380,12 +479,12 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                     onClick={classify}
                     aria-disabled={classifying || undefined}
                   >
-                    <ButtonLabel idle="Vérifier avec l'IA" busy="Vérification…" isBusy={classifying} />
+                    <ButtonLabel idle="Reconnaître le sujet" busy="Reconnaissance en cours…" isBusy={classifying} />
                   </Button>
                 </>
               ) : (
                 <Button type="submit" aria-disabled={classifying || undefined}>
-                  <ButtonLabel idle="Reconnaître le thème" busy="Reconnaissance en cours…" isBusy={classifying} />
+                  <ButtonLabel idle="Reconnaître le sujet" busy="Reconnaissance en cours…" isBusy={classifying} />
                 </Button>
               )}
               <LiveRegion className="text-sm text-muted">
@@ -410,11 +509,11 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
         )}
       </section>
 
-      {/* Étape 2 */}
-      {stage === "chosen" ? (
+      {/* Étape 2 : le sujet (absente quand le projet n'a pas de sujet) */}
+      {chosen && mode !== "none" ? (
         <section aria-labelledby={ids.s2} className="opale-card opale-card--e1 block p-5 sm:p-6">
-          <StepTitle n={2} id={ids.s2} state={step2State}>
-            Le thème
+          <StepTitle n={2} total={totalSteps} id={ids.s2} state={step2State}>
+            Le sujet
           </StepTitle>
 
           {result ? (
@@ -428,49 +527,43 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 <p className="mt-4 flex gap-2 rounded-lg border border-border-strong bg-surface p-3 text-sm">
                   <InfoIcon />
                   <span>
-                    Reconnaissance sans IA : {result.fallbackReason} Vérifiez le thème proposé.
+                    Reconnaissance sans IA : {result.fallbackReason} Vérifiez le sujet proposé.
                   </span>
                 </p>
               ) : result.source === "free" ? (
                 <p className="mt-3 text-sm text-muted">Reconnaissance sans IA, par mots-clés</p>
               ) : null}
+            </>
+          ) : null}
 
-              <fieldset className="mt-5">
-                <legend className="opale-field__label">Thème retenu pour le diaporama</legend>
-                {result.ranked.length === 0 ? (
-                  <p className="mb-3 text-sm text-muted">
-                    Aucun thème n&apos;a été reconnu avec assez de confiance. Choisissez-le dans la liste.
-                  </p>
-                ) : null}
-                <div className="flex flex-col gap-3">
-                  {result.ranked.map((r) => {
+          <fieldset className="mt-5">
+            <legend className="opale-field__label">Sujet retenu pour le diaporama</legend>
+            {result && result.ranked.length === 0 ? (
+              <p className="mb-3 text-sm text-muted">
+                Aucun sujet n&apos;a été reconnu avec assez de confiance. Choisissez-le dans la liste, ou continuez
+                sans sujet.
+              </p>
+            ) : null}
+            <div className="flex flex-col gap-3">
+              {result
+                ? result.ranked.map((r) => {
                     const checked = choice === r.themeId;
-                    const theme = themeById.get(r.themeId);
                     const pct = Math.round(r.confidence * 100);
                     const isHinted = r.themeId === hintedThemeId;
                     const showMeter = !isHinted || r.confidence > 0;
                     const cid = `${baseId}-c-${r.themeId}`;
                     return (
-                      <label
-                        key={r.themeId}
-                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
-                          checked ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border-strong hover:border-text"
-                        }`}
-                      >
+                      <label key={r.themeId} className={`flex cursor-pointer gap-3 transition-colors ${optionClass(checked)}`}>
                         <input
                           type="radio"
                           name="theme-choice"
                           value={r.themeId}
                           checked={checked}
-                          onChange={() => {
-                            if (!generating) update({ choice: r.themeId });
-                          }}
+                          onChange={() => pick(r.themeId)}
                           aria-disabled={generating || undefined}
                           aria-labelledby={`${cid}-name ${showMeter ? `${cid}-pct` : `${cid}-badge`}`}
-                          aria-describedby={[r.rationale ? `${cid}-why` : null, theme && !theme.hasSkeleton ? `${cid}-noskel` : null]
-                            .filter(Boolean)
-                            .join(" ") || undefined}
-                          className="mt-1 h-4 w-4 shrink-0 accent-[var(--opale-primary)]"
+                          aria-describedby={r.rationale ? `${cid}-why` : undefined}
+                          className={`mt-1 ${RADIO_CLASS}`}
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -482,7 +575,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                                 id={`${cid}-badge`}
                                 className="rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40"
                               >
-                                Indiqué sur votre sujet
+                                Indiqué sur l&apos;énoncé
                               </span>
                             ) : null}
                             {showMeter ? (
@@ -501,120 +594,66 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                               {r.rationale}
                             </span>
                           ) : null}
-                          {theme && !theme.hasSkeleton ? (
-                            <span id={`${cid}-noskel`} className="mt-2 block text-sm font-medium text-warning">
-                              Pas de squelette pour ce thème : la génération partira de zéro.
-                            </span>
-                          ) : null}
                         </span>
                       </label>
                     );
-                  })}
-
-                  <div
-                    className={`rounded-lg border p-4 ${choice === OTHER ? "border-accent bg-accent-soft ring-1 ring-accent" : "border-border-strong"}`}
-                  >
-                    <label className="flex cursor-pointer items-center gap-3">
+                  })
+                : directTheme ? (
+                    <label className={`flex cursor-pointer flex-wrap items-center gap-3 ${optionClass(choice === directTheme.id)}`}>
                       <input
                         type="radio"
                         name="theme-choice"
-                        value={OTHER}
-                        checked={choice === OTHER}
-                        onChange={() => {
-                          if (generating) return;
-                          update({ choice: OTHER, otherThemeId: otherThemeId || themes[0]?.id || "" });
-                        }}
+                        value={directTheme.id}
+                        checked={choice === directTheme.id}
+                        onChange={() => pick(directTheme.id)}
                         aria-disabled={generating || undefined}
-                        className="h-4 w-4 shrink-0 accent-[var(--opale-primary)]"
+                        className={RADIO_CLASS}
                       />
-                      <span className="font-semibold">Un autre thème du projet</span>
+                      <span className="font-semibold">{directTheme.name}</span>
+                      {directTheme.id === hintedThemeId ? (
+                        <span className="rounded-full bg-surface px-2 py-0.5 text-sm font-semibold text-accent-strong ring-1 ring-accent/40">
+                          Indiqué sur l&apos;énoncé
+                        </span>
+                      ) : mode === "single" ? (
+                        <span className="text-sm text-muted">Le seul sujet du projet</span>
+                      ) : null}
                     </label>
-                    {choice === OTHER ? (
-                      <div className="mt-3 pl-7">
-                        <label htmlFor={ids.other} className="opale-field__label">
-                          Thème
-                        </label>
-                        <SelectInput
-                          id={ids.other}
-                          value={otherThemeId}
-                          onChange={(e) => {
-                            if (!generating) update({ otherThemeId: e.target.value });
-                          }}
-                        >
-                          {themes.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                              {t.hasSkeleton ? "" : " (sans squelette)"}
-                            </option>
-                          ))}
-                        </SelectInput>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </fieldset>
-            </>
-          ) : (
-            <div className="mt-4 flex flex-col gap-3">
-              <div>
-                <label htmlFor={ids.direct} className="opale-field__label">
-                  Thème indiqué sur votre sujet
-                </label>
-                <SelectInput
-                  id={ids.direct}
-                  value={otherThemeId}
-                  onChange={(e) => {
-                    if (!generating) update({ otherThemeId: e.target.value, choice: OTHER });
-                  }}
-                >
-                  {themes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.hasSkeleton ? "" : " (sans squelette)"}
-                    </option>
-                  ))}
-                </SelectInput>
-              </div>
-              <div>
-                <Button
-                  type="button"
-                  variant="text" size="small"
-                  onClick={() => {
-                    if (generating) return;
-                    update({ stage: "input" });
-                    window.setTimeout(classify, 0);
-                  }}
-                  aria-disabled={generating || undefined}
-                >
-                  Vérifier avec l&apos;IA
-                </Button>
-              </div>
+                  ) : null}
+              {otherOption}
+              {noneOption}
             </div>
-          )}
+          </fieldset>
+
+          {!result && mode === "many" ? (
+            <div className="mt-3">
+              <Button
+                type="button"
+                variant="text" size="small"
+                onClick={() => {
+                  if (generating) return;
+                  // Retour à l'étape 1 : cette étape et ce bouton (focalisé) disparaissent. Le focus
+                  // passe à la problématique, où la progression et une éventuelle erreur
+                  // s'affichent ; au succès, classify() le porte au titre de l'étape 2.
+                  update({ stage: "input" });
+                  focusLater([ids.problem]);
+                  window.setTimeout(classify, 0);
+                }}
+                aria-disabled={generating || undefined}
+              >
+                Reconnaître le sujet
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      {/* Étape 3 */}
-      {stage === "chosen" ? (
+      {/* Dernière étape : le diaporama */}
+      {chosen ? (
         <section aria-labelledby={ids.s3} className="opale-card opale-card--e1 block p-5 sm:p-6">
-          <StepTitle n={3} id={ids.s3} state={step3State}>
+          <StepTitle n={totalSteps} total={totalSteps} id={ids.s3} state={lastState}>
             Le diaporama
           </StepTitle>
-          {selectedTheme ? (
-            <p className="mt-3">
-              {writer.outlineOnly
-                ? "Trame du diaporama, à compléter, pour le thème "
-                : "Deck complet avec notes d'orateur pour le thème "}
-              <strong>{selectedTheme.name}</strong>
-              {selectedTheme.hasSkeleton ? ", à partir de son squelette." : "."}
-            </p>
-          ) : null}
-          {selectedTheme && !selectedTheme.hasSkeleton ? (
-            <Notice tone="warning" className="mt-2">
-              <strong className="text-warning">Ce thème n&apos;a pas de squelette.</strong> La génération fonctionne
-              quand même, mais sans votre travail de préparation.
-            </Notice>
-          ) : null}
+          {outcomeText ? <p className="mt-3">{outcomeText}</p> : null}
 
           <p className="mt-4 flex flex-wrap items-baseline gap-x-2 text-sm">
             <span>
@@ -622,7 +661,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               <strong>{writer.label}</strong>
             </span>
             <Link href="/configuration-ia" className="opale-link">
-              Changer<span className="sr-only"> le moteur de rédaction</span>
+              Changer<span className="sr-only"> qui rédige le jour J</span>
             </Link>
           </p>
 
@@ -632,7 +671,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               type="button"
               size="large"
               onClick={generate}
-              aria-disabled={generating || !selectedThemeId || undefined}
+              aria-disabled={generating || subjectId === undefined || undefined}
               aria-describedby={generating ? `${ids.s3}-progress` : undefined}
             >
               <ButtonLabel idle="Générer le diaporama" busy="Génération en cours…" isBusy={generating} />
@@ -651,8 +690,9 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 </p>
                 {elapsed > SLOW_AFTER_MS ? (
                   <p className="mt-2 text-sm font-medium">
-                    La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou relancer : votre
-                    problématique est conservée.
+                    La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou recharger la page :
+                    votre problématique est conservée. Si le diaporama se termine entre-temps, il apparaîtra en haut de
+                    cette page et dans Decks : attendez avant de générer à nouveau.
                   </p>
                 ) : null}
               </Notice>
@@ -665,9 +705,10 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               </p>
               {elapsed > SLOW_AFTER_MS ? (
                 // Une Server Action en cours ne s'annule pas : on recharge la page, la saisie est restaurée
-                // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau.
+                // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau du haut
+                // (moins de 15 min) et dans les Decks.
                 <Button type="button" variant="ghost" size="small" onClick={() => window.location.reload()}>
-                  Relancer
+                  Recharger la page
                 </Button>
               ) : null}
             </div>
@@ -679,7 +720,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 <p className="mt-1 text-sm">
                   Votre problématique et votre choix sont conservés : relancez la génération, ou{" "}
                   <Link href="/configuration-ia" className="font-semibold underline underline-offset-2">
-                    changez de moteur dans la Configuration IA
+                    changez qui rédige dans la Configuration IA
                   </Link>
                   .
                 </p>

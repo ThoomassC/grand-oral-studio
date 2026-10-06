@@ -14,18 +14,21 @@ export function makeThemes(): ThemeRef[] {
       name: "Transition énergétique",
       description: "Enjeux de la production et de la consommation d'énergie.",
       keywords: ["énergie", "climat", "renouvelable"],
+      notes: "",
     },
     {
       id: "theme-numerique",
       name: "Société numérique",
       description: "Effets des technologies numériques sur la vie collective.",
       keywords: ["données", "réseaux", "algorithmes"],
+      notes: "",
     },
     {
       id: "theme-ville",
       name: "Ville de demain",
       description: "Urbanisme, mobilités et qualité de vie en milieu urbain.",
       keywords: ["mobilité", "logement", "urbanisme"],
+      notes: "",
     },
   ];
 }

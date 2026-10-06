@@ -14,12 +14,11 @@ export interface ProgramSummary {
   id: string;
   name: string;
   description: string;
+  /** Nombre de sujets (les « thèmes » du code). */
   themeCount: number;
-  /** Thèmes disposant d'un squelette. */
-  skeletonCount: number;
   createdAt: Date;
   updatedAt: Date;
-  /** Avancement du parcours en 5 étapes (résumé, sans le détail des étapes). */
+  /** Avancement du parcours en 3 étapes : Apparence, Trame, Jour J (résumé, sans le détail des étapes). */
   progress: ProjectProgressSummary;
 }
 
@@ -29,7 +28,8 @@ export type DeckEngine = "claude" | "ollama" | "free" | "mock";
 export interface DeckView {
   id: string;
   programId: string;
-  themeId: string;
+  /** null : deck final produit sans sujet (jamais pour un squelette, garanti par la base). */
+  themeId: string | null;
   kind: DeckKind;
   problem: string | null;
   /** null : deck antérieur au suivi du moteur. */
@@ -62,27 +62,29 @@ export interface ProgramDetail {
   createdAt: Date;
   updatedAt: Date;
   themes: ThemeWithSkeleton[];
-  /** Parcours en 5 étapes : thèmes, charte, gabarit, squelettes, jour J. */
+  /** Tous les decks finaux du projet, sujet ou non (le compteur par sujet ne voit pas les decks sans sujet). */
+  finalDeckCount: number;
+  /** Parcours du projet en 3 étapes, avec les onglets de la Trame (cf. src/domain/progress.ts). */
   progress: ProjectProgress;
 }
 
 /**
- * Deck accompagné de ce qu'il faut pour l'exporter (charte et gabarit du
+ * Deck accompagné de ce qu'il faut pour l'exporter (apparence et trame du
  * programme). `updatedAt` en ISO : c'est la version à renvoyer à updateDeckSlide.
  */
 export interface DeckWithProgram extends Omit<DeckView, "updatedAt"> {
   updatedAt: string;
-  themeName: string;
+  /** null : deck final sans sujet. */
+  themeName: string | null;
   program: { id: string; name: string; brand: Brand; template: PromptTemplate };
-  /** Deck final : squelette actuel de son thème (relecture, contrôle de recopie) ; null pour un squelette ou sans squelette. */
-  skeletonSpec: DeckSpec | null;
 }
 
 export interface FinalDeckSummary {
   id: string;
   engine: DeckEngine | null;
-  themeId: string;
-  themeName: string;
+  /** null : deck produit sans sujet. */
+  themeId: string | null;
+  themeName: string | null;
   problem: string;
   title: string;
   createdAt: Date;

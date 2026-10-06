@@ -4,12 +4,9 @@ import {
   enforceProblem,
   finalDeckReview,
   findUnsourcedFigures,
-  neutralizeSkeletonProblem,
   pickBetterDeck,
   qualityFeedback,
   qualityWarnings,
-  skeletonStaleness,
-  SKELETON_PROBLEM_PLACEHOLDER,
 } from "@/domain/deck-quality";
 import { checkDeckAgainstTemplate } from "@/domain/deck";
 import { DeckSpecSchema, type DeckSpec, type PromptTemplate, type Slide } from "@/domain/schemas";
@@ -18,12 +15,13 @@ import { GREEN_IT_FINAL, GREEN_IT_PROBLEM, GREEN_IT_SKELETON, GREEN_IT_TEMPLATE 
 
 const PROGRAM = "Green IT v2 — Ollama";
 const THEME = "Green IT";
+const CTX = { template: GREEN_IT_TEMPLATE, problem: GREEN_IT_PROBLEM };
 
 function slide(partial: Pick<Slide, "layout" | "sectionId" | "title"> & Partial<Slide>): Slide {
   return { subtitle: "", bullets: [], notes: "", ...partial };
 }
 
-/** Deck conforme au gabarit Green IT, rédigé pour la problématique (aucune reprise du squelette). */
+/** Deck conforme à la trame Green IT, rédigé pour la problématique (aucune reprise du contenu type). */
 function goodGreenItDeck(): DeckSpec {
   const slides: Slide[] = [
     slide({
@@ -52,22 +50,22 @@ function goodGreenItDeck(): DeckSpec {
   return DeckSpecSchema.parse({ title: "Green IT : réduire ou compenser ?", subtitle: "", slides });
 }
 
-describe("assessFinalDeck — deck réel du passage 2 (copie du squelette)", () => {
-  const quality = assessFinalDeck(GREEN_IT_FINAL, {
-    template: GREEN_IT_TEMPLATE,
-    skeleton: GREEN_IT_SKELETON,
-    problem: GREEN_IT_PROBLEM,
+/** Le contenu type de chaque ligne recopié tel quel en notes et en puces (ce qu'un modèle local fait parfois). */
+function copiedGuidanceDeck(): DeckSpec {
+  const deck = goodGreenItDeck();
+  const guidance = new Map(GREEN_IT_TEMPLATE.sections.map((s) => [s.id, s.guidance]));
+  deck.slides = deck.slides.map((s, i) => {
+    const text = guidance.get(s.sectionId);
+    if (i === 0 || !text || s.sectionId === "conclusion") return s;
+    return { ...s, notes: `[1:00–1:40] ${text}.`, bullets: text.split(/[.:]\s+/).filter(Boolean) };
   });
+  return deck;
+}
 
-  it("devrait mesurer un taux de recopie des notes proche de 100 %", () => {
-    expect(quality.notesCopyRate).toBeGreaterThanOrEqual(0.9);
-  });
+describe("assessFinalDeck — deck réel du passage 2 (structure et conclusion ratées)", () => {
+  const quality = assessFinalDeck(GREEN_IT_FINAL, CTX);
 
-  it("devrait mesurer un taux de recopie des puces élevé (le retrait de « [source à trouver] » ne compte pas comme réécriture)", () => {
-    expect(quality.bulletsCopyRate).toBeGreaterThanOrEqual(0.8);
-  });
-
-  it("devrait lister les sections dont le nombre de diapos diffère du gabarit, avec leur titre", () => {
+  it("devrait lister les sections dont le nombre de diapos diffère de la trame, avec leur titre", () => {
     expect(quality.sectionGaps).toEqual(
       expect.arrayContaining([
         { sectionId: "partie-i-l-etat-des-lieux", title: "Partie I — l'état des lieux", expected: 4, actual: 1 },
@@ -87,106 +85,151 @@ describe("assessFinalDeck — deck réel du passage 2 (copie du squelette)", () 
   });
 });
 
-describe("assessFinalDeck — deck conforme", () => {
-  it("devrait être dans les seuils : structure exacte, rien de recopié, conclusion qui répond", () => {
-    const quality = assessFinalDeck(goodGreenItDeck(), {
-      template: GREEN_IT_TEMPLATE,
-      skeleton: GREEN_IT_SKELETON,
-      problem: GREEN_IT_PROBLEM,
-    });
+describe("assessFinalDeck — recopie du contenu type de la trame", () => {
+  it("devrait être dans les seuils pour un deck rédigé : structure exacte, rien de recopié, conclusion qui répond", () => {
+    const quality = assessFinalDeck(goodGreenItDeck(), CTX);
     expect(quality.sectionGaps).toEqual([]);
+    expect(quality.copiedNotes).toEqual([]);
+    expect(quality.copiedBullets).toEqual([]);
     expect(quality.notesCopyRate).toBe(0);
     expect(quality.bulletsCopyRate).toBe(0);
     expect(quality.problemAddressed).toBe(true);
     expect(quality.ok).toBe(true);
   });
 
-  it("devrait juger hors sujet une conclusion qui ne reprend que les mots déjà présents dans le squelette (génération réelle)", () => {
-    // Conclusion réellement produite par qwen2.5:14b : elle répond à la question inventée du squelette,
-    // pas à « … ou ne fait-il que compenser la croissance des usages ? ».
+  it("devrait compter une note qui recopie le contenu type de SA ligne comme note à réécrire", () => {
     const deck = goodGreenItDeck();
-    deck.slides = deck.slides.map((s) =>
-      s.sectionId === "conclusion"
-        ? {
-            ...s,
-            title: "Conclusion",
-            bullets: ["Réponse à la problématique", "Réduction de l'empreinte carbone", "Maintien des avantages du numérique", "Chiffres de la diapo 4"],
-            notes:
-              "[18:42–19:21] La réponse à la problématique est que le Green IT peut réduire l'empreinte carbone du numérique tout en maintenant ses avantages. Les chiffres de la diapo 4 le confirment.",
-          }
-        : s,
-    );
-    const quality = assessFinalDeck(deck, { template: GREEN_IT_TEMPLATE, skeleton: GREEN_IT_SKELETON, problem: GREEN_IT_PROBLEM });
-    expect(quality.problemAddressed).toBe(false);
+    // Diapo 9 : première diapo de « Partie I — l'état des lieux ».
+    const index = deck.slides.findIndex((s) => s.sectionId === "partie-i-l-etat-des-lieux");
+    deck.slides[index] = {
+      ...deck.slides[index]!,
+      notes: "[4:00–4:40] Le constat mesuré. Se termine par un paradoxe ou une contradiction dans les données.",
+    };
+    const quality = assessFinalDeck(deck, CTX);
+    expect(quality.copiedNotes).toEqual([index + 1]);
+    expect(quality.notesToRewrite).toContain(index + 1);
+  });
+
+  it("ne devrait pas compter le contenu type d'une AUTRE ligne (la référence est la ligne de la diapo)", () => {
+    const deck = goodGreenItDeck();
+    const index = deck.slides.findIndex((s) => s.sectionId === "partie-ii-le-deplacement");
+    deck.slides[index] = {
+      ...deck.slides[index]!,
+      notes: "[6:00–6:40] Le constat mesuré. Se termine par un paradoxe ou une contradiction dans les données.",
+    };
+    expect(assessFinalDeck(deck, CTX).copiedNotes).toEqual([]);
+  });
+
+  it("devrait compter des puces qui recopient le contenu type de la ligne", () => {
+    const deck = goodGreenItDeck();
+    const index = deck.slides.findIndex((s) => s.sectionId === "partie-ii-le-deplacement");
+    deck.slides[index] = {
+      ...deck.slides[index]!,
+      bullets: ["Ce que le phénomène déplace", "La valeur, les compétences, les rôles", "L'entrée dans le métier"],
+    };
+    expect(assessFinalDeck(deck, CTX).copiedBullets).toEqual([index + 1]);
+  });
+
+  it("ne devrait pas compter une note réécrite pour la problématique qui reprend quelques mots du contenu type", () => {
+    const deck = goodGreenItDeck();
+    const index = deck.slides.findIndex((s) => s.sectionId === "partie-i-l-etat-des-lieux");
+    deck.slides[index] = {
+      ...deck.slides[index]!,
+      notes: "[4:00–4:40] Le constat est mesuré : les gains d'efficacité unitaire sont réels, mais le nombre de terminaux et de vidéos explose.",
+    };
+    expect(assessFinalDeck(deck, CTX).copiedNotes).toEqual([]);
+  });
+
+  it("devrait mettre hors seuil un deck qui recopie le contenu type partout", () => {
+    const quality = assessFinalDeck(copiedGuidanceDeck(), CTX);
+    expect(quality.notesToRewriteRate).toBeGreaterThan(0.25);
+    expect(quality.bulletsCopyRate).toBeGreaterThan(0.5);
     expect(quality.ok).toBe(false);
   });
 
   it("devrait compter les notes vides ou réduites à un minutage comme notes à réécrire", () => {
     const deck = goodGreenItDeck();
     deck.slides = deck.slides.map((s, i) => (i >= 2 && i <= 12 ? { ...s, notes: "[1:00–1:40]" } : s));
-    const quality = assessFinalDeck(deck, { template: GREEN_IT_TEMPLATE, skeleton: null, problem: GREEN_IT_PROBLEM });
+    const quality = assessFinalDeck(deck, CTX);
     expect(quality.notesToRewrite).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect(quality.ok).toBe(false);
   });
+});
 
-  it("ne devrait pas compter une note quasi identique mais réécrite pour la problématique", () => {
-    const skeleton = goodGreenItDeck();
+describe("assessFinalDeck — conclusion et problématique", () => {
+  it("devrait juger hors sujet une conclusion qui ne reprend que les mots de la trame", () => {
     const deck = goodGreenItDeck();
-    deck.slides = deck.slides.map((s, i) =>
-      i === 5 ? { ...s, notes: "[3:00–3:40] Ici je confronte les gains d'efficacité unitaire à l'explosion du nombre de terminaux et de vidéos." } : s,
+    deck.slides = deck.slides.map((s) =>
+      s.sectionId === "conclusion"
+        ? {
+            ...s,
+            title: "Conclusion",
+            bullets: ["Réponse frontale à la problématique", "Reprise des chiffres de la diapo 4"],
+            notes: "[18:42–19:21] Voici ma réponse frontale à la problématique, qui reprend les chiffres de la diapo 4 et la question laissée ouverte.",
+          }
+        : s,
     );
-    const quality = assessFinalDeck(deck, { template: GREEN_IT_TEMPLATE, skeleton, problem: GREEN_IT_PROBLEM });
-    expect(quality.notesToRewrite).not.toContain(6);
+    const quality = assessFinalDeck(deck, CTX);
+    expect(quality.problemAddressed).toBe(false);
+    expect(quality.ok).toBe(false);
+  });
+
+  it("devrait accepter une conclusion qui reprend les termes propres de la problématique", () => {
+    expect(assessFinalDeck(goodGreenItDeck(), CTX).problemAddressed).toBe(true);
   });
 });
 
 describe("qualityFeedback", () => {
-  const quality = assessFinalDeck(GREEN_IT_FINAL, {
-    template: GREEN_IT_TEMPLATE,
-    skeleton: GREEN_IT_SKELETON,
-    problem: GREEN_IT_PROBLEM,
-  });
-  const feedback = qualityFeedback(quality, GREEN_IT_TEMPLATE);
-
   it("devrait dire au modèle quelles sections doivent compter combien de diapos", () => {
+    const feedback = qualityFeedback(assessFinalDeck(GREEN_IT_FINAL, CTX), GREEN_IT_TEMPLATE);
     expect(feedback).toContain("« Partie III — les fronts » : 8 diapos (ta réponse en avait 1)");
     expect(feedback).toContain("31 diapos");
+    expect(feedback).toMatch(/trame/);
+    expect(feedback).not.toMatch(/gabarit|squelette/);
   });
 
-  it("devrait demander de réécrire les notes recopiées pour la problématique", () => {
-    expect(feedback).toMatch(/notes d'orateur.*réécri/i);
-    expect(feedback).toMatch(/problématique/);
+  it("devrait demander de réécrire les notes recopiées du contenu type pour la problématique", () => {
+    const feedback = qualityFeedback(assessFinalDeck(copiedGuidanceDeck(), CTX), GREEN_IT_TEMPLATE);
+    expect(feedback).toMatch(/notes d'orateur recopiées du contenu type de la trame/i);
+    expect(feedback).toMatch(/réécri/);
+    expect(feedback).toMatch(/puces recopiées du contenu type/i);
+    expect(feedback).not.toMatch(/squelette/);
   });
 
   it("devrait demander une conclusion qui répond à la problématique", () => {
-    expect(feedback).toMatch(/conclusion/i);
+    expect(qualityFeedback(assessFinalDeck(GREEN_IT_FINAL, CTX), GREEN_IT_TEMPLATE)).toMatch(/conclusion/i);
+  });
+
+  it("devrait le dire en anglais pour une trame anglaise, sans parler de squelette", () => {
+    const template = { ...GREEN_IT_TEMPLATE, language: "en" as const };
+    const feedback = qualityFeedback(assessFinalDeck(copiedGuidanceDeck(), { template, problem: GREEN_IT_PROBLEM }), template);
+    expect(feedback).toMatch(/outline/);
+    expect(feedback).not.toMatch(/skeleton/i);
   });
 });
 
 describe("qualityWarnings", () => {
   it("devrait formuler des avertissements lisibles, sans identifiant technique de section", () => {
-    const quality = assessFinalDeck(GREEN_IT_FINAL, {
-      template: GREEN_IT_TEMPLATE,
-      skeleton: GREEN_IT_SKELETON,
-      problem: GREEN_IT_PROBLEM,
-    });
-    const warnings = qualityWarnings(quality);
-    expect(warnings.some((w) => /recopi/.test(w) && /squelette/.test(w))).toBe(true);
+    const warnings = qualityWarnings(assessFinalDeck(copiedGuidanceDeck(), CTX));
+    expect(warnings.some((w) => /recopiées du contenu type de la trame/.test(w))).toBe(true);
+    expect(warnings.some((w) => /reprises telles quelles du contenu type de la trame/.test(w))).toBe(true);
+    expect(warnings.join(" ")).not.toMatch(/partie-i|le-chiffre-d-accroche|squelette/);
+  });
+
+  it("devrait signaler la conclusion hors problématique", () => {
+    const warnings = qualityWarnings(assessFinalDeck(GREEN_IT_FINAL, CTX));
     expect(warnings.some((w) => /conclusion/i.test(w) && /problématique/.test(w))).toBe(true);
-    expect(warnings.join(" ")).not.toMatch(/partie-i|le-chiffre-d-accroche/);
   });
 
   it("ne devrait rien signaler pour un deck dans les seuils", () => {
-    const quality = assessFinalDeck(goodGreenItDeck(), { template: GREEN_IT_TEMPLATE, skeleton: GREEN_IT_SKELETON, problem: GREEN_IT_PROBLEM });
-    expect(qualityWarnings(quality)).toEqual([]);
+    expect(qualityWarnings(assessFinalDeck(goodGreenItDeck(), CTX))).toEqual([]);
   });
 });
 
 describe("pickBetterDeck", () => {
   it("devrait garder le meilleur des deux résultats", () => {
-    const ctx = { template: GREEN_IT_TEMPLATE, skeleton: GREEN_IT_SKELETON, problem: GREEN_IT_PROBLEM };
-    const bad = { deck: GREEN_IT_FINAL, quality: assessFinalDeck(GREEN_IT_FINAL, ctx) };
-    const good = { deck: goodGreenItDeck(), quality: assessFinalDeck(goodGreenItDeck(), ctx) };
+    const bad = { deck: GREEN_IT_FINAL, quality: assessFinalDeck(GREEN_IT_FINAL, CTX) };
+    const good = { deck: goodGreenItDeck(), quality: assessFinalDeck(goodGreenItDeck(), CTX) };
     expect(pickBetterDeck(bad, good)).toBe(good);
     expect(pickBetterDeck(good, bad)).toBe(good);
   });
@@ -228,7 +271,20 @@ describe("enforceProblem", () => {
     expect(out.slides.find((s) => s.sectionId === "problematique")!.notes).toContain(long);
   });
 
-  it("devrait laisser intact un gabarit sans section problématique (hors couverture)", () => {
+  it("devrait, sans sujet, mettre la problématique en titre de couverture quand le modèle a mis le nom du projet", () => {
+    const out = enforceProblem(GREEN_IT_FINAL, { template: GREEN_IT_TEMPLATE, problem: GREEN_IT_PROBLEM, themeName: null, programName: PROGRAM });
+    expect(out.slides[0]!.title).toBe(GREEN_IT_PROBLEM);
+    expect(out.title).toBe(GREEN_IT_PROBLEM);
+    expect(out.slides[0]!.subtitle).toBe(GREEN_IT_PROBLEM);
+    expect(() => DeckSpecSchema.parse(out)).not.toThrow();
+  });
+
+  it("devrait, sans sujet, garder un titre de couverture propre au deck", () => {
+    const out = enforceProblem(goodGreenItDeck(), { template: GREEN_IT_TEMPLATE, problem: GREEN_IT_PROBLEM, themeName: null, programName: PROGRAM });
+    expect(out.slides[0]!.title).toBe("Green IT : réduire ou compenser ?");
+  });
+
+  it("devrait laisser intacte une trame sans section problématique (hors couverture)", () => {
     const template: PromptTemplate = makeTemplate({
       sections: makeTemplate().sections.filter((s) => s.id !== "problem"),
     });
@@ -237,31 +293,6 @@ describe("enforceProblem", () => {
     const out = enforceProblem(deck, { template, problem: GREEN_IT_PROBLEM, themeName: "Mobilités", programName: "Programme" });
     expect(out.slides.slice(1)).toEqual(deck.slides.slice(1));
     expect(out.slides[0]!.subtitle).toBe(GREEN_IT_PROBLEM);
-  });
-});
-
-describe("neutralizeSkeletonProblem", () => {
-  const names = { themeName: THEME, programName: PROGRAM };
-
-  it("devrait retirer la question inventée de la section problématique du squelette", () => {
-    const out = neutralizeSkeletonProblem(GREEN_IT_SKELETON, GREEN_IT_TEMPLATE, names);
-    const problemSlide = out.slides.find((s) => s.sectionId === "problematique")!;
-    const text = [problemSlide.title, problemSlide.subtitle, ...problemSlide.bullets, problemSlide.notes].join("\n");
-    expect(text).not.toContain("Comment réduire l'empreinte carbone");
-    expect(text).toContain(SKELETON_PROBLEM_PLACEHOLDER);
-    expect(problemSlide.notes.startsWith("[3:45–4:24]")).toBe(true);
-  });
-
-  it("devrait remplacer le nom du projet en titre de couverture par le titre du sujet", () => {
-    const out = neutralizeSkeletonProblem(GREEN_IT_SKELETON, GREEN_IT_TEMPLATE, names);
-    expect(out.slides[0]!.title).toBe(THEME);
-    expect(out.title).toBe(THEME);
-  });
-
-  it("ne devrait pas toucher aux autres sections", () => {
-    const out = neutralizeSkeletonProblem(GREEN_IT_SKELETON, GREEN_IT_TEMPLATE, names);
-    const others = (d: DeckSpec) => d.slides.slice(1).filter((s) => s.sectionId !== "problematique");
-    expect(others(out)).toEqual(others(GREEN_IT_SKELETON));
   });
 });
 
@@ -293,27 +324,6 @@ describe("findUnsourcedFigures", () => {
   });
 });
 
-describe("skeletonStaleness", () => {
-  it("devrait signaler à régénérer un squelette qui ne suit plus le gabarit actuel", () => {
-    expect(skeletonStaleness(GREEN_IT_SKELETON, GREEN_IT_TEMPLATE)).toEqual({
-      stale: true,
-      reason: "Ne suit plus le gabarit actuel : 17 diapos au lieu de 31.",
-    });
-  });
-
-  it("devrait signaler un squelette au bon total mais aux sections différentes", () => {
-    const deck = makeConformingDeck();
-    deck.slides[2] = { ...deck.slides[2]!, sectionId: "autre" };
-    const result = skeletonStaleness(deck, makeTemplate());
-    expect(result.stale).toBe(true);
-    expect(result.reason).toMatch(/sections/);
-  });
-
-  it("devrait considérer à jour un squelette conforme", () => {
-    expect(skeletonStaleness(makeConformingDeck(), makeTemplate())).toEqual({ stale: false, reason: null });
-  });
-});
-
 describe("checkDeckAgainstTemplate — libellés", () => {
   it("devrait citer le titre de la section, pas son identifiant", () => {
     const warnings = checkDeckAgainstTemplate(GREEN_IT_FINAL, GREEN_IT_TEMPLATE);
@@ -323,17 +333,19 @@ describe("checkDeckAgainstTemplate — libellés", () => {
 });
 
 describe("finalDeckReview — avertissements affichés à la relecture du deck final", () => {
-  it("devrait signaler, en clair, les sections incomplètes, la recopie, la conclusion et les chiffres sans source", () => {
-    const warnings = finalDeckReview(GREEN_IT_FINAL, { template: GREEN_IT_TEMPLATE, skeleton: GREEN_IT_SKELETON, problem: GREEN_IT_PROBLEM });
+  it("devrait signaler, en clair, les sections incomplètes, la conclusion et les chiffres sans source", () => {
+    const warnings = finalDeckReview(GREEN_IT_FINAL, CTX);
     expect(warnings).toContain("La section « Partie III — les fronts » compte 1 diapo(s) au lieu de 8.");
-    expect(warnings.some((w) => /recopiées du squelette/.test(w))).toBe(true);
     expect(warnings.some((w) => /conclusion/i.test(w))).toBe(true);
     expect(warnings.some((w) => /Chiffre sans source/.test(w) && w.includes("« Le chiffre d'accroche »"))).toBe(true);
     expect(warnings.join(" ")).not.toMatch(/partie-iii-les-fronts/);
   });
 
+  it("devrait signaler la recopie du contenu type de la trame", () => {
+    expect(finalDeckReview(copiedGuidanceDeck(), CTX).some((w) => /recopiées du contenu type de la trame/.test(w))).toBe(true);
+  });
+
   it("ne devrait rien signaler pour un deck conforme", () => {
-    expect(finalDeckReview(goodGreenItDeck(), { template: GREEN_IT_TEMPLATE, skeleton: GREEN_IT_SKELETON, problem: GREEN_IT_PROBLEM })).toEqual([]);
+    expect(finalDeckReview(goodGreenItDeck(), CTX)).toEqual([]);
   });
 });
-

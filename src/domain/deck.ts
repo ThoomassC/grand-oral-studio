@@ -1,16 +1,17 @@
-import { LIMITS, type DeckSpec, type PromptTemplate, type Slide } from "./schemas";
+import type { DeckSpec, PromptTemplate, Slide } from "./schemas";
 
 /** Identifiant réservé de la diapo de couverture. */
 export const COVER_SECTION_ID = "cover";
 
 /**
- * Vérifie qu'un deck respecte le gabarit. Renvoie la liste des écarts (vide si
- * conforme), un message par problème, en citant le TITRE de la section concernée
- * (lisible par l'utilisateur ; l'id n'apparaît que pour une section inconnue du gabarit) :
+ * Vérifie qu'un deck respecte la trame. Renvoie la liste des écarts (vide si
+ * conforme), un message par problème, en citant le TITRE de la section (ligne de
+ * trame) concernée (lisible par l'utilisateur ; l'id n'apparaît que pour une
+ * section inconnue de la trame) :
  * - une seule couverture (layout "title"), en tête ;
- * - chaque section du gabarit présente avec exactement `slides` diapos ;
- * - aucune section inconnue du gabarit ;
- * - sections dans l'ordre du gabarit.
+ * - chaque section de la trame présente avec exactement `slides` diapos ;
+ * - aucune section inconnue de la trame ;
+ * - sections dans l'ordre de la trame.
  */
 export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplate): string[] {
   const issues: string[] = [];
@@ -41,10 +42,10 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
     }
   }
   for (const id of counts.keys()) {
-    if (!known.has(id)) issues.push(`La section « ${id} » n'existe pas dans le gabarit.`);
+    if (!known.has(id)) issues.push(`La section « ${id} » n'existe pas dans la trame.`);
   }
 
-  // Ordre : la suite des sections rencontrées doit suivre celle du gabarit.
+  // Ordre : la suite des sections rencontrées doit suivre celle de la trame.
   const order = template.sections.map((s) => s.id);
   const seen = slides.map((s) => s.sectionId).filter((id) => id !== COVER_SECTION_ID && known.has(id));
   const sequence = seen.filter((id, i) => i === 0 || seen[i - 1] !== id);
@@ -52,7 +53,7 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
   for (const id of sequence) {
     const pos = order.indexOf(id);
     if (pos <= cursor) {
-      issues.push(`La section « ${template.sections[pos]?.title ?? id} » n'est pas à sa place dans l'ordre du gabarit.`);
+      issues.push(`La section « ${template.sections[pos]?.title ?? id} » n'est pas à sa place dans l'ordre de la trame.`);
       break;
     }
     cursor = pos;
@@ -85,74 +86,4 @@ function spokenWords(notes: string): number {
 /** Note vide ou réduite à une consigne / un minutage : ce n'est pas un texte à dire. */
 export function isThinNotes(notes: string): boolean {
   return spokenWords(notes) < THIN_NOTES_WORDS;
-}
-
-/** Coupe un texte à `max` caractères, sur une fin de mot, avec une ellipse si coupé. */
-function clampText(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max - 1);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
-}
-
-/** Diapos d'un deck regroupées par section, dans l'ordre (index global conservé). */
-function slidesBySection(slides: readonly Slide[]): Map<string, number[]> {
-  const groups = new Map<string, number[]>();
-  slides.forEach((slide, i) => {
-    const group = groups.get(slide.sectionId);
-    if (group) group.push(i);
-    else groups.set(slide.sectionId, [i]);
-  });
-  return groups;
-}
-
-export type CompletedNotes = {
-  deck: DeckSpec;
-  /** Numéros (1 = couverture) des diapos dont la note a été reprise du squelette. */
-  filled: number[];
-  /** Sections laissées telles quelles car leur nombre de diapos diffère du squelette. */
-  skippedSections: string[];
-};
-
-/**
- * Filet de sécurité du deck final produit par l'IA : une note d'orateur vide ou
- * réduite à une consigne est remplacée par la note rédigée de la diapo de même
- * rang dans la même section du squelette, en gardant le minutage du deck.
- *
- * L'alignement se fait par rang au sein de chaque section : une diapo omise ou
- * ajoutée par l'IA ailleurs ne décale rien. Une section dont le nombre de diapos
- * diffère entre deck et squelette n'est pas complétée (impossible de savoir quelle
- * diapo correspond à quoi) et est signalée dans `skippedSections` quand elle avait
- * des notes trop courtes. La note produite ne dépasse jamais `LIMITS.notes`.
- */
-export function completeThinNotes(deck: DeckSpec, skeleton: DeckSpec | null): CompletedNotes {
-  if (!skeleton) return { deck, filled: [], skippedSections: [] };
-  const skeletonGroups = slidesBySection(skeleton.slides);
-  const deckGroups = slidesBySection(deck.slides);
-  const filled: number[] = [];
-  const skippedSections: string[] = [];
-  const slides = [...deck.slides];
-
-  for (const [sectionId, indexes] of deckGroups) {
-    const thin = indexes.filter((i) => spokenWords(deck.slides[i]!.notes) < THIN_NOTES_WORDS);
-    if (thin.length === 0) continue;
-    const sources = skeletonGroups.get(sectionId) ?? [];
-    if (sources.length !== indexes.length) {
-      skippedSections.push(sectionId);
-      continue;
-    }
-    indexes.forEach((deckIndex, rank) => {
-      const slide = deck.slides[deckIndex]!;
-      const source = skeleton.slides[sources[rank]!]!;
-      if (spokenWords(slide.notes) >= THIN_NOTES_WORDS || spokenWords(source.notes) < THIN_NOTES_WORDS) return;
-      const timing = TIMING.exec(slide.notes)?.[0]?.trim() ?? TIMING.exec(source.notes)?.[0]?.trim() ?? "";
-      const spoken = source.notes.replace(TIMING, "").trim();
-      const notes = clampText(timing ? `${timing} ${spoken}` : spoken, LIMITS.notes);
-      slides[deckIndex] = { ...slide, bullets: [...slide.bullets], notes };
-      filled.push(deckIndex + 1);
-    });
-  }
-
-  filled.sort((a, b) => a - b);
-  return filled.length > 0 ? { deck: { ...deck, slides }, filled, skippedSections } : { deck, filled, skippedSections };
 }

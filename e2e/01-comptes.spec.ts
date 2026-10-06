@@ -188,7 +188,7 @@ test.describe("1. Comptes — connexion", () => {
 });
 
 test.describe("1. Comptes — pages protégées et anciennes URL", () => {
-  for (const path of ["/projets", "/configuration-ia", "/profil", "/projets/abc123/charte"]) {
+  for (const path of ["/projets", "/configuration-ia", "/profil", "/projets/abc123/apparence", "/projets/abc123/trame/sujets"]) {
     test(`devrait rediriger ${path} vers /connexion?next= sans session`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent(path)}`);
@@ -205,6 +205,11 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
     expect(root.headers()["location"]).toBe("/projets");
   });
 
+  test("devrait mener l'ancienne URL /charte à la connexion puis à /apparence sans session", async ({ page }) => {
+    await page.goto("/projets/abc123/charte");
+    await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent("/projets/abc123/apparence")}`);
+  });
+
   test("devrait rediriger l'ancienne page /parametres en 308 vers /configuration-ia", async ({ request }) => {
     const res = await request.get("/parametres?x=1", { maxRedirects: 0 });
     expect(res.status()).toBe(308);
@@ -217,5 +222,28 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
   test("devrait mener /parametres à la connexion puis à /configuration-ia sans session", async ({ page }) => {
     await page.goto("/parametres");
     await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent("/configuration-ia")}`);
+  });
+});
+
+test.describe("1. Comptes — notes de version", () => {
+  test("devrait ouvrir les notes de version sans session depuis le seul onglet de l'en-tête", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Navigation principale" });
+    await expect(nav.getByRole("link")).toHaveText(["Notes de version"]);
+    await nav.getByRole("link", { name: "Notes de version" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
+    await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("heading", { name: "1.1.0", level: 2 })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");
+  });
+
+  test("devrait proposer Projets, Configuration IA puis Notes de version à un compte connecté", async ({ page, account }) => {
+    void account;
+    await page.goto("/projets");
+    const nav = page.getByRole("navigation", { name: "Navigation principale" });
+    await expect(nav.getByRole("link")).toHaveText(["Projets", "Configuration IA", "Notes de version"]);
+    await nav.getByRole("link", { name: "Notes de version" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
+    await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();
   });
 });

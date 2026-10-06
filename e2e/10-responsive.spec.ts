@@ -1,6 +1,7 @@
 import { test, expect, loggedInContext, expectNoHorizontalScroll } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, generateFinalDeck, generateMissingSkeletons, importThemeList, setEngine } from "./support/app";
+import { createProject, importThemeList } from "./support/app";
+import { SUBJECTS, generateDeck, seedLegacySkeleton } from "./support/parcours";
 import type { BrowserContext, Page } from "@playwright/test";
 import { PREFERENCES_STORAGE_KEY, serializePreferences } from "../src/components/preferences/preferences";
 
@@ -17,31 +18,28 @@ const paths: Record<string, string> = {};
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000);
   ({ context, page } = await loggedInContext(browser, "responsive"));
-  await setEngine(page, "claude");
+  // Moteur démo (compte neuf, AI_PROVIDER=mock) ; deux sujets pour afficher l'étape « sujet » du Jour J.
   const id = await createProject(page, "Projet responsive avec un nom assez long pour tester le retour à la ligne");
-  await importThemeList(page, id);
-  await generateMissingSkeletons(page, id);
-  await page.getByRole("link", { name: "Ouvrir le squelette Cybersécurité" }).click();
-  await page.waitForURL(/\/squelettes\/[a-z0-9]+$/);
-  const skeleton = new URL(page.url()).pathname;
-  const deckId = await generateFinalDeck(
+  await importThemeList(page, id, [SUBJECTS.cyber, SUBJECTS.ai].join("\n"));
+  const deckId = await generateDeck(
     page,
     id,
     "Comment protéger les données des entreprises face à la multiplication des attaques par rançongiciel ?",
     "Cybersécurité",
   );
+  const skeletonId = await seedLegacySkeleton(deckId, "Squelette hérité de la 1.0 au titre assez long pour le retour à la ligne");
   Object.assign(paths, {
     Projets: "/projets",
     "Configuration IA": "/configuration-ia",
+    "Notes de version": "/notes-de-version",
     Profil: "/profil",
-    "Étape 1 · Thèmes": `/projets/${id}`,
-    Charte: `/projets/${id}/charte`,
-    Gabarit: `/projets/${id}/gabarit`,
-    Squelettes: `/projets/${id}/squelettes`,
-    Squelette: skeleton,
-    "Jour J": `/projets/${id}/jour-j`,
+    "Étape 1 · Apparence": `/projets/${id}/apparence`,
+    "Étape 2 · Trame": `/projets/${id}/trame`,
+    "Trame · Sujets": `/projets/${id}/trame/sujets`,
+    "Étape 3 · Jour J": `/projets/${id}/jour-j`,
     Decks: `/projets/${id}/decks`,
     Deck: `/projets/${id}/decks/${deckId}`,
+    "Squelette (version 1.0)": `/projets/${id}/decks/${skeletonId}`,
   });
 });
 
@@ -53,15 +51,15 @@ test.afterAll(async () => {
 const PAGES = [
   "Projets",
   "Configuration IA",
+  "Notes de version",
   "Profil",
-  "Étape 1 · Thèmes",
-  "Charte",
-  "Gabarit",
-  "Squelettes",
-  "Squelette",
-  "Jour J",
+  "Étape 1 · Apparence",
+  "Étape 2 · Trame",
+  "Trame · Sujets",
+  "Étape 3 · Jour J",
   "Decks",
   "Deck",
+  "Squelette (version 1.0)",
 ] as const;
 
 for (const width of [375, 320] as const) {
@@ -84,10 +82,10 @@ for (const width of [375, 320] as const) {
         });
       }
 
-      test("pages publiques (accueil, connexion, inscription) : pas de défilement horizontal", async ({ browser }) => {
+      test("pages publiques (accueil, connexion, inscription, notes de version) : pas de défilement horizontal", async ({ browser }) => {
         const anon = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: scheme });
         const p = await anon.newPage();
-        for (const path of ["/", "/connexion", "/inscription"]) {
+        for (const path of ["/", "/connexion", "/inscription", "/notes-de-version"]) {
           await test.step(path, async () => {
             await p.goto(path);
             await expectNoHorizontalScroll(p, true);
@@ -98,6 +96,45 @@ for (const width of [375, 320] as const) {
     });
   }
 }
+
+test.describe("10. Parcours d'un projet à 375 px", () => {
+  test.beforeEach(async () => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.emulateMedia({ colorScheme: "light" });
+  });
+
+  test("devrait montrer l'étape courante dans le fil compact et la barre « Étape suivante » de l'Apparence", async () => {
+    await page.goto(paths["Étape 1 · Apparence"]!);
+    const steps = page.getByRole("main").getByRole("navigation", { name: "Étapes du projet" });
+    await expect(steps.getByRole("link", { name: /^Étape 1 : Apparence/ })).toHaveAttribute("aria-current", "step");
+    await expect(steps.getByRole("link", { name: /^Étape 2 : Trame/ })).toBeAttached();
+    await expect(steps.getByRole("link", { name: /^Étape 3 : Jour J/ })).toBeAttached();
+    const bar = page.getByRole("main").getByRole("navigation", { name: "Étapes précédente et suivante" });
+    await expect(bar.getByRole("link", { name: "Étape suivante : Trame" })).toBeVisible();
+    await expect(bar.getByRole("link", { name: "Passer au Jour J" })).toBeVisible();
+    await expect(bar.getByRole("link", { name: /^Étape précédente/ })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("devrait passer de la Trame aux Sujets (facultatifs) puis au Jour J par la barre du bas", async () => {
+    await page.goto(paths["Étape 2 · Trame"]!);
+    const bar = page.getByRole("main").getByRole("navigation", { name: "Étapes précédente et suivante" });
+    await expect(bar.getByRole("link", { name: "Étape précédente : Apparence" })).toBeVisible();
+    // Les sujets ne sont pas une étape : l'étape suivante de la Trame est le Jour J.
+    await expect(bar.getByRole("link", { name: "Étape suivante : Jour J" })).toBeVisible();
+    await bar.getByRole("link", { name: "Ajouter des sujets (facultatif)" }).click();
+    await page.waitForURL(/\/trame\/sujets$/);
+    await expect(page.getByRole("main").getByRole("heading", { name: "Sujets", level: 2 })).toBeVisible();
+    // Depuis les Sujets, l'étape suivante est déjà le Jour J : pas de raccourci en double.
+    await expect(bar.getByRole("link", { name: "Passer au Jour J" })).toHaveCount(0);
+    await bar.getByRole("link", { name: "Étape suivante : Jour J" }).click();
+    await page.waitForURL(/\/jour-j$/);
+    const steps = page.getByRole("main").getByRole("navigation", { name: "Étapes du projet" });
+    await expect(steps.getByRole("link", { name: /^Étape 3 : Jour J/ })).toHaveAttribute("aria-current", "step");
+    await expect(bar.getByRole("link", { name: "Voir les diaporamas" })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+});
 
 test.describe("10. Thème sombre — lisibilité de base", () => {
   test("devrait appliquer un fond sombre et un texte clair en mode sombre", async () => {

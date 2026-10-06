@@ -67,15 +67,21 @@ export async function saveUserEngine(userId: string, engine: Engine, ollamaModel
   await db().userAiSettings.upsert({ where: { userId }, create: { userId, ...data }, update: data, select: { userId: true } });
 }
 
-/** Chiffre puis enregistre (INSERT … ON CONFLICT DO UPDATE : rejouable, dernier gagnant). */
-export async function saveUserAiKey(
+/**
+ * Chiffre la clé et choisit Claude en UNE écriture (INSERT … ON CONFLICT DO
+ * UPDATE) : rejouable, dernier gagnant, jamais d'état intermédiaire « clé
+ * enregistrée mais Claude non choisi ». Le modèle Ollama enregistré est
+ * conservé (revenir à Ollama retrouve le dernier modèle choisi).
+ */
+export async function activateUserClaudeKey(
   userId: string,
   apiKey: string,
   last4: string,
   box: SecretBox,
 ): Promise<UserAiKeyMeta> {
   const sealed = box.seal(apiKey, userId);
-  const data = { anthropicKeyCiphertext: sealed.ciphertext, anthropicKeyLast4: last4, keyVersion: sealed.keyVersion };
+  const engine: Engine = "claude";
+  const data = { anthropicKeyCiphertext: sealed.ciphertext, anthropicKeyLast4: last4, keyVersion: sealed.keyVersion, engine };
   const row = await db().userAiSettings.upsert({
     where: { userId },
     create: { userId, ...data },
@@ -83,19 +89,27 @@ export async function saveUserAiKey(
     select: { anthropicKeyLast4: true, keyVersion: true, updatedAt: true },
   });
   const meta = keyMeta(row);
-  if (!meta) throw new Error("saveUserAiKey: ligne sans clé après écriture"); // inatteignable (CHECK)
+  if (!meta) throw new Error("activateUserClaudeKey: ligne sans clé après écriture"); // inatteignable (CHECK)
   return meta;
 }
 
 /**
  * Idempotent : supprimer une clé absente n'est pas une erreur. La ligne est
- * conservée (préférence de moteur) ; seules les colonnes de clé sont effacées.
+ * conservée ; les colonnes de clé sont effacées et, si Claude était choisi, le
+ * moteur revient au choix par défaut (NULL : Sans IA sans clé serveur), dans
+ * la même transaction. Un autre moteur choisi (Ollama, Sans IA) est conservé.
+ * Sans clé enregistrée, rien ne change (Claude via la clé serveur reste choisi).
  */
 export async function deleteUserAiKey(userId: string): Promise<boolean> {
-  const { count } = await db().userAiSettings.updateMany({
-    where: { userId, anthropicKeyCiphertext: { not: null } },
-    data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
-  });
+  const client = db();
+  const withKey = { userId, anthropicKeyCiphertext: { not: null } };
+  const [, { count }] = await client.$transaction([
+    client.userAiSettings.updateMany({ where: { ...withKey, engine: "claude" }, data: { engine: null } }),
+    client.userAiSettings.updateMany({
+      where: withKey,
+      data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
+    }),
+  ]);
   return count > 0;
 }
 

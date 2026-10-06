@@ -39,6 +39,25 @@ describe("next.config", () => {
       ]),
     );
   });
+  it("devrait rediriger durablement les anciennes pages d'un projet (charte, gabarit, squelettes) vers les nouvelles", async () => {
+    const redirects = await nextConfig.redirects?.();
+    expect(redirects).toEqual(
+      expect.arrayContaining([
+        { source: "/projets/:id/charte", destination: "/projets/:id/apparence", permanent: true },
+        { source: "/projets/:id/gabarit", destination: "/projets/:id/trame", permanent: true },
+        { source: "/projets/:id/squelettes", destination: "/projets/:id/decks", permanent: true },
+        { source: "/projets/:id/squelettes/:deckId", destination: "/projets/:id/decks/:deckId", permanent: true },
+      ]),
+    );
+  });
+
+  // 307 : la place reste libre pour une future page d'accueil du projet (pas de cache navigateur définitif).
+  it("devrait ouvrir un projet sur son apparence par une redirection temporaire, déclarée en dernier", async () => {
+    const redirects = (await nextConfig.redirects?.()) ?? [];
+    const projects = redirects.filter((r) => r.source.startsWith("/projets/:id"));
+    expect(projects.at(-1)).toEqual({ source: "/projets/:id", destination: "/projets/:id/apparence", permanent: false });
+    expect(projects).toHaveLength(5);
+  });
 });
 
 describe("assertAiProviderEnv (validation au démarrage)", () => {

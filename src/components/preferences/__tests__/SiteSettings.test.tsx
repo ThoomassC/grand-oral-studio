@@ -76,7 +76,7 @@ describe("bouton Réglages de l'en-tête", () => {
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(within(dialog).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
-      "Apparence",
+      "Affichage",
       "Lisibilité",
       "Mouvements",
     ]);

@@ -1,9 +1,9 @@
 "use client";
 
-import { Badge, Button, Dropzone, FileCard } from "@thomascaron/opale-ui";
+import { Button, Dropzone, FileCard } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import type { PromptTemplate } from "@/domain/schemas";
-import { totalSlides } from "@/domain/slides";
+import { formatSeconds, totalSlides } from "@/domain/slides";
 import { analyzeTemplatePrompt } from "@/server/actions/imports";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { IMPORT_ANCHORS } from "@/components/projects/steps";
@@ -28,15 +28,10 @@ type Phase =
 /** Un fichier texte de 20 000 caractères pèse au plus ~80 Ko (UTF-8) : au-delà, inutile de le lire. */
 const TEXT_FILE_MAX_BYTES = 256 * 1024;
 
-const SOURCE_TEXT: Record<TemplateImportData["source"], string> = {
-  ai: "Analysé par l'IA",
-  free: "Analyse sans IA (mots-clés)",
-};
-
 /**
  * « Préremplir avec un prompt » : des consignes (collées ou lues d'un .txt /
- * .md, côté client) → un gabarit proposé (aperçu), appliqué au formulaire ou
- * abandonné. Rien n'est enregistré ici.
+ * .md, côté client), lues sans IA → une trame proposée (aperçu), appliquée au
+ * formulaire ou abandonnée. Rien n'est enregistré ici.
  */
 export function TemplatePromptImport({
   programId,
@@ -153,8 +148,9 @@ export function TemplatePromptImport({
       </h2>
       <p id={ids.hint} className="mt-1 max-w-3xl text-sm text-muted">
         Facultatif. Collez les consignes de votre oral (ou celles de votre établissement) : durée, format, langue,
-        sections, ton et contraintes sont repérés et proposés dans un aperçu, que vous appliquez au formulaire avant
-        d&apos;enregistrer. Analyse par l&apos;IA si votre moteur le permet, sinon par mots-clés (gratuit).
+        lignes de la trame (un tableau « Diapo | Titre | Contenu | Durée » est lu tel quel), ton et contraintes sont
+        repérés et proposés dans un aperçu, que vous appliquez au formulaire avant d&apos;enregistrer. Rien n&apos;est
+        envoyé à une IA.
       </p>
 
       <form noValidate onSubmit={submit} className="mt-4 flex flex-col gap-3">
@@ -172,7 +168,7 @@ export function TemplatePromptImport({
                 setLoaded(null);
                 changeText(e.target.value);
               }}
-              placeholder="Ex. Oral de 20 minutes en 16:9. Sections : 1. Introduction (1 diapo) 2. Problématique (1 diapo)… Ton : professionnel."
+              placeholder="Ex. Oral de 20 minutes en 16:9. Plan : 1. Introduction (1 diapo) 2. Problématique (1 diapo)… Ton : professionnel."
               {...errorProps(fieldErrors, "text", `${ids.text}-err`, ids.count)}
             />
             <p id={ids.count} className={`opale-field__helper num ${tooLong ? "font-semibold text-danger" : ""}`}>
@@ -238,7 +234,7 @@ export function TemplatePromptImport({
   );
 }
 
-/** Valeur non trouvée dans le texte : celle du gabarit actuel. */
+/** Valeur non trouvée dans le texte : celle de la trame actuelle. */
 function DefaultMark({ show }: { show: boolean }) {
   return show ? <span className="ml-2 text-xs text-muted">(par défaut)</span> : null;
 }
@@ -254,7 +250,7 @@ function TemplateImportPreview({
   onApply: () => void;
   onCancel: () => void;
 }) {
-  const { template, recognized, source, fallbackReason } = result;
+  const { template, recognized } = result;
   // Deux avertissements identiques n'apportent rien et donneraient des clés React en double.
   const warnings = [...new Set(result.warnings)];
   const found = [...new Set(result.found)];
@@ -264,26 +260,17 @@ function TemplateImportPreview({
   return (
     <section aria-labelledby={titleId} className="mt-5 border-t border-border pt-5">
       <FocusOnMount targetId={titleId} />
-      <div className="flex flex-wrap items-center gap-3">
-        <h3 id={titleId} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
-          Gabarit proposé
-        </h3>
-        <Badge tone={source === "ai" ? "info" : "neutral"} size="small">
-          {SOURCE_TEXT[source]}
-        </Badge>
-      </div>
-      {fallbackReason ? (
-        <Notice tone="warning" className="mt-3">
-          L&apos;IA n&apos;a pas été utilisée : {fallbackReason} Les réglages ci-dessous viennent de l&apos;analyse par mots-clés.
-        </Notice>
-      ) : null}
+      <h3 id={titleId} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
+        Trame proposée
+      </h3>
 
       {nothing ? (
         <div className="mt-3">
           <p className="font-semibold">Aucun réglage reconnu dans ce texte.</p>
           <p className="mt-1 text-sm text-muted">
-            Précisez par exemple la durée (« 20 minutes »), le format (« 16:9 »), la langue ou la liste des sections
-            avec leur nombre de diapos, puis relancez l&apos;analyse.
+            Précisez par exemple la durée (« 20 minutes »), le format (« 16:9 »), la langue ou la liste des lignes
+            avec leur nombre de diapos (un tableau « Diapo | Titre | Contenu | Durée » convient), puis relancez
+            l&apos;analyse.
           </p>
           <div className="mt-4">
             <Button type="button" variant="text" onClick={onCancel}>
@@ -295,7 +282,7 @@ function TemplateImportPreview({
         <>
           <p className="mt-1 text-sm text-muted">
             Rien n&apos;est encore appliqué ni enregistré. Les valeurs marquées « par défaut » ne figurent pas dans le
-            texte : ce sont celles de votre gabarit actuel.
+            texte : ce sont celles de votre trame actuelle.
           </p>
           {warnings.length > 0 ? (
             <Notice tone="warning" className="mt-3">
@@ -350,14 +337,23 @@ function TemplateImportPreview({
               </dl>
             </div>
             <div>
-              <h4 className="opale-field__label">
-                Sections <span className="font-normal text-muted">({plural(total, "diapo")}, couverture comprise)</span>
+              <h4 id={`${titleId}-lines`} className="opale-field__label">
+                Lignes <span className="font-normal text-muted">({plural(total, "diapo")}, couverture comprise)</span>
                 <DefaultMark show={!isRecognized("sections")} />
               </h4>
-              <ol className="list-decimal space-y-0.5 pl-6 text-sm">
+              <ol aria-labelledby={`${titleId}-lines`} className="list-decimal space-y-0.5 pl-6 text-sm">
                 {template.sections.map((section) => (
                   <li key={section.id}>
-                    {section.title} <span className="text-muted">— {plural(section.slides, "diapo")}</span>
+                    {section.title}{" "}
+                    <span className="text-muted">
+                      — {plural(section.slides, "diapo")}
+                      {section.seconds === undefined ? null : (
+                        <>
+                          {" · "}
+                          <span className="num">{formatSeconds(section.seconds)}</span>
+                        </>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -365,7 +361,7 @@ function TemplateImportPreview({
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Button type="button" onClick={onApply}>
-              Appliquer au gabarit
+              Appliquer à la trame
             </Button>
             <Button type="button" variant="text" onClick={onCancel}>
               Annuler

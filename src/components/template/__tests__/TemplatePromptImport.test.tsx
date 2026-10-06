@@ -44,17 +44,15 @@ afterEach(() => {
   update.mockReset();
 });
 
-describe("Préremplissage du gabarit avec un prompt", () => {
-  it("devrait analyser un texte collé et montrer le gabarit proposé, focus sur l'aperçu", async () => {
+describe("Préremplissage de la trame avec un prompt", () => {
+  it("devrait analyser un texte collé et montrer la trame proposée, focus sur l'aperçu", async () => {
     analyze.mockResolvedValue({
       ok: true,
       data: {
         template: PROPOSED,
-        found: ["Durée : 20 min", "3 sections"],
+        found: ["Durée : 20 min", "3 lignes"],
         recognized: ["durationMinutes", "sections", "tone"],
         warnings: [],
-        source: "ai",
-        fallbackReason: null,
       },
     });
     const user = userEvent.setup();
@@ -64,12 +62,11 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
 
     expect(analyze).toHaveBeenCalledWith("p1", { text: PROMPT });
-    const heading = await screen.findByRole("heading", { name: "Gabarit proposé" });
+    const heading = await screen.findByRole("heading", { name: "Trame proposée" });
     await waitFor(() => expect(heading).toHaveFocus());
-    const preview = screen.getByRole("region", { name: "Gabarit proposé" });
-    expect(within(preview).getByText("Analysé par l'IA")).toBeInTheDocument();
+    const preview = screen.getByRole("region", { name: "Trame proposée" });
     expect(within(preview).getByText("Durée : 20 min")).toBeInTheDocument();
-    expect(within(preview).getByText("3 sections")).toBeInTheDocument();
+    expect(within(preview).getByText("3 lignes")).toBeInTheDocument();
     expect(within(preview).getByText(/Développement/)).toBeInTheDocument();
     expect(within(preview).getByText(/4 diapos/)).toBeInTheDocument();
     expect(within(preview).getByText("professionnel")).toBeInTheDocument();
@@ -80,11 +77,9 @@ describe("Préremplissage du gabarit avec un prompt", () => {
       ok: true,
       data: {
         template: { ...PROPOSED, constraints: "Un chiffre par diapo." },
-        found: ["Format : 16:9", "3 sections", "Contraintes"],
+        found: ["Format : 16:9", "3 lignes", "Contraintes"],
         recognized: ["format", "sections", "constraints"],
-        warnings: ["Durée non précisée dans le texte : la durée actuelle du gabarit (20 min) est conservée — vérifiez-la."],
-        source: "free",
-        fallbackReason: null,
+        warnings: ["Durée non précisée dans le texte : la durée actuelle de la trame (20 min) est conservée — vérifiez-la."],
       },
     });
     const user = userEvent.setup();
@@ -92,7 +87,7 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     await user.click(textarea());
     await user.paste(PROMPT);
     await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
-    const preview = await screen.findByRole("region", { name: "Gabarit proposé" });
+    const preview = await screen.findByRole("region", { name: "Trame proposée" });
 
     const recognized = within(preview).getByRole("list", { name: "Trouvé dans le texte" });
     expect(within(recognized).queryByText(/Durée/)).toBeNull();
@@ -110,11 +105,9 @@ describe("Préremplissage du gabarit avec un prompt", () => {
       ok: true,
       data: {
         template: PROPOSED,
-        found: ["3 sections"],
+        found: ["3 lignes"],
         recognized: ["sections"],
         warnings: [twice, twice, "Autre avertissement."],
-        source: "free",
-        fallbackReason: null,
       },
     });
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -124,7 +117,7 @@ describe("Préremplissage du gabarit avec un prompt", () => {
       await user.click(textarea());
       await user.paste(PROMPT);
       await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
-      const preview = await screen.findByRole("region", { name: "Gabarit proposé" });
+      const preview = await screen.findByRole("region", { name: "Trame proposée" });
       expect(within(preview).getAllByText(twice)).toHaveLength(1);
       expect(within(preview).getByText("Autre avertissement.")).toBeInTheDocument();
       expect(errors.mock.calls.some((args) => String(args[0]).includes("same key"))).toBe(false);
@@ -133,7 +126,7 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     }
   });
 
-  it("devrait appliquer le gabarit à l'éditeur sans enregistrer", async () => {
+  it("devrait appliquer la trame à l'éditeur sans enregistrer", async () => {
     analyze.mockResolvedValue({
       ok: true,
       data: {
@@ -141,8 +134,6 @@ describe("Préremplissage du gabarit avec un prompt", () => {
         found: ["Durée : 25 min"],
         recognized: ["durationMinutes"],
         warnings: [],
-        source: "ai",
-        fallbackReason: null,
       },
     });
     const user = userEvent.setup();
@@ -150,12 +141,12 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     await user.click(textarea());
     await user.paste(PROMPT);
     await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
-    await user.click(await screen.findByRole("button", { name: "Appliquer au gabarit" }));
+    await user.click(await screen.findByRole("button", { name: "Appliquer à la trame" }));
 
     expect(screen.getByLabelText("Durée de l'oral (minutes)")).toHaveValue(25);
-    expect(screen.getByLabelText("Titre de la section 2")).toHaveValue("Développement");
+    expect(screen.getByLabelText("Titre de la ligne 2")).toHaveValue("Développement");
     expect(screen.getByText("Modifications non enregistrées")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Gabarit de présentation" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Diapos de la trame" })).toHaveFocus());
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -194,7 +185,7 @@ describe("Préremplissage du gabarit avec un prompt", () => {
   it("devrait dire qu'aucun réglage n'est reconnu, sans proposer d'appliquer", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: { template: defaultTemplate(), found: [], recognized: [], warnings: [], source: "free", fallbackReason: null },
+      data: { template: defaultTemplate(), found: [], recognized: [], warnings: [] },
     });
     const user = userEvent.setup();
     renderWorkspace();
@@ -202,28 +193,52 @@ describe("Préremplissage du gabarit avec un prompt", () => {
     await user.paste("Bonjour");
     await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
     expect(await screen.findByText("Aucun réglage reconnu dans ce texte.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Appliquer au gabarit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Appliquer à la trame" })).not.toBeInTheDocument();
   });
 
-  it("devrait signaler le repli sans IA et sa raison", async () => {
+  it("devrait annoncer une lecture sans IA, sans badge ni repli", async () => {
     analyze.mockResolvedValue({
       ok: true,
-      data: {
-        template: PROPOSED,
-        found: ["Durée : 20 min"],
-        recognized: ["durationMinutes"],
-        warnings: [],
-        source: "free",
-        fallbackReason: "Le service IA n'a pas répondu.",
-      },
+      data: { template: PROPOSED, found: ["Durée : 20 min"], recognized: ["durationMinutes"], warnings: [] },
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+    const region = screen.getByRole("region", { name: "Préremplir avec un prompt" });
+    expect(region).toHaveTextContent("Rien n'est envoyé à une IA.");
+    await user.click(textarea());
+    await user.paste(PROMPT);
+    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    const preview = await screen.findByRole("region", { name: "Trame proposée" });
+    expect(preview.textContent).not.toMatch(/IA|mots-clés/);
+    expect(region.textContent).not.toMatch(/Analysé par l'IA|moteur|Claude/);
+  });
+
+  it("devrait afficher la durée des lignes qui en ont une", async () => {
+    const timed: PromptTemplate = {
+      ...PROPOSED,
+      sections: [
+        { id: "c", title: "Contexte", guidance: "Enjeu", slides: 2, seconds: 180 },
+        { id: "k", title: "Conclusion", guidance: "", slides: 1 },
+      ],
+    };
+    analyze.mockResolvedValue({
+      ok: true,
+      data: { template: timed, found: ["2 lignes", "Durées des diapos"], recognized: ["sections"], warnings: [] },
     });
     const user = userEvent.setup();
     renderWorkspace();
     await user.click(textarea());
     await user.paste(PROMPT);
     await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
-    const preview = await screen.findByRole("region", { name: "Gabarit proposé" });
-    expect(within(preview).getByText("Analyse sans IA (mots-clés)")).toBeInTheDocument();
-    expect(within(preview).getByText(/Le service IA n'a pas répondu\./)).toBeInTheDocument();
+    const preview = await screen.findByRole("region", { name: "Trame proposée" });
+    const lines = within(preview).getByRole("list", { name: /Lignes/ });
+    const items = within(lines).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Contexte — 2 diapos · 3:00");
+    expect(items[1]).toHaveTextContent("Conclusion — 1 diapo");
+    expect(items[1]).not.toHaveTextContent(":");
+
+    await user.click(within(preview).getByRole("button", { name: "Appliquer à la trame" }));
+    expect(screen.getByLabelText("Durée de la ligne 1")).toHaveValue("3:00");
+    expect(screen.getByLabelText("Durée de la ligne 2")).toHaveValue("");
   });
 });

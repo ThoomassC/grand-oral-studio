@@ -21,10 +21,13 @@ const deps = (ctx: ActionContext): service.AiSettingsDeps => ({
   verifyKey: (apiKey) => verifyAnthropicKey(apiKey),
 });
 
-/** Valide, vérifie auprès d'Anthropic (sans génération), puis enregistre chiffrée. */
-export async function saveAnthropicApiKey(input: SaveApiKeyInput): Promise<ActionResult<{ last4: string }>> {
-  return runAction("saveAnthropicApiKey", async (ctx) => {
-    const result = await service.saveApiKey(ctx.user.id, input, deps(ctx));
+/**
+ * « Vérifier et activer » : valide, vérifie auprès d'Anthropic (sans
+ * génération), enregistre la clé chiffrée et choisit Claude en une écriture.
+ */
+export async function activateClaude(input: SaveApiKeyInput): Promise<ActionResult<{ last4: string }>> {
+  return runAction("activateClaude", async (ctx) => {
+    const result = await service.activateClaudeWithKey(ctx.user.id, input, deps(ctx));
     revalidatePath(SETTINGS_PATH);
     return result;
   });
@@ -49,8 +52,8 @@ export async function testAnthropicApiKey(): Promise<ActionResult<{ source: "use
 }
 
 /**
- * Choisit le moteur de rédaction : "claude" (exige une clé), "ollama" (exige un
- * modèle installé sur le serveur Ollama configuré) ou "free".
+ * Choisit qui rédige le jour J : "claude" (exige une clé), "ollama" (exige un
+ * modèle installé sur le serveur Ollama configuré) ou "free" (Sans IA).
  */
 export async function setAiEngine(input: service.SetEngineInput): Promise<ActionResult<null>> {
   return runAction("setAiEngine", async (ctx) => {

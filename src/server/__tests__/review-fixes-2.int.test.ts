@@ -43,12 +43,11 @@ function failingDeck(error: Error): AiProvider {
 
 describe("S3 — plafond global Ollama", () => {
   it("devrait refuser au-delà du plafond global et restituer la consommation de l'utilisateur", async () => {
-    const { a, themeId } = await setup();
+    const { a, programId, themeId } = await setup();
     await db().usageWindow.create({
       data: { key: AI_LOCAL_GLOBAL_QUOTA_KEY, windowStart: new Date(), count: AI_LOCAL_GLOBAL_QUOTA.limit },
     });
-    const error = await gen
-      .generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "local" })
+    const error = await gen.generateFinalDeck(a.id, { programId, themeId, problem: PROBLEM }, { ai: createMockProvider(), log: recordingLogger(), billing: "local" })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RateLimitedError);
     expect((error as RateLimitedError).scope).toBe("global");
@@ -56,8 +55,8 @@ describe("S3 — plafond global Ollama", () => {
   });
 
   it("devrait compter chaque appel Ollama dans le plafond global", async () => {
-    const { a, themeId } = await setup();
-    await gen.generateSkeleton(a.id, themeId, { ai: createMockProvider(), log: recordingLogger(), billing: "local" });
+    const { a, programId, themeId } = await setup();
+    await gen.generateFinalDeck(a.id, { programId, themeId, problem: PROBLEM }, { ai: createMockProvider(), log: recordingLogger(), billing: "local" });
     expect(await count(AI_LOCAL_GLOBAL_QUOTA_KEY)).toBe(1);
     expect(await count(aiLocalQuotaKey(a.id))).toBe(1);
   });
@@ -71,7 +70,7 @@ describe("S4 — plafond global des vérifications de clé", () => {
     });
     let called = false;
     const error = await settings
-      .saveApiKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ((called = true), { ok: true }) })
+      .activateClaudeWithKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ((called = true), { ok: true }) })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RateLimitedError);
     expect(called).toBe(false);
@@ -104,7 +103,9 @@ describe("B1 — AI_PROVIDER invalide", () => {
 describe("B6 — clé supprimée entre les deux lectures", () => {
   it("devrait appliquer la règle par défaut (gratuit) quand aucune préférence n'est enregistrée", async () => {
     const a = await createUser("a");
-    await settings.saveApiKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
+    // Ligne de la version 1.0 : clé enregistrée sans préférence de moteur.
+    await db().userAiSettings.update({ where: { userId: a.id }, data: { engine: null } });
     const r = await getEngineForUser(a.id, { env: PROD, log: recordingLogger(), loadUserApiKey: async () => null });
     expect(r).toEqual({ engine: "free" });
   });
@@ -126,26 +127,26 @@ describe("B7 — singleFlight par moteur", () => {
 
 describe("B8 — remboursement du quota", () => {
   it("devrait restituer l'unité quand Ollama est injoignable (rien n'a été calculé)", async () => {
-    const { a, themeId } = await setup();
+    const { a, programId, themeId } = await setup();
     const down = new AiUnavailableError("connexion", { refundable: true });
     await expect(
-      gen.generateSkeleton(a.id, themeId, { ai: failingDeck(down), log: recordingLogger(), billing: "local" }),
+      gen.generateFinalDeck(a.id, { programId, themeId, problem: PROBLEM }, { ai: failingDeck(down), log: recordingLogger(), billing: "local" }),
     ).rejects.toBe(down);
     expect(await count(aiLocalQuotaKey(a.id))).toBe(0);
     expect(await count(AI_LOCAL_GLOBAL_QUOTA_KEY)).toBe(0);
   });
 
   it("devrait garder l'unité consommée quand le modèle a travaillé (délai dépassé)", async () => {
-    const { a, themeId } = await setup();
+    const { a, programId, themeId } = await setup();
     const slow = new AiUnavailableError("délai");
-    await expect(gen.generateSkeleton(a.id, themeId, { ai: failingDeck(slow), log: recordingLogger(), billing: "local" })).rejects.toBe(slow);
+    await expect(gen.generateFinalDeck(a.id, { programId, themeId, problem: PROBLEM }, { ai: failingDeck(slow), log: recordingLogger(), billing: "local" })).rejects.toBe(slow);
     expect(await count(aiLocalQuotaKey(a.id))).toBe(1);
   });
 
   it("devrait restituer aussi pour la clé du serveur (quota utilisateur et global)", async () => {
-    const { a, themeId } = await setup();
+    const { a, programId, themeId } = await setup();
     const down = new AiUnavailableError("connexion", { refundable: true });
-    await expect(gen.generateSkeleton(a.id, themeId, { ai: failingDeck(down), log: recordingLogger() })).rejects.toBe(down);
+    await expect(gen.generateFinalDeck(a.id, { programId, themeId, problem: PROBLEM }, { ai: failingDeck(down), log: recordingLogger() })).rejects.toBe(down);
     expect(await count(`ai:${a.id}`)).toBe(0);
     expect(await count("ai:global")).toBe(0);
   });

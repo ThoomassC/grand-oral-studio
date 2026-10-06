@@ -5,7 +5,7 @@ import type { PromptTemplate } from "@/domain/schemas";
 import { TemplateEditor, type TemplateEditorHandle } from "./TemplateEditor";
 import { TemplatePromptImport } from "./TemplatePromptImport";
 
-/** Page Gabarit : le préremplissage par prompt (facultatif) au-dessus de l'éditeur, qu'il remplit sans enregistrer. */
+/** Page Trame : le préremplissage par prompt (facultatif) au-dessus de l'éditeur, qu'il remplit sans enregistrer. */
 export function TemplateWorkspace({ programId, initialTemplate }: { programId: string; initialTemplate: PromptTemplate }) {
   const editorRef = useRef<TemplateEditorHandle>(null);
   return (

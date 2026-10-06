@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThemeInput } from "@/domain/schemas";
-import type { ResolvedEngine } from "@/server/ai";
-import { createMockProvider } from "@/server/ai/mock";
-import type { AiProvider } from "@/server/ai/types";
 import { db } from "@/server/db/client";
 import { NotFoundError } from "@/server/errors";
-import { AI_QUOTA, aiOwnKeyQuotaKey, aiQuotaKey, consumeQuota, importQuotaKey } from "@/server/rate-limit";
+import { aiOwnKeyQuotaKey, aiQuotaKey, importQuotaKey } from "@/server/rate-limit";
 import { updateBrand } from "@/server/repo/programs";
 import { analyzeThemePrompt } from "@/server/services/imports";
 import { MAX_THEMES_PER_PROGRAM } from "@/server/validation";
@@ -14,11 +11,11 @@ import { createUser, setupTestDatabase } from "@/test/db";
 import { recordingLogger, seedProgram, seedThemes, themeInput } from "./helpers";
 
 /**
- * Thèmes et charte depuis un prompt, contre la vraie base de test :
- *  - analyzeThemePrompt (service) : autorisation, quotas, rien d'écrit ;
+ * Sujets et apparence depuis un prompt, contre la vraie base de test :
+ *  - analyzeThemePrompt (service) : autorisation, quota d'import, rien d'écrit,
+ *    aucune IA ;
  *  - importThemeList (Server Action, session simulée) : idempotence par nom,
  *    plafond de 60, autorisation, verrou sous appels concurrents.
- * Aucun réseau : moteurs gratuit et mock uniquement.
  */
 
 const session = vi.hoisted(() => ({ userId: "" }));
@@ -26,7 +23,6 @@ vi.mock("@/server/session", () => ({
   requireUser: async () => ({ id: session.userId, email: `${session.userId}@example.test`, name: "U" }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
-vi.mock("@/server/ai", () => ({ getEngineForUser: async () => ({ engine: "free" }) }));
 
 const { importThemeList } = await import("@/server/actions/imports");
 
@@ -34,10 +30,9 @@ setupTestDatabase();
 
 const TEXT = "Thèmes : 1. Inflation 2. Chômage 3. Croissance. Couleur principale : #1F3A5F. Police des titres : Georgia.";
 
-function deps(engine: ResolvedEngine) {
-  return { log: recordingLogger(), resolveEngine: async () => engine };
+function deps() {
+  return { log: recordingLogger() };
 }
-const mockEngine = (provider: AiProvider = createMockProvider()): ResolvedEngine => ({ engine: "mock", provider, billing: "server" });
 
 async function count(key: string): Promise<number> {
   return (await db().usageWindow.findUnique({ where: { key } }))?.count ?? 0;
@@ -67,63 +62,44 @@ const list = (...n: string[]): ThemeInput[] => n.map((name) => themeInput(name))
 describe("analyzeThemePrompt — autorisation", () => {
   it("B ne peut pas analyser un prompt pour le projet de A (introuvable), sans consommer de quota", async () => {
     const { b, programId } = await setup();
-    await expect(analyzeThemePrompt(b.id, programId, { text: TEXT }, deps({ engine: "free" }))).rejects.toBeInstanceOf(NotFoundError);
-    await expect(analyzeThemePrompt(b.id, programId, { text: TEXT }, deps(mockEngine()))).rejects.toBeInstanceOf(NotFoundError);
+    await expect(analyzeThemePrompt(b.id, programId, { text: TEXT }, deps())).rejects.toBeInstanceOf(NotFoundError);
     expect(await count(importQuotaKey(b.id))).toBe(0);
-    expect(await count(aiQuotaKey(b.id))).toBe(0);
   });
 
   it("un projet inexistant est introuvable", async () => {
     const { a } = await setup();
-    await expect(analyzeThemePrompt(a.id, "inexistant", { text: TEXT }, deps({ engine: "free" }))).rejects.toBeInstanceOf(
+    await expect(analyzeThemePrompt(a.id, "inexistant", { text: TEXT }, deps())).rejects.toBeInstanceOf(
       NotFoundError,
     );
   });
 });
 
-describe("analyzeThemePrompt — aucune écriture, charte actuelle comme base", () => {
-  it("n'écrit ni thème ni charte (gratuit et IA), et complète depuis la charte enregistrée", async () => {
+describe("analyzeThemePrompt — aucune écriture, apparence actuelle comme base", () => {
+  it("n'écrit ni sujet ni apparence, et complète depuis l'apparence enregistrée", async () => {
     const { a, programId } = await setup();
-    const saved = { ...makeBrand(), name: "Charte du lycée", fonts: { heading: "Lato" as const, body: "Roboto" as const } };
+    const saved = { ...makeBrand(), name: "Apparence du lycée", fonts: { heading: "Lato" as const, body: "Roboto" as const } };
     await updateBrand(a.id, programId, saved);
     await seedThemes(programId, list("Existant"));
     const before = await snapshot(programId);
 
-    const free = await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps({ engine: "free" }));
-    const ai = await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps(mockEngine()));
+    const out = await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps());
 
-    expect([free.source, ai.source]).toEqual(["free", "ai"]);
-    for (const out of [free, ai]) {
-      expect(out.themes.map((t) => t.name)).toEqual(["Inflation", "Chômage", "Croissance"]);
-      expect(out.brand?.name).toBe("Charte du lycée");
-      expect(out.brand?.colors.primary).toBe("#1F3A5F");
-      expect(out.brand?.fonts).toEqual({ heading: "Georgia", body: "Roboto" });
-    }
+    expect(out.themes.map((t) => t.name)).toEqual(["Inflation", "Chômage", "Croissance"]);
+    expect(out.brand?.name).toBe("Apparence du lycée");
+    expect(out.brand?.colors.primary).toBe("#1F3A5F");
+    expect(out.brand?.fonts).toEqual({ heading: "Georgia", body: "Roboto" });
     expect(await snapshot(programId)).toEqual(before);
   });
 });
 
 describe("analyzeThemePrompt — quotas", () => {
-  it("gratuit : une unité d'import, aucun quota IA ; IA : une unité de chaque", async () => {
+  it("une unité d'import par analyse, aucun quota IA", async () => {
     const { a, programId } = await setup();
-    await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps({ engine: "free" }));
-    expect(await count(importQuotaKey(a.id))).toBe(1);
-    expect(await count(aiQuotaKey(a.id))).toBe(0);
-    await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps(mockEngine()));
+    await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps());
+    await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps());
     expect(await count(importQuotaKey(a.id))).toBe(2);
-    expect(await count(aiQuotaKey(a.id))).toBe(1);
+    expect(await count(aiQuotaKey(a.id))).toBe(0);
     expect(await count(aiOwnKeyQuotaKey(a.id))).toBe(0);
-  });
-
-  it("quota IA épuisé : repli gratuit avec la raison, sans appel IA", async () => {
-    const { a, programId } = await setup();
-    await consumeQuota(aiQuotaKey(a.id), AI_QUOTA.limit, AI_QUOTA);
-    const draftThemes = vi.fn();
-    const out = await analyzeThemePrompt(a.id, programId, { text: TEXT }, deps(mockEngine({ ...createMockProvider(), draftThemes })));
-    expect(out.source).toBe("free");
-    expect(out.fallbackReason).toMatch(/Trop de générations/);
-    expect(out.themes).toHaveLength(3);
-    expect(draftThemes).not.toHaveBeenCalled();
   });
 });
 
@@ -155,7 +131,7 @@ describe("importThemeList (Server Action)", () => {
   });
 
   it("accepte la sortie d'analyzeThemePrompt telle quelle", async () => {
-    const out = await analyzeThemePrompt(ids.a.id, ids.programId, { text: TEXT }, deps({ engine: "free" }));
+    const out = await analyzeThemePrompt(ids.a.id, ids.programId, { text: TEXT }, deps());
     const result = await importThemeList(ids.programId, { themes: out.themes });
     expect(result).toEqual({ ok: true, data: { created: 3, skipped: 0 } });
   });
@@ -168,7 +144,7 @@ describe("importThemeList (Server Action)", () => {
     const before = await names(ids.programId);
     const result = await importThemeList(ids.programId, { themes: list("Nouveau un", "Nouveau deux") });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatch(/limité à 60 thèmes/);
+    if (!result.ok) expect(result.error).toMatch(/limité à 60 sujets/);
     expect(await names(ids.programId)).toEqual(before);
     // Les thèmes déjà présents ne comptent pas : un seul nouveau passe.
     expect(await importThemeList(ids.programId, { themes: list("Thème 0", "Nouveau un") })).toEqual({

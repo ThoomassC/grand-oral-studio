@@ -1,5 +1,5 @@
 import { checkDeckAgainstTemplate, COVER_SECTION_ID, isThinNotes, NOTES_TIMING } from "./deck";
-import { sectionKind } from "./free/skeleton";
+import { sectionKind } from "./free/outline";
 import { deaccent, extractTerms, normalizeText } from "./free/text";
 import { truncateText } from "./normalize";
 import { LIMITS, type DeckSpec, type PromptTemplate, type Section, type Slide } from "./schemas";
@@ -10,11 +10,10 @@ import { totalSlides } from "./slides";
  * fonctions pures (aucune base, aucun réseau), communes à tous les moteurs IA.
  *
  * - `assessFinalDeck` mesure ce qu'un modèle local rate le plus souvent : le
- *   nombre de diapos par section, la recopie du squelette (notes et puces) et la
- *   réponse à la problématique dans la conclusion.
+ *   nombre de diapos par ligne de trame, la recopie du contenu type de la ligne
+ *   (notes et puces) et la réponse à la problématique dans la conclusion.
  * - `qualityFeedback` dit au modèle, pour UNE nouvelle tentative, ce qui manque.
- * - `enforceProblem` / `neutralizeSkeletonProblem` écrivent la problématique
- *   tirée (deck final) ou retirent celle que le modèle aurait inventée (squelette).
+ * - `enforceProblem` écrit la problématique tirée (couverture, diapo problématique).
  */
 
 type Lang = PromptTemplate["language"];
@@ -23,21 +22,21 @@ type Lang = PromptTemplate["language"];
 export const QUALITY_THRESHOLDS = {
   /** Similarité (Dice sur les racines) à partir de laquelle un texte est une recopie. */
   similarity: 0.8,
-  /** Part maximale de notes recopiées du squelette ou trop courtes (hors couverture). */
+  /** Part maximale de notes recopiées du contenu type ou trop courtes (hors couverture). */
   notesToRewriteRate: 0.25,
-  /** Part maximale de diapos dont les puces sont celles du squelette. */
+  /** Part maximale de diapos dont les puces recopient le contenu type de leur ligne. */
   bulletsCopyRate: 0.5,
   /** Part minimale des mots de la problématique repris par la conclusion. */
   problemCoverage: 0.35,
   /**
-   * Part minimale, dans la conclusion, des mots de la problématique ABSENTS du
-   * squelette : ce sont eux qui distinguent la question tirée d'une question
-   * générique (sinon une conclusion recopiée du squelette passerait).
+   * Part minimale, dans la conclusion, des mots de la problématique ABSENTS de
+   * la trame (titres et contenus types) : ce sont eux qui distinguent la
+   * question tirée d'une conclusion générique qui ne ferait que reprendre la trame.
    */
   distinctiveCoverage: 0.3,
 } as const;
 
-/** En deçà, un texte est trop court pour parler de recopie (consigne, intercalaire). */
+/** En deçà, un texte est trop court pour parler de recopie (contenu type bref, intercalaire). */
 const MIN_COMPARABLE_TERMS = 4;
 
 export interface SectionGap {
@@ -49,13 +48,13 @@ export interface SectionGap {
 
 export interface FinalDeckQuality {
   sectionGaps: SectionGap[];
-  /** Numéros de diapo (1 = couverture) dont la note recopie une note du squelette. */
+  /** Numéros de diapo (1 = couverture) dont la note recopie le contenu type de sa ligne. */
   copiedNotes: number[];
   /** Numéros de diapo dont la note est recopiée ou trop courte : à réécrire. */
   notesToRewrite: number[];
-  /** Numéros de diapo dont les puces sont celles du squelette. */
+  /** Numéros de diapo dont les puces recopient le contenu type de leur ligne. */
   copiedBullets: number[];
-  /** Notes recopiées / diapos hors couverture (0 sans squelette). */
+  /** Notes recopiées / diapos hors couverture. */
   notesCopyRate: number;
   /** Notes recopiées ou trop courtes / diapos hors couverture. */
   notesToRewriteRate: number;
@@ -72,7 +71,6 @@ export interface FinalDeckQuality {
 
 export interface QualityContext {
   template: PromptTemplate;
-  skeleton: DeckSpec | null;
   problem: string;
 }
 
@@ -120,12 +118,12 @@ function plural(n: number, word: string): string {
   return n > 1 ? `${word}s` : word;
 }
 
-/** Section du gabarit qui porte la problématique (la première), ou null. */
+/** Ligne de la trame qui porte la problématique (la première), ou null. */
 export function problemSection(template: PromptTemplate): Section | null {
   return template.sections.find((s) => sectionKind(s) === "problem") ?? null;
 }
 
-/** Sections de conclusion du gabarit ; à défaut, la dernière section. */
+/** Lignes de conclusion de la trame ; à défaut, la dernière ligne. */
 function conclusionSectionIds(template: PromptTemplate): Set<string> {
   const ids = template.sections.filter((s) => sectionKind(s) === "conclusion").map((s) => s.id);
   const last = template.sections[template.sections.length - 1];
@@ -150,28 +148,26 @@ export function assessFinalDeck(deck: DeckSpec, ctx: QualityContext): FinalDeckQ
   const gaps = sectionGaps(deck, ctx.template);
   const body = deck.slides.map((slide, i) => ({ slide, number: i + 1 })).slice(1);
 
-  const skeletonNotes = (ctx.skeleton?.slides ?? []).map((s) => stems(spoken(s.notes))).filter((s) => s.size >= MIN_COMPARABLE_TERMS);
-  const skeletonBullets = (ctx.skeleton?.slides ?? [])
-    .map((s) => stems(contentBullets(s).join(" ")))
-    .filter((s) => s.size >= MIN_COMPARABLE_TERMS - 1);
-  const copies = (text: Set<string>, pool: readonly Set<string>[]) =>
-    pool.some((candidate) => dice(text, candidate) >= QUALITY_THRESHOLDS.similarity);
+  // Référence de chaque diapo : le contenu type de SA ligne (une diapo d'une autre ligne ne compte pas).
+  const guidanceBySection = new Map(ctx.template.sections.map((s) => [s.id, stems(s.guidance)]));
+  const copies = (text: ReadonlySet<string>, reference: ReadonlySet<string> | undefined, minTerms: number) =>
+    reference !== undefined &&
+    text.size >= minTerms &&
+    reference.size >= minTerms &&
+    dice(text, reference) >= QUALITY_THRESHOLDS.similarity;
 
   const copiedNotes: number[] = [];
   const thinNotes: number[] = [];
   const copiedBullets: number[] = [];
   let withBullets = 0;
   for (const { slide, number } of body) {
+    const reference = guidanceBySection.get(slide.sectionId);
     if (isThinNotes(slide.notes)) thinNotes.push(number);
-    else {
-      const terms = stems(spoken(slide.notes));
-      if (terms.size >= MIN_COMPARABLE_TERMS && copies(terms, skeletonNotes)) copiedNotes.push(number);
-    }
+    else if (copies(stems(spoken(slide.notes)), reference, MIN_COMPARABLE_TERMS)) copiedNotes.push(number);
     const bullets = contentBullets(slide);
     if (bullets.length > 0) {
       withBullets += 1;
-      const terms = stems(bullets.join(" "));
-      if (terms.size >= MIN_COMPARABLE_TERMS - 1 && copies(terms, skeletonBullets)) copiedBullets.push(number);
+      if (copies(stems(bullets.join(" ")), reference, MIN_COMPARABLE_TERMS - 1)) copiedBullets.push(number);
     }
   }
   const notesToRewrite = [...new Set([...copiedNotes, ...thinNotes])].sort((a, b) => a - b);
@@ -186,10 +182,8 @@ export function assessFinalDeck(deck: DeckSpec, ctx: QualityContext): FinalDeckQ
   let found = 0;
   for (const t of problemTerms) if (conclusionTerms.has(t)) found += 1;
   const problemCoverage = problemTerms.size === 0 ? 1 : found / problemTerms.size;
-  const skeletonTerms = ctx.skeleton
-    ? stems(ctx.skeleton.slides.map((s) => [s.title, s.subtitle, ...s.bullets, s.notes].join(" ")).join(" "))
-    : new Set<string>();
-  const distinctive = [...problemTerms].filter((t) => !skeletonTerms.has(t));
+  const templateTerms = stems(ctx.template.sections.map((s) => `${s.title} ${s.guidance}`).join(" "));
+  const distinctive = [...problemTerms].filter((t) => !templateTerms.has(t));
   const distinctiveFound = distinctive.filter((t) => conclusionTerms.has(t)).length;
   const problemAddressed =
     problemCoverage >= QUALITY_THRESHOLDS.problemCoverage &&
@@ -253,8 +247,8 @@ export function qualityFeedback(q: FinalDeckQuality, template: PromptTemplate): 
   if (q.sectionGaps.length > 0) {
     lines.push(
       en
-        ? `- Number of slides: follow the template exactly, ${total} slides in all (cover included). Sections to fix:`
-        : `- Nombre de diapos : respecte exactement le gabarit, soit ${total} diapos au total (couverture comprise). Sections à corriger :`,
+        ? `- Number of slides: follow the outline exactly, ${total} slides in all (cover included). Lines to fix:`
+        : `- Nombre de diapos : respecte exactement la trame, soit ${total} diapos au total (couverture comprise). Lignes à corriger :`,
     );
     for (const g of q.sectionGaps) {
       lines.push(
@@ -267,15 +261,15 @@ export function qualityFeedback(q: FinalDeckQuality, template: PromptTemplate): 
   if (q.notesToRewrite.length > 0) {
     lines.push(
       en
-        ? `- Speaker notes copied from the skeleton or too short on slides ${slideList(q.notesToRewrite, 40)}: rewrite them entirely so that they answer the question.`
-        : `- Notes d'orateur recopiées du squelette ou trop courtes sur les diapos ${slideList(q.notesToRewrite, 40)} : réécris-les entièrement pour qu'elles servent la problématique.`,
+        ? `- Speaker notes copied from the outline's content guidance or too short on slides ${slideList(q.notesToRewrite, 40)}: rewrite them entirely so that they answer the question.`
+        : `- Notes d'orateur recopiées du contenu type de la trame ou trop courtes sur les diapos ${slideList(q.notesToRewrite, 40)} : réécris-les entièrement pour qu'elles servent la problématique.`,
     );
   }
   if (q.copiedBullets.length > 0) {
     lines.push(
       en
-        ? `- Bullets copied from the skeleton on slides ${slideList(q.copiedBullets, 40)}: rephrase them to serve the question.`
-        : `- Puces recopiées du squelette sur les diapos ${slideList(q.copiedBullets, 40)} : reformule-les au service de la problématique.`,
+        ? `- Bullets copied from the outline's content guidance on slides ${slideList(q.copiedBullets, 40)}: rephrase them to serve the question.`
+        : `- Puces recopiées du contenu type de la trame sur les diapos ${slideList(q.copiedBullets, 40)} : reformule-les au service de la problématique.`,
     );
   }
   if (!q.problemAddressed) {
@@ -288,20 +282,20 @@ export function qualityFeedback(q: FinalDeckQuality, template: PromptTemplate): 
   return lines.join("\n");
 }
 
-/** Avertissements affichables (le nombre de diapos par section est signalé par `checkDeckAgainstTemplate`). */
+/** Avertissements affichables (le nombre de diapos par ligne est signalé par `checkDeckAgainstTemplate`). */
 export function qualityWarnings(q: FinalDeckQuality): string[] {
   const warnings: string[] = [];
   // Seul l'écart au seuil est signalé : quelques reprises isolées ne justifient pas une alerte.
   if (q.notesToRewriteRate > QUALITY_THRESHOLDS.notesToRewriteRate) {
     const n = q.notesToRewrite.length;
     warnings.push(
-      `Notes d'orateur recopiées du squelette ou trop courtes sur ${n} ${plural(n, "diapo")} (${slideList(q.notesToRewrite)}) : réécrivez-les pour votre problématique.`,
+      `Notes d'orateur recopiées du contenu type de la trame ou trop courtes sur ${n} ${plural(n, "diapo")} (${slideList(q.notesToRewrite)}) : réécrivez-les pour votre problématique.`,
     );
   }
   if (q.bulletsCopyRate > QUALITY_THRESHOLDS.bulletsCopyRate) {
     const n = q.copiedBullets.length;
     warnings.push(
-      `Puces reprises telles quelles du squelette sur ${n} ${plural(n, "diapo")} (${slideList(q.copiedBullets)}) : adaptez-les à votre problématique.`,
+      `Puces reprises telles quelles du contenu type de la trame sur ${n} ${plural(n, "diapo")} (${slideList(q.copiedBullets)}) : adaptez-les à votre problématique.`,
     );
   }
   if (!q.problemAddressed) {
@@ -311,15 +305,12 @@ export function qualityWarnings(q: FinalDeckQuality): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Problématique : injection (deck final) et neutralisation (squelette)
+// Problématique : injection dans le deck final
 // ---------------------------------------------------------------------------
 
-export const SKELETON_PROBLEM_PLACEHOLDER = "[problématique tirée le jour J]";
-const SKELETON_PROBLEM_PLACEHOLDER_EN = "[question drawn on the day]";
-
 export interface DeckNames {
-  /** Titre du sujet (nom du thème). */
-  themeName: string;
+  /** Titre du sujet retenu ; null = deck sans sujet (la problématique tient lieu de titre). */
+  themeName: string | null;
   /** Nom du projet : jamais un titre de couverture. */
   programName: string;
 }
@@ -349,9 +340,9 @@ function joinNotes(...parts: string[]): string {
   return truncateText(parts.filter((p) => p.trim()).join(" ").trim(), LIMITS.notes);
 }
 
-/** Couverture et titre du deck : le titre du sujet remplace le nom du projet. */
-function withSubjectTitle(deck: DeckSpec, names: DeckNames): DeckSpec {
-  const subject = truncateText(names.themeName.trim(), LIMITS.slideTitle);
+/** Couverture et titre du deck : le titre du sujet (sans sujet : `fallback`) remplace le nom du projet. */
+function withSubjectTitle(deck: DeckSpec, names: DeckNames, fallback: string): DeckSpec {
+  const subject = truncateText((names.themeName ?? fallback).trim(), LIMITS.slideTitle);
   const slides = deck.slides.map((s, i) =>
     i === 0 && s.layout === "title" && isProgramTitle(s.title, names.programName) ? { ...s, bullets: [...s.bullets], title: subject } : s,
   );
@@ -363,13 +354,14 @@ function withSubjectTitle(deck: DeckSpec, names: DeckNames): DeckSpec {
 /**
  * Deck final : la problématique TIRÉE est écrite par le code, quoi qu'ait
  * produit le modèle — en sous-titre de la couverture (et du deck) et sur la
- * première diapo de la section « problématique » du gabarit, à la place de
- * toute question inventée. Le titre du sujet remplace le nom du projet.
+ * première diapo de la ligne « problématique » de la trame, à la place de
+ * toute question inventée. Le titre du sujet (sans sujet : la problématique)
+ * remplace le nom du projet.
  */
 export function enforceProblem(deck: DeckSpec, input: { template: PromptTemplate; problem: string } & DeckNames): DeckSpec {
   const problem = input.problem.replace(/\s+/g, " ").trim();
   const lang: Lang = input.template.language;
-  const named = withSubjectTitle(deck, input);
+  const named = withSubjectTitle(deck, input, problem);
   const section = problemSection(input.template);
   const target = section ? named.slides.findIndex((s) => s.sectionId === section.id) : -1;
 
@@ -401,40 +393,8 @@ export function enforceProblem(deck: DeckSpec, input: { template: PromptTemplate
   };
 }
 
-/**
- * Squelette : générique, il ne formule AUCUNE problématique. Une question
- * inventée par le modèle dans la section « problématique » est retirée (titre,
- * sous-titre, puces, notes) et remplacée par un marqueur. Le titre du sujet
- * remplace le nom du projet en couverture.
- */
-export function neutralizeSkeletonProblem(deck: DeckSpec, template: PromptTemplate, names: DeckNames): DeckSpec {
-  const named = withSubjectTitle(deck, names);
-  const section = problemSection(template);
-  if (!section) return named;
-  const placeholder = template.language === "en" ? SKELETON_PROBLEM_PLACEHOLDER_EN : SKELETON_PROBLEM_PLACEHOLDER;
-  const first = named.slides.findIndex((s) => s.sectionId === section.id);
-
-  const slides = named.slides.map((slide, i): Slide => {
-    if (slide.sectionId !== section.id) return slide;
-    const kept = slide.bullets.filter((b) => !QUESTION.test(b));
-    const bullets = i === first && !kept.includes(placeholder) ? [placeholder, ...kept].slice(0, LIMITS.bullets) : kept;
-    const title = QUESTION.test(slide.title) ? truncateText(section.title, LIMITS.slideTitle) : slide.title;
-    const subtitle = QUESTION.test(slide.subtitle) ? "" : slide.subtitle;
-    const said = withoutQuestions(spoken(slide.notes));
-    const lead =
-      i === first && !said.includes(placeholder)
-        ? template.language === "en"
-          ? `${placeholder}: I will state it slowly, then show what is at stake.`
-          : `${placeholder} : je l'énoncerai lentement, puis j'en montrerai l'enjeu.`
-        : "";
-    const notes = joinNotes(timingOf(slide.notes), lead, said);
-    return { ...slide, title, subtitle, bullets, notes };
-  });
-  return { ...named, slides };
-}
-
 // ---------------------------------------------------------------------------
-// Sources et fraîcheur du squelette
+// Sources
 // ---------------------------------------------------------------------------
 
 /** Pourcentage, ou nombre suivi d'une unité (millions, €, TWh, tonnes…). Une numérotation (« 01 - », « Front 2 ») n'en est pas un. */
@@ -471,27 +431,10 @@ export function unsourcedFigureWarning(figures: readonly UnsourcedFigure[]): str
   return `Chiffre sans source affiché sur ${figures.length > 1 ? "les diapos" : "la diapo"} ${list} : ajoutez « Source : auteur, titre, année » ou retirez le chiffre.`;
 }
 
-export interface SkeletonStaleness {
-  stale: boolean;
-  reason: string | null;
-}
-
-/** Squelette qui ne suit plus le gabarit actuel (gabarit modifié depuis, ou squelette hors gabarit) : à régénérer. */
-export function skeletonStaleness(spec: DeckSpec, template: PromptTemplate): SkeletonStaleness {
-  const expected = totalSlides(template);
-  if (spec.slides.length !== expected) {
-    return { stale: true, reason: `Ne suit plus le gabarit actuel : ${spec.slides.length} diapos au lieu de ${expected}.` };
-  }
-  if (checkDeckAgainstTemplate(spec, template).length > 0) {
-    return { stale: true, reason: "Ne suit plus le gabarit actuel : sections différentes." };
-  }
-  return { stale: false, reason: null };
-}
-
 /**
  * Avertissements de relecture d'un deck final IA, recalculés à l'affichage
- * depuis le deck enregistré (aucune colonne de plus) : sections dont le nombre
- * de diapos diffère du gabarit, recopie du squelette, conclusion hors
+ * depuis le deck enregistré (aucune colonne de plus) : lignes dont le nombre
+ * de diapos diffère de la trame, recopie du contenu type, conclusion hors
  * problématique, chiffres affichés sans source. Une correction de l'utilisateur
  * fait disparaître l'avertissement correspondant.
  */

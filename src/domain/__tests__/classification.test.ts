@@ -47,7 +47,7 @@ describe("normalizeClassification", () => {
   });
 
   it("devrait garder au plus 3 candidats, les plus confiants", () => {
-    const fourThemes = [...themes, { id: "theme-sante", name: "Santé publique", description: "", keywords: [] }];
+    const fourThemes = [...themes, { id: "theme-sante", name: "Santé publique", description: "", keywords: [], notes: "" }];
     const raw = makeClassification([
       candidate("theme-energie", 0.1),
       candidate("theme-ville", 0.9),
@@ -72,10 +72,11 @@ describe("normalizeClassification", () => {
     const { ranked } = normalizeClassification(raw, themes, "theme-numerique");
     expect(ranked.map((r) => r.themeId)).toContain("theme-numerique");
     expect(ranked.find((r) => r.themeId === "theme-numerique")?.themeName).toBe("Société numérique");
+    expect(ranked.find((r) => r.themeId === "theme-numerique")?.rationale).toBe("Sujet annoncé avec la problématique.");
   });
 
   it("devrait ajouter le thème annoncé sans dépasser 3 candidats quand l'IA en propose déjà 3 autres", () => {
-    const fourThemes = [...themes, { id: "theme-sante", name: "Santé publique", description: "", keywords: [] }];
+    const fourThemes = [...themes, { id: "theme-sante", name: "Santé publique", description: "", keywords: [], notes: "" }];
     const raw = makeClassification([candidate("theme-ville", 0.9), candidate("theme-numerique", 0.8), candidate("theme-energie", 0.7)]);
     const { ranked } = normalizeClassification(raw, fourThemes, "theme-sante");
     expect(ranked).toHaveLength(3);

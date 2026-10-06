@@ -60,7 +60,8 @@ export function attachmentHeader(filename: string, unicodeName?: string): string
 const ENGINE_LABEL: Record<DeckEngine, string> = { free: "Gratuit", ollama: "Ollama", claude: "Claude", mock: "Démo" };
 
 export interface DeckFileInfo {
-  themeName: string;
+  /** null : deck final sans sujet (la partie est alors omise). */
+  themeName: string | null;
   kind: DeckKind;
   engine: DeckEngine | null;
   createdAt: Date;
@@ -68,11 +69,12 @@ export interface DeckFileInfo {
 
 /**
  * Titre de fichier d'un deck, identique quel que soit le moteur (le titre du
- * deck, lui, dépend du moteur : problématique tronquée, nom du thème…) :
- * « Thème - deck final - Moteur - AAAA-MM-JJ » ou « Thème - squelette - Moteur ».
+ * deck, lui, dépend du moteur : problématique tronquée, nom du sujet…) :
+ * « Sujet - deck final - Moteur - AAAA-MM-JJ » (« deck final - Moteur - … » sans
+ * sujet) ou « Sujet - squelette - Moteur » (anciens squelettes v1.0).
  */
 export function deckFileTitle(info: DeckFileInfo): string {
-  const parts = [info.themeName.trim(), info.kind === "SKELETON" ? "squelette" : "deck final"];
+  const parts = [info.themeName?.trim() ?? "", info.kind === "SKELETON" ? "squelette" : "deck final"];
   if (info.engine) parts.push(ENGINE_LABEL[info.engine]);
   if (info.kind === "FINAL") parts.push(parisDate(info.createdAt));
   return parts.filter(Boolean).join(" - ");

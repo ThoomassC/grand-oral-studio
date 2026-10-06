@@ -8,7 +8,7 @@ const production = process.env.NODE_ENV === "production";
 assertAiProviderEnv(process.env);
 
 /**
- * Corps maximal d'une Server Action : l'import de charte accepte un fichier de
+ * Corps maximal d'une Server Action : l'import d'apparence accepte un .pptx de
  * 20 Mo (cf. BRAND_FILE_MAX_BYTES) ; la limite porte sur le corps HTTP brut,
  * enveloppe multipart comprise, d'où 1 Mo de marge — et pas davantage.
  */
@@ -25,13 +25,22 @@ const nextConfig: NextConfig = {
   // API saisie dans la Configuration IA apparaîtrait en clair dans le terminal.
   logging: { serverFunctions: false },
   // Anciennes adresses : les liens et favoris restent valides. Les pages des projets
-  // vivaient sous /programmes ; la page des réglages IA s'appelait /parametres.
+  // vivaient sous /programmes ; la page des réglages IA s'appelait /parametres. En 1.1.0,
+  // la charte devient l'Apparence, le gabarit la Trame, et les squelettes vivent dans Decks.
+  // Redirections de la configuration (et non `redirect()` dans une page) : sous `loading.tsx`,
+  // une page répond en 200 streamé avant de pouvoir rediriger.
   async redirects() {
     return [
       { source: "/programmes", destination: "/projets", permanent: true },
       { source: "/programmes/:path*", destination: "/projets/:path*", permanent: true },
       { source: "/parametres", destination: "/configuration-ia", permanent: true },
       { source: "/parametres/:path*", destination: "/configuration-ia/:path*", permanent: true },
+      { source: "/projets/:id/charte", destination: "/projets/:id/apparence", permanent: true },
+      { source: "/projets/:id/gabarit", destination: "/projets/:id/trame", permanent: true },
+      { source: "/projets/:id/squelettes", destination: "/projets/:id/decks", permanent: true },
+      { source: "/projets/:id/squelettes/:deckId", destination: "/projets/:id/decks/:deckId", permanent: true },
+      // Temporaire (307) : la place reste libre pour une future page d'accueil du projet.
+      { source: "/projets/:id", destination: "/projets/:id/apparence", permanent: false },
     ];
   },
   async headers() {

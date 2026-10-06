@@ -15,7 +15,7 @@ async function savedAt(programId: string) {
   return db().program.findUniqueOrThrow({ where: { id: programId }, select: { brandSavedAt: true, templateSavedAt: true } });
 }
 
-describe("dates d'enregistrement de la charte et du gabarit", () => {
+describe("dates d'enregistrement de l'apparence et de la trame", () => {
   it("devrait laisser les deux dates à null à la création", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
@@ -69,16 +69,21 @@ describe("dates d'enregistrement de la charte et du gabarit", () => {
 });
 
 describe("getProgram — progression", () => {
-  it("devrait tout marquer à faire pour un projet neuf", async () => {
+  it("devrait marquer apparence et trame par défaut faites et seul le jour J à faire pour un projet neuf, sans blocage", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
     const { progress } = await programs.getProgram(a.id, id);
-    expect(progress).toMatchObject({ doneCount: 0, total: 3, nextStep: "prepare" });
-    expect(progress.steps.find((s) => s.id === "skeletons")?.blockedBy).toBe("prepare");
-    expect(progress.prepare.map((i) => i.status)).toEqual(["todo", "default", "default"]);
+    expect(progress).toMatchObject({ doneCount: 2, total: 3, nextStep: "day" });
+    expect(progress.steps.map((s) => [s.id, s.status])).toEqual([
+      ["appearance", "done"],
+      ["template", "done"],
+      ["day", "todo"],
+    ]);
+    for (const s of progress.steps) expect(s).not.toHaveProperty("blockedBy");
+    expect(progress.templateTabs.map((t) => t.status)).toEqual(["default", "optional"]);
   });
 
-  it("devrait refléter thèmes, charte, gabarit, squelettes et decks finaux", async () => {
+  it("devrait refléter apparence, trame, sujets et decks finaux (les anciens squelettes ne comptent pas)", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
     const [t1, t2, t3] = await seedThemes(id, [themeInput("A"), themeInput("B"), themeInput("C")]);
@@ -90,36 +95,51 @@ describe("getProgram — progression", () => {
 
     const { progress } = await programs.getProgram(a.id, id);
     const steps = Object.fromEntries(progress.steps.map((s) => [s.id, s]));
-    const items = Object.fromEntries(progress.prepare.map((i) => [i.id, i]));
-    expect(steps.prepare).toMatchObject({ status: "done", summary: "3 thèmes · gabarit personnalisé" });
-    expect(steps.skeletons).toMatchObject({ status: "todo", summary: "2/3 squelettes" });
+    const tabs = Object.fromEntries(progress.templateTabs.map((t) => [t.id, t]));
+    const detail = `${totalSlides(makeTemplate())} diapos · ${makeTemplate().durationMinutes} min`;
+    expect(steps.appearance).toMatchObject({ status: "done", summary: "Par défaut" });
+    expect(steps.template).toMatchObject({ status: "done", summary: `${detail} · 3 sujets` });
     expect(steps.day).toMatchObject({ status: "done", summary: "2 diaporamas" });
-    expect(items.themes).toMatchObject({ required: true, status: "done", summary: "3 thèmes" });
-    expect(items.brand).toMatchObject({ required: false, status: "default", summary: "Charte par défaut" });
-    expect(items.template).toMatchObject({
-      required: false,
-      status: "done",
-      summary: `${totalSlides(makeTemplate())} diapos · ${makeTemplate().durationMinutes} min`,
-    });
-    expect(progress).toMatchObject({ doneCount: 2, nextStep: "skeletons" });
+    expect(tabs.slides).toMatchObject({ status: "done", summary: detail });
+    expect(tabs.subjects).toMatchObject({ status: "done", summary: "3 sujets" });
+    expect(progress).toMatchObject({ doneCount: 3, nextStep: null });
   });
 
-  it("devrait annoncer le gabarit par défaut avec ses diapos et sa durée", async () => {
+  it("devrait annoncer la trame par défaut avec ses diapos et sa durée", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
     const { progress } = await programs.getProgram(a.id, id);
-    expect(progress.prepare.find((i) => i.id === "template")?.summary).toBe(
-      `Gabarit par défaut · ${totalSlides(makeTemplate())} diapos · ${makeTemplate().durationMinutes} min`,
+    expect(progress.steps.find((s) => s.id === "template")?.summary).toBe(
+      `Par défaut · ${totalSlides(makeTemplate())} diapos · ${makeTemplate().durationMinutes} min`,
     );
   });
 
-  it("devrait marquer les squelettes faits quand chaque thème en a un", async () => {
+  it("devrait marquer l'apparence faite dès son enregistrement", async () => {
+    const a = await createUser("a");
+    const id = await seedProgram(a.id);
+    await programs.updateBrand(a.id, id, makeBrand());
+    const { progress } = await programs.getProgram(a.id, id);
+    expect(progress.steps.find((s) => s.id === "appearance")).toMatchObject({ status: "done", summary: "Personnalisée" });
+  });
+
+  it("devrait marquer le jour J fait avec un seul deck final sans sujet (total du programme)", async () => {
+    const a = await createUser("a");
+    const id = await seedProgram(a.id);
+    await seedDeck(id, null, "FINAL");
+    await seedDeck(id, null, "FINAL");
+    const { progress, finalDeckCount } = await programs.getProgram(a.id, id);
+    expect(finalDeckCount).toBe(2);
+    expect(progress.steps.find((s) => s.id === "day")).toMatchObject({ status: "done", summary: "2 diaporamas" });
+  });
+
+  it("devrait compter ensemble les decks finaux avec et sans sujet", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
     const [t1] = await seedThemes(id, [themeInput("A")]);
-    await seedDeck(id, t1!, "SKELETON");
+    await seedDeck(id, t1!, "FINAL");
+    await seedDeck(id, null, "FINAL");
     const { progress } = await programs.getProgram(a.id, id);
-    expect(progress.steps.find((s) => s.id === "skeletons")?.status).toBe("done");
+    expect(progress.steps.find((s) => s.id === "day")?.summary).toBe("2 diaporamas");
   });
 
   it("ne devrait pas exposer le projet de A à B", async () => {
@@ -135,17 +155,16 @@ describe("listPrograms — progression résumée", () => {
     const neuf = await seedProgram(a.id, "Neuf");
     const avance = await seedProgram(a.id, "Avancé");
     const [t1] = await seedThemes(avance, [themeInput("A")]);
-    await seedDeck(avance, t1!, "SKELETON");
     await seedDeck(avance, t1!, "FINAL");
     await programs.updateBrand(a.id, avance, makeBrand());
     await programs.updateTemplate(a.id, avance, makeTemplate());
 
     const list = await programs.listPrograms(a.id);
     const byId = Object.fromEntries(list.map((p) => [p.id, p]));
-    expect(byId[neuf]!.progress).toEqual({ doneCount: 0, total: 3, nextStep: "prepare" });
+    expect(byId[neuf]!.progress).toEqual({ doneCount: 2, total: 3, nextStep: "day" });
     expect(byId[avance]!.progress).toEqual({ doneCount: 3, total: 3, nextStep: null });
     expect(byId[avance]!.progress).not.toHaveProperty("steps");
-    expect(byId[avance]!.progress).not.toHaveProperty("prepare");
+    expect(byId[avance]!.progress).not.toHaveProperty("templateTabs");
   });
 
   it("devrait compter les decks finaux par projet sans mélanger les projets ni les utilisateurs", async () => {
@@ -156,9 +175,11 @@ describe("listPrograms — progression résumée", () => {
     const [tb] = await seedThemes(pb, [themeInput("B")]);
     await seedDeck(pb, tb!, "FINAL");
     await seedDeck(pa, ta!, "SKELETON");
+    await programs.updateBrand(a.id, pa, makeBrand());
+    await programs.updateTemplate(a.id, pa, makeTemplate());
     const listA = await programs.listPrograms(a.id);
     expect(listA.map((p) => p.id)).toEqual([pa]);
-    // A n'a pas de deck final : le jour J reste à faire malgré le deck final de B.
+    // A n'a pas de deck final (un ancien squelette ne compte pas) : le jour J reste à faire malgré le deck final de B.
     expect(listA[0]!.progress).toEqual({ doneCount: 2, total: 3, nextStep: "day" });
   });
 
@@ -180,8 +201,8 @@ describe("listPrograms — progression résumée", () => {
     try {
       const list = await programs.listPrograms(a.id, client);
       expect(list).toHaveLength(5);
-      // Thème + deck final, sans squelette : préparation et jour J faits.
-      expect(list.every((p) => p.progress.doneCount === 2 && p.progress.nextStep === "skeletons")).toBe(true);
+      // Deck final sans apparence ni trame enregistrées : celles par défaut comptent, tout est fait.
+      expect(list.every((p) => p.progress.doneCount === 3 && p.progress.nextStep === null)).toBe(true);
       expect(queries.length).toBeGreaterThanOrEqual(1);
       expect(queries.length).toBeLessThanOrEqual(2);
     } finally {

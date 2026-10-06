@@ -8,7 +8,7 @@ import type { KeyCheck } from "../ai/verify-key";
 import { AiKeyRejectedError, AiKeyRequiredError, AiUnavailableError, ValidationError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeApiKeyVerifyQuota } from "../rate-limit";
-import { deleteUserAiKey, findUserAiPrefs, loadUserApiKey, saveUserAiKey, saveUserEngine } from "../repo/ai-settings";
+import { activateUserClaudeKey, deleteUserAiKey, findUserAiPrefs, loadUserApiKey, saveUserEngine } from "../repo/ai-settings";
 import type { AiSettingsView } from "../repo/types";
 import { parseInput } from "../validation";
 
@@ -38,12 +38,14 @@ function checkUnavailable(): AiUnavailableError {
 }
 
 /**
- * Valide le format, vérifie la clé auprès d'Anthropic, puis l'enregistre
- * chiffrée. Ordre : format → clé maître (échec immédiat, avant tout appel
+ * « Vérifier et activer » : valide le format, vérifie la clé auprès
+ * d'Anthropic, puis l'enregistre chiffrée ET choisit Claude en une seule
+ * écriture. Ordre : format → clé maître (échec immédiat, avant tout appel
  * réseau) → quota de vérification → vérification réseau (hors transaction) →
- * écriture unique (upsert).
+ * écriture unique (upsert). Clé refusée ou invérifiable : rien n'est écrit, le
+ * moteur précédent reste en place.
  */
-export async function saveApiKey(userId: string, input: unknown, deps: AiSettingsDeps): Promise<{ last4: string }> {
+export async function activateClaudeWithKey(userId: string, input: unknown, deps: AiSettingsDeps): Promise<{ last4: string }> {
   const { apiKey } = parseInput(SaveApiKeyInputSchema, input);
   const box = deps.box ?? loadSecretBoxFromEnv(deps.env);
   await consumeApiKeyVerifyQuota(userId);
@@ -55,8 +57,8 @@ export async function saveApiKey(userId: string, input: unknown, deps: AiSetting
     throw checkUnavailable();
   }
 
-  const saved = await saveUserAiKey(userId, apiKey, apiKeyLast4(apiKey), box);
-  deps.log.info("ai_key.saved", { last4: saved.last4, keyVersion: saved.keyVersion });
+  const saved = await activateUserClaudeKey(userId, apiKey, apiKeyLast4(apiKey), box);
+  deps.log.info("ai_key.activated", { last4: saved.last4, keyVersion: saved.keyVersion });
   return { last4: saved.last4 };
 }
 
@@ -159,27 +161,25 @@ export async function setEngine(userId: string, input: unknown, deps: AiSettings
   if (parsed.engine === "claude") {
     const prefs = await findUserAiPrefs(userId);
     if (!claudeAvailable({ hasUserKey: prefs.key !== null, env: deps.env })) {
-      const message = "Ajoutez d'abord votre clé API Anthropic pour utiliser Claude.";
+      const message = "Connectez d'abord Claude avec votre clé API Anthropic.";
       throw new ValidationError(message, { engine: [message] });
     }
     await saveUserEngine(userId, "claude");
   } else if (parsed.engine === "ollama") {
     const baseUrl = ollamaBaseUrl(deps.env);
     if (!baseUrl) {
-      const message = "Ollama n'est pas configuré sur ce serveur.";
+      const message = "Le modèle local n'est pas proposé sur ce serveur.";
       throw new ValidationError(message, { engine: [message] });
     }
     const { reachable, models } = await deps.listOllamaModels(baseUrl);
+    // Messages pour l'utilisateur, jamais pour l'administrateur : les commandes sont dans le README.
     if (!reachable) {
       throw new AiUnavailableError("ollama: injoignable", {
-        userMessage:
-          deps.env.NODE_ENV === "production"
-            ? "Le serveur Ollama ne répond pas. Réessayez plus tard."
-            : `Ollama ne répond pas à ${baseUrl} : vérifiez qu'il est lancé (ollama serve).`,
+        userMessage: "Le modèle local ne répond pas pour le moment. Réessayez plus tard.",
       });
     }
     if (!models.includes(parsed.ollamaModel)) {
-      const message = `Le modèle ${parsed.ollamaModel} n'est pas installé : ollama pull ${parsed.ollamaModel}`;
+      const message = "Ce modèle n'est pas installé sur le serveur.";
       throw new ValidationError(message, { ollamaModel: [message] });
     }
     await saveUserEngine(userId, "ollama", parsed.ollamaModel);

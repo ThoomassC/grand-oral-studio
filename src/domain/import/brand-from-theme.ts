@@ -20,7 +20,7 @@ import { saturation } from "./office-usage";
  */
 
 export const MIN_TEXT_CONTRAST = 4.5;
-const DEFAULT_NAME = "Charte importée";
+const DEFAULT_NAME = "Apparence importée";
 
 function channel(hex: string, i: number): number {
   return parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;

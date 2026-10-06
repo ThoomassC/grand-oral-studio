@@ -4,8 +4,9 @@ import { stepHref, stepMeta } from "./steps";
 
 /**
  * Avancement d'un projet sur sa carte : « n/3 étapes » (pastilles, nommées
- * comme une image) et le bouton pour reprendre à l'étape suivante, ou
- * commencer le Jour J quand la préparation est faite.
+ * comme une image) et le bouton pour commencer le Jour J quand apparence et
+ * trame sont faites — toujours le cas, par défaut ou personnalisées (cf.
+ * `computeProjectProgress`) —, sinon reprendre à l'étape suivante.
  */
 export function ProjectProgressSummary({
   programId,
