@@ -25,9 +25,8 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
         currentBrand={{ logoDataUrl: program.brand.logoDataUrl }}
         format={program.template.format}
       />
-      {/* Clé = date d'enregistrement : un import appliqué remonte l'éditeur sur l'apparence importée. */}
+      {/* Un import appliqué est repris par l'éditeur sans le remonter (voir BrandEditor). */}
       <BrandWorkspace
-        key={program.brandSavedAt ?? "default"}
         programId={program.id}
         initialBrand={program.brand}
         format={program.template.format}

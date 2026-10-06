@@ -84,6 +84,20 @@ export function BrandEditor({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [logoError, setLogoError] = useState<string | null>(null);
+  // Apparence enregistrée reçue du serveur. Si elle diffère de ce que l'éditeur a lui-même
+  // enregistré (import appliqué au-dessus), on la reprend ; après notre propre enregistrement,
+  // le rafraîchissement renvoie la même apparence : rien ne bouge et le message reste affiché.
+  const [serverBrand, setServerBrand] = useState<Brand>(initialBrand);
+  if (initialBrand !== serverBrand) {
+    setServerBrand(initialBrand);
+    if (JSON.stringify(initialBrand) !== JSON.stringify(saved)) {
+      setSaved(initialBrand);
+      setBrand(initialBrand);
+      setFieldErrors({});
+      setStatus(IDLE);
+      setLogoError(null);
+    }
+  }
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
