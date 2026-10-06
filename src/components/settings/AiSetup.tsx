@@ -160,7 +160,7 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const baseId = useId();
-  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, model: `${baseId}-model` };
+  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, model: `${baseId}-model`, ollamaNote: `${baseId}-ollama-note` };
   /** Id du radio d'un moteur : cible du focus quand le bouton « Choisir … » disparaît. */
   const radioId = (engine: EngineId) => `${baseId}-engine-${engine}`;
   const { ollama } = status;
@@ -268,10 +268,20 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
             error={engineError}
           >
             <EngineCard engine="free" label="Sans IA" checked={choice === "free"} info={ENGINE_INFO.free} onPick={pick}>
-              <Radio id={radioId("free")} value="free" label="Sans IA" description="Gratuit et instantané." />
+              <Radio
+                id={radioId("free")}
+                value="free"
+                label={<span className="font-semibold">Sans IA</span>}
+                description="La trame remplie avec vos notes."
+              />
             </EngineCard>
             <EngineCard engine="claude" label="Claude" checked={choice === "claude"} info={ENGINE_INFO.claude} onPick={pick}>
-              <Radio id={radioId("claude")} value="claude" label="Claude" description="Quelques centimes par diaporama." />
+              <Radio
+                id={radioId("claude")}
+                value="claude"
+                label={<span className="font-semibold">Claude</span>}
+                description="Quelques centimes par diaporama."
+              />
             </EngineCard>
             {ollama !== null ? (
               <EngineCard
@@ -285,15 +295,17 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
                 <Radio
                   id={radioId("ollama")}
                   value="ollama"
-                  label="Modèle local (Ollama)"
+                  label={<span className="font-semibold">Modèle local (Ollama)</span>}
                   disabled={!ollamaUsable}
-                  description={
-                    <>
-                      Gratuit, sur ce serveur.
-                      {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
-                    </>
-                  }
+                  description="Gratuit, sur ce serveur."
+                  aria-describedby={ollamaNote ? ids.ollamaNote : undefined}
                 />
+                {/* Hors de la description grisée du radio désactivé : lisible, et toujours annoncée. */}
+                {ollamaNote ? (
+                  <p id={ids.ollamaNote} className="text-sm font-semibold">
+                    {ollamaNote}
+                  </p>
+                ) : null}
               </EngineCard>
             ) : null}
           </RadioGroup>

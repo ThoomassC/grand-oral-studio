@@ -38,7 +38,7 @@ export default function ReleaseNotesPage() {
             <li key={release.version} className={index > 0 ? "border-t border-border py-6" : "pb-6"}>
               <article aria-labelledby={headingId} className="grid gap-x-6 gap-y-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
                 <header className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start">
-                  <h2 id={headingId} className="num text-2xl">
+                  <h2 id={headingId} className="text-2xl">
                     {release.version}
                   </h2>
                   {release.date === null ? (

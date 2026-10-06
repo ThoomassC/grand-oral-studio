@@ -17,9 +17,9 @@
 
 ### Direction : la fiche bristol
 
-Grand Oral Studio sert à préparer un oral sous contrainte de temps : on écrit une trame, des notes, des sujets, comme sur les fiches bristol qu'on garde en main devant le jury. La direction reprend ce support : papier froid, encre marine, réglure bleue, marge rouge.
+Grand Oral Studio sert à préparer un oral sous contrainte de temps : on écrit une trame, des notes, des sujets, comme sur les fiches bristol qu'on garde en main devant le jury. La direction reprend ce support : papier froid, encre marine, réglure bleue, marge rose, surligneur jaune.
 
-- **Un seul élément marquant : la fiche.** Les blocs que l'étudiant écrit (lignes de trame, notes des sujets, cartes de projet) portent une marge rouge à gauche, et les champs de texte long une réglure discrète. Tout le reste est calme.
+- **Un seul élément marquant : la fiche.** Les blocs que l'étudiant rédige (lignes de trame, sujets) portent une marge rose à gauche, et les champs de texte long une réglure discrète. Tout le reste est calme.
 - **La typographie porte la hiérarchie.** Titres en Schibsted Grotesk, texte en Atkinson Hyperlegible Next ; casse de phrase, aucun surtitre, chiffres tabulaires (jamais de police à chasse fixe pour les données).
 - **Géométrie nette.** Arrondis faibles (4 à 8 px), filets fins ; pas de pilules, pas de halos d'ombre.
 - **Mouvement seulement en réponse à une action** (ouvrir, déplier, confirmer) ; aucune apparition au défilement.
@@ -38,10 +38,11 @@ Contrastes mesurés (WCAG) : texte ≥ 5,8:1 partout ; filets décoratifs non po
 | Graphite (texte secondaire) | `#55607A` | `#A3ADC2` | `--fiche-graphite` |
 | Réglure (primaire, liens, actions) | `#2A4DB3` | `#8FAEFF` | `--fiche-rule` |
 | Sur primaire | `#FFFFFF` | `#0E1626` | `--fiche-on-rule` |
-| Marge (accent du motif seulement) | `#C8372D` | `#FF8A7A` | `--fiche-margin` |
+| Marge (motif seulement, rose de bristol, ≥ 20° de teinte du rouge d'erreur) | `#D65A82` | `#F29BC0` | `--fiche-margin` |
+| Surligneur (« À compléter ») | `#FBE78C` | `#4A4220` | `--fiche-highlighter` |
 | Filet | `#DCE1EA` | `#2C3647` | `--fiche-line` |
 
-Ratios : encre/papier 14,8 ; graphite/papier 5,8 ; blanc/réglure 7,5 ; réglure/carte 7,5 ; marge/carte 5,2 ; craie/ardoise 14,5 ; graphite/surface sombre 6,9 ; bleu sombre/surface 7,2 ; encre/bleu sombre 8,3.
+Ratios : encre/papier 14,8 ; graphite/papier 5,8 ; blanc/réglure 7,5 ; réglure/carte 7,5 ; marge/carte 3,7 (décorative) ; craie/ardoise 14,5 ; graphite/surface sombre 6,9 ; bleu sombre/surface 7,2 ; encre/bleu sombre 8,3.
 
 ### Typography
 
@@ -72,113 +73,18 @@ Ratios : encre/papier 14,8 ; graphite/papier 5,8 ; blanc/réglure 7,5 ; réglure
 | En-tête | filet 1px + `0 3px 8px -2px` | En-tête collant |
 | Flottant | `0 8px 24px -8px` | Menus, panneaux « i », modales |
 
--------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
-
 ---
 
 ## Component Specs
 
-### Buttons
+Les composants sont ceux d'Opale UI ; leur apparence suit les jetons `--fiche-*` branchés sur `--opale-*` (src/app/globals.css).
 
-```css
-/* Primary Button */
-.btn-primary {
-  background: #EA580C;
-  color: #000000;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-/* Secondary Button */
-.btn-secondary {
-  background: transparent;
-  color: #134E4A;
-  border: 2px solid #0D9488;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-```
-
-### Cards
-
-```css
-.card {
-  background: #F0FDFA;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
-}
-```
-
-### Inputs
-
-```css
-.input {
-  padding: 12px 16px;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 200ms ease;
-}
-
-.input:focus {
-  border-color: #0D9488;
-  outline: none;
-  box-shadow: 0 0 0 3px #0D948820;
-}
-```
-
-### Modals
-
-```css
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
-  max-width: 500px;
-  width: 90%;
-}
-```
-
----
-
-## Style Guidelines
-
-**Style:** Flat Design
-
-**Keywords:** 2D, minimalist, bold colors, no shadows, clean lines, simple shapes, typography-focused, modern, icon-heavy
-
-**Best For:** Web apps, mobile apps, cross-platform, startup MVPs, user-friendly, SaaS, dashboards, corporate
-
-**Key Effects:** No gradients/shadows, simple hover (color/opacity shift), fast loading, clean transitions (150-200ms ease), minimal icons
+- **Boutons** : arrondi 6 px ; un seul bouton plein (réglure) par vue, les autres en contour ou texte ; danger réservé aux suppressions.
+- **Cartes** : fond carte, filet 1 px, arrondi 8 px, aucune ombre portée. `.fiche` (marge rose à gauche) seulement sur les blocs que l'étudiant rédige : lignes de trame, sujets.
+- **Champs** : arrondi 6 px, contour ≥ 3:1, focus = anneau de focus Opale autour du champ ; placeholders en graphite opaque. `.fiche-ruled` (réglure) sur les textes longs : contenu type, contraintes, description et notes des sujets, problématique, notes d'orateur.
+- **Fil d'étapes** : pastilles rondes (numéro « à faire », coche « fait »), étape courante cerclée.
+- **Flottants** (menus, panneaux « i », modales) : arrondi 8 px, filet, ombre « Flottant ».
+- **Titres** : h1 > h2 d'étape (`text-2xl`) > titres de cartes (`text-xl`).
 
 ---
 

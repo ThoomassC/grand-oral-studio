@@ -234,7 +234,7 @@ export function SubjectPromptImport({
         </LiveRegion>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" aria-disabled={analyzing || undefined}>
+          <Button type="submit" variant="ghost" aria-disabled={analyzing || undefined}>
             <ButtonLabel idle="Analyser le prompt" busy="Analyse…" isBusy={analyzing} />
           </Button>
           <Button

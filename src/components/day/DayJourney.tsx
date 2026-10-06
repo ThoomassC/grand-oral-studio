@@ -75,9 +75,9 @@ function StepTitle({
     <h3 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
       <span
         aria-hidden="true"
-        className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-base font-bold ${
+        className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
           state === "current"
-            ? "bg-accent text-on-accent"
+            ? "bg-accent text-on-accent ring-2 ring-accent ring-offset-2 ring-offset-surface"
             : state === "done"
               ? "bg-success-soft text-success ring-1 ring-success"
               : "bg-surface-2 text-muted ring-1 ring-border-strong"
@@ -381,7 +381,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-3xl flex-col gap-6">
       {recentDeck ? (
         <div className="flex flex-col gap-3 rounded-lg border border-success/40 bg-success-soft p-4 sm:flex-row sm:items-center sm:justify-between">
           <p>

@@ -170,7 +170,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           {/* Sous-bloc de la page Sujets (h2) : h3, et ses panneaux et sujets en h4. */}
-          <h3 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
+          <h3 id={IDS.listTitle} tabIndex={-1} className="text-xl focus:outline-none">
             Vos sujets
           </h3>
           <p className="max-w-3xl text-sm text-muted">

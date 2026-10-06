@@ -47,7 +47,7 @@ export function MainNav({ className = "", signedIn }: { className?: string; sign
                 className={TAB_LINK_CLASS}
                 onClick={(e) => onLinkClick(e, item.href)}
               >
-                {item.label}
+                <span className="app-tab__label">{item.label}</span>
               </Link>
             </li>
           );

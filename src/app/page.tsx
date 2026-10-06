@@ -120,12 +120,8 @@ export default async function HomePage() {
         <ol className="mt-8 grid gap-4 md:grid-cols-3 md:gap-6">
           {STEPS.map((step, i) => (
             <li key={step.title} className="opale-card opale-card--e1 block p-6">
-              <span aria-hidden="true" className="num text-sm font-bold text-muted">
-                Étape {String(i + 1).padStart(2, "0")}
-              </span>
-              <h3 className="mt-2 text-xl">
-                <span className="sr-only">Étape {i + 1} : </span>
-                {step.title}
+              <h3 className="text-xl">
+                <span className="num">{i + 1}.</span> {step.title}
               </h3>
               <p className="mt-3 text-muted">{step.text}</p>
             </li>
@@ -137,8 +133,8 @@ export default async function HomePage() {
         <div className="flex items-center gap-4 md:flex-col md:items-center">
           <PrepDial className="h-24 w-24 shrink-0 sm:h-32 sm:w-32" />
           <p className="text-sm text-muted md:text-center">
-            <span className="block text-2xl font-bold text-text">
-              <Duration minutes={PREP_MINUTES} className="num" />
+            <span className="block font-title text-2xl font-bold text-text">
+              <Duration minutes={PREP_MINUTES} />
             </span>
             de préparation
           </p>

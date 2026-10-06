@@ -43,7 +43,7 @@ export function TemplateTabs({ programId, tabs }: { programId: string; tabs: Tem
                 className={`${TAB_LINK_CLASS} gap-2`}
                 onClick={(e) => onLinkClick(e, href)}
               >
-                {meta.label}
+                <span className="app-tab__label">{meta.label}</span>
                 {state ? (
                   <Badge tone={state.tone} size="small">
                     <span className="sr-only"> : </span>

@@ -238,7 +238,7 @@ export function TemplateEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {/* Sous-bloc de la page Trame (h2) : h3. */}
-          <h3 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
+          <h3 ref={headingRef} tabIndex={-1} className="text-xl focus:outline-none">
             Diapos de la trame
           </h3>
           <p className="max-w-2xl text-sm text-muted">
@@ -373,7 +373,7 @@ export function TemplateEditor({
                   </legend>
                   <span
                     aria-hidden="true"
-                    className="num flex h-8 shrink-0 items-center justify-center rounded-sm border border-border-strong px-2 text-sm font-bold md:min-w-24"
+                    className="num flex h-8 shrink-0 items-center text-sm font-bold md:w-28"
                   >
                     {range ?? `Ligne ${n}`}
                   </span>

@@ -35,7 +35,10 @@
   --fiche-rule: #2A4DB3;
   --fiche-rule-hover: #213E93;
   --fiche-on-rule: #FFFFFF;
-  --fiche-margin: #C8372D;
+  /* Marge : rose de bristol, nettement à part du rouge d'erreur d'Opale (#b3261e). */
+  --fiche-margin: #D65A82;
+  /* Surligneur des « À compléter » : le jaune des fiches de révision. */
+  --fiche-highlighter: #FBE78C;
   --fiche-line: #DCE1EA;
   /* Réglure des champs longs : décorative, jamais porteuse de sens. */
   --fiche-ruling: color-mix(in srgb, var(--fiche-rule) 16%, var(--fiche-card));
@@ -57,7 +60,8 @@
   --fiche-rule: #8FAEFF;
   --fiche-rule-hover: #A9C1FF;
   --fiche-on-rule: #0E1626;
-  --fiche-margin: #FF8A7A;
+  --fiche-margin: #F29BC0;
+  --fiche-highlighter: #4A4220;
   --fiche-line: #2C3647;
   --fiche-ruling: color-mix(in srgb, var(--fiche-rule) 20%, var(--fiche-card));
   --fiche-shadow-float: 0 8px 24px -8px rgb(0 0 0 / 0.55);
@@ -80,6 +84,20 @@
   --opale-primary-dark: var(--fiche-rule-hover);
   --opale-primary-on-surface: var(--fiche-rule);
   --opale-on-primary: var(--fiche-on-rule);
+  /*
+   * Secondaire et accent : la réglure aussi (une seule couleur d'action). Le
+   * bleu-gris et l'ambre d'Opale disparaissent ; l'encre de l'accent (texte du
+   * badge « à compléter », sur 34 % d'accent) est l'encre de la fiche, seule à
+   * tenir 4,5:1 sur ce lavis dans les deux thèmes (test de palette).
+   */
+  --opale-secondary: var(--fiche-rule);
+  --opale-secondary-dark: var(--fiche-rule-hover);
+  --opale-on-secondary: var(--fiche-on-rule);
+  --opale-accent: var(--fiche-rule);
+  --opale-accent-dark: var(--fiche-rule-hover);
+  --opale-accent-ink: var(--fiche-ink);
+  --opale-accent-graphic: var(--fiche-rule);
+  --opale-on-accent: var(--fiche-on-rule);
   --opale-focus: var(--fiche-rule);
   --opale-divider: var(--fiche-line);
   --opale-radius-sm: var(--fiche-radius-sm);
@@ -131,10 +149,10 @@
   --color-on-accent: var(--opale-on-primary);
   --color-accent-soft: color-mix(in srgb, var(--opale-primary) 12%, var(--opale-surface));
   --color-accent-strong: var(--opale-primary-on-surface);
-  /* Le surlignage : l'accent ambré d'Opale, toujours avec son encre. */
-  --color-highlight: var(--opale-accent);
-  --color-on-highlight: var(--opale-on-accent);
-  --color-highlight-soft: color-mix(in srgb, var(--opale-accent) 30%, var(--opale-surface));
+  /* Le surlignage (« À compléter ») : le surligneur jaune des fiches, toujours avec l'encre du texte. */
+  --color-highlight: var(--fiche-highlighter);
+  --color-on-highlight: var(--fiche-ink);
+  --color-highlight-soft: var(--fiche-highlighter);
   --color-ring: var(--opale-focus);
   --color-danger: var(--opale-danger-on-surface);
   --color-danger-soft: color-mix(in srgb, var(--opale-danger) 9%, var(--opale-surface));
@@ -404,13 +422,13 @@
    */
   /*
    * Choix de la Configuration IA en cartes côte à côte (autant de colonnes que la
-   * largeur le permet, 15 rem au moins), détail écrit dans chaque carte. Le choix
+   * largeur le permet, 15 rem au moins, jamais plus large que le conteneur), détail écrit dans chaque carte. Le choix
    * coché a la bordure primaire ; le focus clavier du radio entoure toute la carte.
    * Sous 640 px, les cartes s'empilent et le détail se replie derrière son bouton.
    */
   .engine-cards .opale-radio-group__options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
     gap: 0.75rem;
   }
   .engine-card {
@@ -560,9 +578,15 @@
     --app-tab-fill: color-mix(in srgb, var(--opale-primary) 12%, transparent);
     color: var(--opale-primary-on-surface);
   }
-  /* Page courante : la réglure sous l'onglet, en plus de la graisse et du lavis. */
+  /*
+   * Page courante : la réglure sous le libellé (`.app-tab__label`), en plus de la
+   * graisse et du lavis. Sur le libellé seul : le badge voisin (compteur, état)
+   * n'est pas souligné.
+   */
   .app-tab[aria-current="page"] {
     font-weight: 600;
+  }
+  .app-tab[aria-current="page"] .app-tab__label {
     text-decoration: underline;
     text-decoration-color: var(--opale-primary);
     text-decoration-thickness: 2px;
@@ -613,11 +637,11 @@
 
   /*
    * Fil d'étapes d'un projet (components/layout/ProjectSteps.tsx). Numéro dans
-   * une pastille (coche quand l'étape est faite, cadenas quand elle est
-   * bloquée, à toutes les largeurs), libellé, résumé ; étapes reliées par un
-   * trait. Courante : lavis et pastille au primaire ; faite : pastille cerclée
-   * et coche au vert « sur surface » (contraste ≥ 3:1 dans les deux thèmes).
-   * Jamais la couleur seule : coche, cadenas, graisse et texte masqué disent
+   * une pastille ronde (coche quand l'étape est faite, à toutes les largeurs),
+   * libellé, résumé ; étapes reliées par un trait. Courante : lavis, pastille
+   * au primaire et anneau épais autour d'elle ; faite : pastille cerclée et
+   * coche au vert « sur surface » (contraste ≥ 3:1 dans les deux thèmes).
+   * Jamais la couleur seule : coche, anneau, graisse et texte masqué disent
    * l'état.
    */
   /*
@@ -751,7 +775,8 @@
     flex: none;
     place-items: center;
     border: 1.5px solid var(--opale-field-border);
-    border-radius: var(--fiche-radius-sm);
+    /* Pastille ronde : la seule forme ronde du fil, elle dit « étape ». */
+    border-radius: 50%;
     background: var(--opale-surface);
     color: var(--opale-text-secondary);
     font-size: var(--opale-text-sm);
@@ -808,10 +833,13 @@
     background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
     color: var(--opale-primary-on-surface);
   }
+  /* Anneau de 2 px détaché de la pastille : l'étape courante se lit aussi à la forme. */
   .project-step[aria-current="step"] .project-step__dot {
     border-color: var(--opale-primary);
     background: var(--opale-primary);
     color: var(--opale-on-primary);
+    outline: 2px solid var(--opale-primary);
+    outline-offset: 2px;
   }
   .project-step__text {
     display: grid;
@@ -871,6 +899,24 @@
     }
   }
 
+  /*
+   * Focus des champs (WCAG 2.4.7) : le contrôle natif (`.opale-input`,
+   * `.opale-select`, textarea) n'a pas de contour, la coquille le porte. Le
+   * lavis à 18 % d'Opale ne tient pas 3:1 : on trace l'anneau de focus commun,
+   * sans halo (MASTER.md, « Géométrie nette »).
+   */
+  .opale-input-shell:focus-within {
+    box-shadow: none;
+    outline: var(--opale-focus-ring-width) solid var(--opale-focus);
+    outline-offset: 2px;
+  }
+  /* Indications de saisie : le graphite plein (≥ 5,8:1), sans l'opacité de 72 % d'Opale. */
+  .opale-input::placeholder,
+  .opale-input-shell textarea::placeholder {
+    color: var(--opale-text-secondary);
+    opacity: 1;
+  }
+
   /* Zone de texte dans la coquille d'Opale (voir components/ui/Field.tsx). */
   .opale-input-shell--textarea {
     align-items: stretch;
@@ -898,9 +944,9 @@
   }
 
   /*
-   * Le motif « fiche » (MASTER.md, Direction) : la marge rouge d'une fiche bristol,
+   * Le motif « fiche » (MASTER.md, Direction) : la marge rose d'une fiche bristol,
    * un filet vertical à gauche du bloc. Réservé aux blocs que l'étudiant écrit :
-   * lignes de trame, sujets, cartes de projet. L'élément porteur réserve la place
+   * lignes de trame, sujets. L'élément porteur réserve la place
    * à gauche (padding-inline-start ≥ 1.5rem, posé par un utilitaire pl-*).
    */
   .fiche {

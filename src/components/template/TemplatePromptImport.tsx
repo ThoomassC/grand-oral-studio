@@ -141,9 +141,9 @@ export function TemplatePromptImport({
     <section
       id={IMPORT_ANCHORS.template}
       aria-labelledby={ids.title}
-      className="opale-card opale-card--e1 block scroll-mt-4 p-4 sm:p-5"
+      className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6"
     >
-      <h2 id={ids.title} className="text-lg font-semibold">
+      <h2 id={ids.title} className="text-xl">
         Préremplir avec un prompt
       </h2>
       <p id={ids.hint} className="mt-1 max-w-3xl text-sm text-muted">

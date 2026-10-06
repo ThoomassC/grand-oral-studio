@@ -100,7 +100,7 @@ export function ProjectSteps({ programId, steps, deckCount }: { programId: strin
           className={`${TAB_LINK_CLASS} gap-2`}
           onClick={(e) => onLinkClick(e, decks)}
         >
-          Decks
+          <span className="app-tab__label">Decks</span>
           <Badge tone="neutral" size="small" aria-hidden="true">
             {deckCount}
           </Badge>
