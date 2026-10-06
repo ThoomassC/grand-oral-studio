@@ -16,7 +16,7 @@ export default async function ProgramsPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <h1 className="text-3xl sm:text-4xl">Projets</h1>
         <CreateProgramDialog />
       </div>
@@ -37,7 +37,10 @@ export default async function ProgramsPage() {
             </div>
           </div>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <>
+            {/* Le nombre de projets, en haut à droite de la liste. */}
+            <p className="num mb-3 text-right text-sm text-muted">{plural(programs.length, "projet")}</p>
+            <ul className="flex flex-col gap-3">
             {programs.map((p, i) => {
               const neighbour = programs[i + 1] ?? programs[i - 1];
               return (
@@ -84,9 +87,9 @@ export default async function ProgramsPage() {
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </>
         )}
-        {programs.length > 0 ? <p className="num mt-3 text-sm text-muted">{plural(programs.length, "projet")}</p> : null}
       </section>
     </div>
   );
