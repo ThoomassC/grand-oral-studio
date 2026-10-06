@@ -159,11 +159,16 @@ test.describe("3. Configuration IA — connecter Claude", () => {
     });
   }
 
-  test("devrait rappeler que la clé est chiffrée et jamais réaffichée, avec le lien vers la console Anthropic", async ({ page, account }) => {
+  test("devrait rappeler, derrière le « i », que la clé est chiffrée et jamais réaffichée, avec le lien vers la console Anthropic", async ({
+    page,
+    account,
+  }) => {
     void account;
     await page.goto("/configuration-ia");
     const main = page.getByRole("main");
-    await expect(main.getByText("Chiffrée, jamais réaffichée : seuls les 4 derniers caractères restent visibles.")).toBeVisible();
+    await main.getByRole("button", { name: "En savoir plus : Votre clé API" }).click();
+    await expect(page.getByRole("dialog", { name: "Votre clé API" }).getByText(/chiffrée et n'est jamais réaffichée/)).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(main.getByRole("link", { name: /console Anthropic, rubrique API Keys/ })).toHaveAttribute(
       "href",
       "https://console.anthropic.com/settings/keys",

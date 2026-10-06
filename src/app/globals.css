@@ -317,6 +317,17 @@
    * à 12 % découpé en squircle, page courante en graisse 600.
    */
   /*
+   * Panneau du bouton « i » (Configuration IA) : une fenêtre flottante nettement
+   * détachée de la carte (arrondi, ombre portée, filet), en clair comme en sombre.
+   */
+  .choice-info-panel {
+    border: 1px solid color-mix(in srgb, var(--opale-text) 20%, transparent);
+    border-radius: var(--opale-radius-lg);
+    background: var(--opale-surface);
+    box-shadow: var(--opale-shadow-3);
+  }
+
+  /*
    * Étape qui apparaît sous la précédente (Configuration IA, « 2. Connecter Claude ») :
    * la hauteur se déroule (grille 0fr → 1fr) pendant que le bloc glisse et passe en
    * fondu. Découpe seulement pendant l'animation (data-reveal="enter"), pour ne pas

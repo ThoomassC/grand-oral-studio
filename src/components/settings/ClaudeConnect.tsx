@@ -16,6 +16,7 @@ import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ANTHROPIC_KEY_MAX_LENGTH, SaveApiKeyInputSchema } from "@/domain/api-key";
 import { activateClaude, deleteAnthropicApiKey } from "@/server/actions/settings";
 import type { AiSetupStatus } from "./ai-status";
+import { ChoiceInfo, type ChoiceInfoItem } from "./ChoiceInfo";
 
 const CONSOLE_URL = "https://console.anthropic.com/settings/keys";
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
@@ -28,6 +29,26 @@ interface ActivateState {
 
 const INITIAL: ActivateState = { status: IDLE, fieldErrors: {} };
 
+/** Les aides sur la clé, derrière le bouton « i » du champ (et du résumé de la clé). */
+const KEY_INFO: readonly ChoiceInfoItem[] = [
+  {
+    term: "Format",
+    detail: (
+      <>
+        Collez la clé entière : elle commence par « <span className="num whitespace-nowrap">sk-ant-</span> ».
+      </>
+    ),
+  },
+  {
+    term: "Crédits",
+    detail: "Ajoutez quelques euros de crédit dans la console Anthropic (rubrique Billing) : sans crédit, la clé est refusée.",
+  },
+  {
+    term: "Sécurité",
+    detail: "Votre clé est chiffrée et n'est jamais réaffichée : seuls ses 4 derniers caractères restent visibles.",
+  },
+];
+
 const SOURCE_NOTE: Partial<Record<AiSetupStatus["claude"]["source"], string>> = {
   mock: "Mode démonstration : aucune clé nécessaire.",
   server: "Le serveur fournit une clé : vous pouvez aussi utiliser la vôtre.",
@@ -36,8 +57,8 @@ const SOURCE_NOTE: Partial<Record<AiSetupStatus["claude"]["source"], string>> = 
 /**
  * Question 2 de la Configuration IA : connecter Claude avec sa clé API.
  *
- * Sans clé personnelle : trois étapes (créer, coller, « Vérifier et
- * activer »), qui vérifient la clé, l'enregistrent chiffrée ET choisissent
+ * Sans clé personnelle : le lien vers la console, le champ (aides derrière
+ * son bouton « i ») et « Vérifier et activer », qui vérifient la clé, l'enregistrent chiffrée ET choisissent
  * Claude en un seul geste côté serveur. Avec une clé : son résumé (4 derniers
  * caractères), « Remplacer » (révèle le champ) et « Supprimer ma clé ».
  *
@@ -114,10 +135,14 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
     <div className="flex flex-col gap-5">
       {claude.userKey ? (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4">
-          <p>
-            Clé <span className="num font-semibold">•••• {claude.userKey.last4}</span>
-            {claude.userKey.addedAtLabel ? <> · ajoutée le {claude.userKey.addedAtLabel}</> : null}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p>
+              Clé <span className="num font-semibold">•••• {claude.userKey.last4}</span>
+              {claude.userKey.addedAtLabel ? <> · ajoutée le {claude.userKey.addedAtLabel}</> : null}
+            </p>
+            {/* Champ révélé (« Remplacer ») : son propre « i » suffit. */}
+            {showForm ? null : <ChoiceInfo label="Votre clé API" items={KEY_INFO} />}
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               id={ids.replace}
@@ -182,19 +207,22 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
             startTransition(() => submit(data));
           }}
         >
-          <ol className="flex list-decimal flex-col gap-4 pl-5 marker:font-semibold marker:text-muted">
-            <li>
+          <div className="flex flex-col gap-4">
+            <p>
               Créez une clé dans la{" "}
               <a href={CONSOLE_URL} className="opale-link font-semibold" target="_blank" rel="noopener noreferrer">
                 console Anthropic, rubrique API Keys
                 <span className="sr-only"> (nouvel onglet)</span>
               </a>
-              , puis ajoutez quelques euros de crédit (rubrique Billing).
-            </li>
-            <li>
-              <label htmlFor={ids.key} className="opale-field__label">
-                Clé API Anthropic
-              </label>
+              , puis collez-la ci-dessous.
+            </p>
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor={ids.key} className="opale-field__label">
+                  Clé API Anthropic
+                </label>
+                <ChoiceInfo label="Votre clé API" items={KEY_INFO} />
+              </div>
               <PasswordInput
                 id={ids.key}
                 name="apiKey"
@@ -207,23 +235,23 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
                 onChange={(e) => setKeyTyped(e.target.value !== "")}
                 {...errorProps(state.fieldErrors, "apiKey", `${ids.key}-err`, ids.hint)}
               />
-              <p id={ids.hint} className="opale-field__helper">
-                Collez-la ici. Elle commence par « sk-ant- ».
+              {/* Le format, lu avec le champ ; le détail (crédits, sécurité) est derrière le « i ». */}
+              <p id={ids.hint} className="sr-only">
+                Elle commence par « sk-ant- ».
               </p>
               <FieldError id={`${ids.key}-err`} message={keyError} />
-            </li>
-            <li>
+            </div>
+            <div>
               <Button type="submit" aria-disabled={pending || undefined}>
                 <ButtonLabel idle="Vérifier et activer" busy="Vérification de la clé…" isBusy={pending} />
               </Button>
-            </li>
-          </ol>
+            </div>
+          </div>
           <FormStatus state={state.status} className="mt-4" />
           <LiveRegion className="sr-only">{pending ? "Vérification de la clé auprès d'Anthropic…" : null}</LiveRegion>
         </form>
       ) : null}
 
-      <p className="text-sm text-muted">Chiffrée, jamais réaffichée : seuls les 4 derniers caractères restent visibles.</p>
       <LiveRegion className="text-sm font-medium text-success">
         {announce ? (
           <>

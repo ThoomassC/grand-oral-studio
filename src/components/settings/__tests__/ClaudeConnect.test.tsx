@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiSetupStatus } from "@/components/settings/ai-status";
@@ -35,16 +35,28 @@ const field = () => screen.getByLabelText("Clé API Anthropic");
 const submit = () => screen.getByRole("button", { name: "Vérifier et activer" });
 
 describe("ClaudeConnect — sans clé", () => {
-  it("devrait guider en trois étapes, avec le lien vers la console et la mention du chiffrement", () => {
+  it("devrait proposer le lien vers la console, le champ et « Vérifier et activer », sans liste numérotée", () => {
     render(<ClaudeConnect claude={NO_KEY} onActivated={vi.fn()} />);
-    const steps = screen.getAllByRole("listitem");
-    expect(steps).toHaveLength(3);
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
     const link = screen.getByRole("link", { name: /console Anthropic, rubrique API Keys/ });
     expect(link).toHaveAttribute("href", "https://console.anthropic.com/settings/keys");
     expect(link).toHaveAttribute("target", "_blank");
-    expect(steps[0]).toHaveTextContent(/puis ajoutez quelques euros de crédit \(rubrique Billing\)\.$/);
     expect(field()).toHaveAttribute("autocomplete", "off");
-    expect(screen.getByText(/Chiffrée, jamais réaffichée/)).toBeInTheDocument();
+    // Le format reste dit au lecteur d'écran, en description du champ.
+    expect(field()).toHaveAccessibleDescription(/commence par « sk-ant- »/);
+    expect(submit()).toBeInTheDocument();
+    // Les aides détaillées sont derrière le bouton « i », pas affichées en permanence.
+    expect(screen.queryByText(/Chiffrée, jamais réaffichée/)).not.toBeInTheDocument();
+  });
+
+  it("devrait détailler format, crédits et sécurité de la clé derrière le bouton « i »", async () => {
+    const user = userEvent.setup();
+    render(<ClaudeConnect claude={NO_KEY} onActivated={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "En savoir plus : Votre clé API" }));
+    const panel = await screen.findByRole("dialog", { name: "Votre clé API" });
+    expect(within(panel).getByText((_, el) => el?.tagName === "DD" && /commence par « sk-ant- »/.test(el.textContent ?? ""))).toBeInTheDocument();
+    expect(within(panel).getByText(/rubrique Billing/)).toBeInTheDocument();
+    expect(within(panel).getByText(/chiffrée et n'est jamais réaffichée/)).toBeInTheDocument();
   });
 
   it("devrait refuser un format invalide sans appeler le serveur, et placer le focus sur le champ", async () => {

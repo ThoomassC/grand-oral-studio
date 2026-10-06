@@ -1,11 +1,11 @@
 "use client";
 
 import { Icon, Popover, PopoverContent, PopoverTrigger } from "@thomascaron/opale-ui";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 export interface ChoiceInfoItem {
   term: string;
-  detail: string;
+  detail: ReactNode;
 }
 
 /**
@@ -22,7 +22,6 @@ export function ChoiceInfo({ label, items }: { label: string; items: readonly Ch
       <PopoverTrigger
         className="choice-info-trigger"
         aria-label={`En savoir plus : ${label}`}
-        title={`En savoir plus : ${label}`}
       >
         <Icon name="info" />
       </PopoverTrigger>
@@ -30,7 +29,7 @@ export function ChoiceInfo({ label, items }: { label: string; items: readonly Ch
         placement="bottom"
         align="end"
         aria-labelledby={titleId}
-        className="w-[min(22rem,calc(100vw-2rem))] p-4 text-sm"
+        className="choice-info-panel w-[min(22rem,calc(100vw-2rem))] p-4 text-sm"
       >
         <p id={titleId} className="font-title text-base font-semibold">
           {label}
