@@ -63,8 +63,7 @@ export default async function HomePage() {
     <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
       <section aria-labelledby="accroche" className="grid items-center gap-12 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-14">
         <div>
-          <p className="eyebrow">Préparation du grand oral · bac+5</p>
-          <h1 id="accroche" className="mt-4 text-4xl leading-[1.05] sm:text-5xl xl:text-[3.75rem]">
+          <h1 id="accroche" className="text-4xl leading-[1.05] sm:text-5xl xl:text-[3.75rem]">
             Une problématique <span className="marker">tirée au sort</span>, un diaporama{" "}
             <span className="marker">prêt</span> en quelques minutes.
           </h1>
@@ -116,8 +115,7 @@ export default async function HomePage() {
       </section>
 
       <section aria-labelledby="etapes" className="border-t border-border py-12 sm:py-16">
-        <p className="eyebrow">L&apos;IA seulement le jour J</p>
-        <h2 id="etapes" className="mt-2 text-2xl sm:text-3xl">
+        <h2 id="etapes" className="text-2xl sm:text-3xl">
           En trois étapes
         </h2>
         <ol className="mt-8 grid gap-4 md:grid-cols-3 md:gap-6">

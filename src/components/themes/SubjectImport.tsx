@@ -26,9 +26,8 @@ export function SubjectImport({
 }) {
   return (
     <section id={ANCHOR} aria-labelledby={TITLE_ID} className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6">
-      <p className="eyebrow">Démarrage rapide</p>
       {/* Sous-bloc de la page Sujets (h2) : h3. */}
-      <h3 id={TITLE_ID} className="mt-1 text-2xl">
+      <h3 id={TITLE_ID} className="text-2xl">
         Importer des sujets depuis un texte
       </h3>
       <p className="mt-1 max-w-3xl text-muted">

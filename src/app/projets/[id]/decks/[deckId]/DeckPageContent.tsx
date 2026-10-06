@@ -38,16 +38,16 @@ export async function DeckPageContent({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="eyebrow text-accent-strong">
-          {isSkeleton ? "Squelette (version 1.0)" : "Deck final"} · {deck.themeName ?? "Sans sujet"}
-        </p>
         <h2
           id="titre-deck"
           tabIndex={-1}
           aria-describedby={isNew ? "deck-pret" : undefined}
-          className="mt-2 text-2xl focus:outline-none sm:text-3xl">
+          className="text-2xl focus:outline-none sm:text-3xl">
           {deck.spec.title}
         </h2>
+        <p className="mt-1 text-sm text-muted">
+          {isSkeleton ? "Squelette (version 1.0)" : "Deck final"} · {deck.themeName ?? "Sans sujet"}
+        </p>
         {/* Arrivée après génération : le focus quitte <body> pour le titre du deck. */}
         {isNew ? <FocusOnMount targetId="titre-deck" /> : null}
         {deck.engine ? (

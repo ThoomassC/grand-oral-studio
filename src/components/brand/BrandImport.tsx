@@ -35,9 +35,8 @@ export function BrandImport({
       aria-labelledby={TITLE_ID}
       className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6"
     >
-      <p className="eyebrow">Facultatif</p>
       {/* Sous-bloc de la page Apparence (h2) : h3. */}
-      <h3 id={TITLE_ID} className="mt-1 text-2xl">
+      <h3 id={TITLE_ID} className="text-2xl">
         Partir d&apos;un exemple
       </h3>
       <p className="mt-1 max-w-3xl text-muted">

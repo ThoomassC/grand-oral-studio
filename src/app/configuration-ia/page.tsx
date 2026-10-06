@@ -16,8 +16,7 @@ export default async function AiConfigurationPage() {
 
   return (
     <div className={SETTINGS_CONTAINER}>
-      <p className="eyebrow">Compte</p>
-      <h1 className="mt-2 text-3xl sm:text-4xl">Configuration IA</h1>
+      <h1 className="text-3xl sm:text-4xl">Configuration IA</h1>
       <p className="mt-2 text-muted">
         L&apos;IA n&apos;intervient qu&apos;au jour J, pour rédiger le diaporama : tout le reste se prépare sans elle.
         Mode clair ou sombre, taille du texte et animations se règlent dans Réglages, depuis l&apos;en-tête.

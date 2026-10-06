@@ -23,8 +23,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <p className="eyebrow">Compte</p>
-      <h1 className="mt-2 text-3xl sm:text-4xl">Informations du profil</h1>
+      <h1 className="text-3xl sm:text-4xl">Informations du profil</h1>
 
       <div className="mt-8 flex flex-col gap-6">
         <section aria-labelledby="profil-infos">

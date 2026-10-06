@@ -24,8 +24,7 @@ const SECTION_TONE: Record<ReleaseSection, string> = {
 export default function ReleaseNotesPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <p className="eyebrow">Grand Oral Studio</p>
-      <h1 className="mt-2 text-3xl sm:text-4xl">Notes de version</h1>
+      <h1 className="text-3xl sm:text-4xl">Notes de version</h1>
       <p className="mt-2 text-muted">Ce qui change à chaque version, de la plus récente à la plus ancienne.</p>
 
       <ol className="mt-8 flex flex-col">

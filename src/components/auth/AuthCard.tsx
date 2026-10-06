@@ -6,8 +6,7 @@ export function AuthCard({ title, intro, children }: { title: string; intro: str
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:py-16">
       <Card elevation={2} className="w-full max-w-md p-6 sm:p-8">
-        <p className="eyebrow">Grand Oral Studio</p>
-        <h1 className="mt-2 text-3xl">{title}</h1>
+        <h1 className="text-3xl">{title}</h1>
         <p className="mt-2 text-muted">{intro}</p>
         <div className="mt-6">{children}</div>
       </Card>
