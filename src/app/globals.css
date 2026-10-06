@@ -12,6 +12,21 @@
 @import "@thomascaron/opale-ui/opale-nofonts.layered.css";
 
 /*
+ * Repli recalé d'Atkinson Hyperlegible Next : next/font ne connaît pas ses métriques
+ * (absente de capsize-font-metrics.json), il ne génère donc pas de repli. Valeurs
+ * calculées sur le woff2 servi (getFallbackMetricsFromFontFile) : pas de redécoupage
+ * du texte au chargement de la police.
+ */
+@font-face {
+  font-family: "Atkinson Hyperlegible Next Fallback";
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans");
+  ascent-override: 99.04%;
+  descent-override: 31.8%;
+  line-gap-override: 0%;
+  size-adjust: 99.36%;
+}
+
+/*
  * Thème : `data-theme="light" | "dark"` sur <html>, toujours posé — par le
  * serveur quand le cookie `theme` porte un choix, sinon par le script
  * d'Opale (`opaleThemeScript`) avant la première peinture. La variante
@@ -49,7 +64,7 @@
   --fiche-shadow-float: 0 8px 24px -8px rgb(20 33 61 / 0.28);
   --fiche-shadow-header: 0 1px 0 var(--fiche-line), 0 3px 8px -2px rgb(20 33 61 / 0.12);
   --fiche-font-title: var(--font-schibsted-grotesk), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --fiche-font-text: var(--font-atkinson-next), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fiche-font-text: var(--font-atkinson-next), "Atkinson Hyperlegible Next Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 :root[data-theme="dark"] {
   --fiche-paper: #141A24;
@@ -82,6 +97,7 @@
   --opale-text-secondary: var(--fiche-graphite);
   --opale-primary: var(--fiche-rule);
   --opale-primary-dark: var(--fiche-rule-hover);
+  --opale-primary-light: var(--fiche-rule-hover);
   --opale-primary-on-surface: var(--fiche-rule);
   --opale-on-primary: var(--fiche-on-rule);
   /*

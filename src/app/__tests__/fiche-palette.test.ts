@@ -86,7 +86,7 @@ const TEXT_PAIRS: ReadonlyArray<readonly [FicheToken, FicheToken]> = [
 ];
 
 describe.each(["light", "dark"] as const)("palette « fiche bristol » — thème %s", (theme) => {
-  it("devrait déclarer les dix jetons --fiche-* en hexadécimal opaque", () => {
+  it("devrait déclarer chaque jeton --fiche-* en hexadécimal opaque", () => {
     expect(() => readPalette(theme)).not.toThrow();
   });
 
