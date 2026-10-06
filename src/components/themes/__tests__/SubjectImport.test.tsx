@@ -73,6 +73,8 @@ describe("Import de sujets depuis un texte (page Sujets)", () => {
     renderSubjects();
     const region = screen.getByRole("region", { name: "Importer des sujets depuis un texte" });
     expect(region).toHaveAttribute("id", "importer-sujets");
+    // Sous-bloc de la page Sujets (h2) : niveau 3.
+    expect(within(region).getByRole("heading", { name: "Importer des sujets depuis un texte", level: 3 })).toBeInTheDocument();
     expect(within(region).queryByRole("tab")).not.toBeInTheDocument();
     expect(within(region).queryByLabelText(/Déposez votre présentation/)).not.toBeInTheDocument();
     expect(region).toHaveTextContent("Rien n'est envoyé à une IA.");

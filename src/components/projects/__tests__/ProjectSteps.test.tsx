@@ -64,6 +64,16 @@ describe("ProjectSteps", () => {
     expect(within(nav()).getByRole("link", { name: /Étape 3.*Jour J.*à faire/ })).toBeInTheDocument();
   });
 
+  it("devrait garder le résumé de chaque étape lisible au lecteur d'écran, même masqué sous 1024 px", () => {
+    render(<ProjectSteps programId="p1" steps={STEPS} deckCount={0} />);
+    const link = within(nav()).getByRole("link", { name: /Étape 1.*Apparence/ });
+    expect(link).toHaveAccessibleName(/résumé appearance/);
+    const summary = within(link).getByText("résumé appearance");
+    // `hidden` (display: none) retirerait le résumé de l'arbre d'accessibilité ; `sr-only` le masque seulement à l'écran.
+    expect(summary.closest(".project-step__summary")).toHaveClass("max-lg:sr-only");
+    expect(summary.closest(".project-step__summary")).not.toHaveClass("max-lg:hidden");
+  });
+
   it.each([
     ["/projets/p1/apparence", "/projets/p1/apparence"],
     ["/projets/p1/trame", "/projets/p1/trame"],

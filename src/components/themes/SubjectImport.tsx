@@ -27,9 +27,10 @@ export function SubjectImport({
   return (
     <section id={ANCHOR} aria-labelledby={TITLE_ID} className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6">
       <p className="eyebrow">Démarrage rapide</p>
-      <h2 id={TITLE_ID} className="mt-1 text-2xl">
+      {/* Sous-bloc de la page Sujets (h2) : h3. */}
+      <h3 id={TITLE_ID} className="mt-1 text-2xl">
         Importer des sujets depuis un texte
-      </h2>
+      </h3>
       <p className="mt-1 max-w-3xl text-muted">
         Partez de ce que vous avez déjà : la liste des sujets ou l&apos;énoncé de votre oral. Vous cochez les sujets à
         importer dans un aperçu ; tout reste modifiable ensuite. Rien n&apos;est envoyé à une IA.

@@ -44,7 +44,8 @@ afterEach(() => {
 describe("Éditeur de trame — lignes et contenu type", () => {
   it("devrait montrer la couverture fixe puis la plage de diapos de chaque ligne", () => {
     renderEditor();
-    expect(screen.getByRole("heading", { name: "Diapos de la trame" })).toBeInTheDocument();
+    // Sous-bloc de la page Trame (h2) : niveau 3.
+    expect(screen.getByRole("heading", { name: "Diapos de la trame", level: 3 })).toBeInTheDocument();
     const cover = screen.getByText("Couverture").closest("li");
     expect(cover).toHaveTextContent("Diapo 1");
     expect(cover).toHaveTextContent("La problématique tirée et le titre du sujet. Ajoutée automatiquement.");
@@ -203,6 +204,21 @@ describe("Éditeur de trame — ajout, suppression, ordre", () => {
       ["Pistes", undefined],
       ["Contexte", 180],
     ]);
+  });
+
+  it("devrait annuler les modifications, l'annoncer et placer le focus sur « Enregistrer la trame »", async () => {
+    const user = userEvent.setup();
+    renderEditor(TIMED);
+    await user.type(within(line(2)).getByLabelText("Durée de la ligne 2"), "2:00");
+    const cancel = screen.getByRole("button", { name: "Annuler les modifications" });
+    await user.click(cancel);
+
+    expect(within(line(2)).getByLabelText("Durée de la ligne 2")).toHaveValue("");
+    expect(cancel).not.toBeInTheDocument();
+    // Le bouton cliqué a disparu : le focus ne doit pas retomber sur <body>.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enregistrer la trame" })).toHaveFocus());
+    expect(screen.getByText("Modifications annulées.").closest("[role='status']")).not.toBeNull();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("devrait recharger la trame par défaut sans enregistrer", async () => {

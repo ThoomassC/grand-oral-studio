@@ -54,6 +54,8 @@ describe("Bloc « Partir d'un exemple » (page Apparence)", () => {
     renderBlock();
     const region = screen.getByRole("region", { name: "Partir d'un exemple" });
     expect(region).toHaveAttribute("id", "importer-apparence");
+    // Sous-bloc de la page Apparence (h2) : niveau 3.
+    expect(within(region).getByRole("heading", { name: "Partir d'un exemple", level: 3 })).toBeInTheDocument();
     const tabs = within(region).getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Depuis un fichier .pptx", "Depuis un prompt"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");

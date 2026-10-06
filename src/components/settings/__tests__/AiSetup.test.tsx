@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiSetupStatus } from "@/components/settings/ai-status";
 
 const setAiEngine = vi.fn();
@@ -131,6 +131,41 @@ describe("AiSetup — question 1", () => {
     await user.click(screen.getByRole("radio", { name: "Modèle local (Ollama)" }));
     await user.click(screen.getByRole("button", { name: "Choisir ce modèle" }));
     expect(await screen.findByText("Le modèle local ne répond pas pour le moment. Réessayez plus tard.")).toBeInTheDocument();
+  });
+});
+
+describe("AiSetup — focus et erreurs (accessibilité)", () => {
+  beforeEach(() => {
+    // jsdom ne calcule pas de boîtes : focusLater exige getClientRects() non vide.
+    vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 10, 10)] as unknown as DOMRectList);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("devrait placer le focus sur le choix coché quand le bouton « Choisir … » disparaît après l'enregistrement", async () => {
+    setAiEngine.mockResolvedValue({ ok: true, data: null });
+    const user = userEvent.setup();
+    render(<AiSetup status={status({ selected: "claude", effective: "claude" }, WITH_USER_KEY)} />);
+    await user.click(screen.getByRole("radio", { name: "Sans IA" }));
+    await user.click(screen.getByRole("button", { name: "Choisir Sans IA" }));
+    expect(await screen.findByText("Choix enregistré : Sans IA.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choisir Sans IA" })).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(screen.getByRole("radio", { name: "Sans IA" })).toHaveFocus());
+  });
+
+  it("devrait marquer le groupe invalide et le décrire par l'erreur « engine » renvoyée par le serveur", async () => {
+    setAiEngine.mockResolvedValue({
+      ok: false,
+      error: "Ce choix n'a pas pu être enregistré.",
+      fieldErrors: { engine: ["Ce moteur n'est pas disponible sur ce serveur."] },
+    });
+    const user = userEvent.setup();
+    render(<AiSetup status={status({ selected: "claude", effective: "claude" }, WITH_USER_KEY)} />);
+    const group = screen.getByRole("radiogroup", { name: "1. Qui rédige le jour J ?" });
+    expect(group).not.toHaveAttribute("aria-invalid", "true");
+    await user.click(screen.getByRole("radio", { name: "Sans IA" }));
+    await user.click(screen.getByRole("button", { name: "Choisir Sans IA" }));
+    await vi.waitFor(() => expect(group).toHaveAttribute("aria-invalid", "true"));
+    expect(group).toHaveAccessibleDescription(/Ce moteur n'est pas disponible sur ce serveur\./);
   });
 });
 

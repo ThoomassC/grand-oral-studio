@@ -35,6 +35,18 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     expect(screen.queryByRole("link", { name: /gabarit avec un prompt/ })).not.toBeInTheDocument();
   });
 
+  it("devrait titrer la liste au niveau 3 (sous le h2 « Sujets » de la page) et chaque sujet au niveau 4", () => {
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0 }]}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Vos sujets", level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Énergie/, level: 4 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+  });
+
   it("devrait garder la saisie manuelle à un clic, en secondaire", async () => {
     const user = userEvent.setup();
     render(<ThemeManager programId="p1" themes={[]} />);
@@ -43,7 +55,7 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     const add = screen.getByRole("button", { name: "Ajouter un sujet" });
     expect(add).toHaveAttribute("aria-expanded", "false");
     await user.click(add);
-    expect(screen.getByRole("heading", { name: "Nouveau sujet" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nouveau sujet", level: 4 })).toBeInTheDocument();
   });
 
   it("devrait garder l'import de liste existant", async () => {
@@ -51,7 +63,7 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     render(<ThemeManager programId="p1" themes={[]} />);
     const trigger = screen.getByRole("button", { name: "Importer une liste" });
     await user.click(trigger);
-    expect(screen.getByRole("heading", { name: "Importer des sujets" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Importer des sujets", level: 4 })).toBeInTheDocument();
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Nom | description | mot-clé 1, mot-clé 2 | notes")).toBeInTheDocument();
     expect(screen.getByLabelText("Liste des sujets")).toBeInTheDocument();
@@ -118,6 +130,34 @@ describe("Gestionnaire de sujets — notes", () => {
       keywords: ["climat"],
       notes: "Chiffre ADEME 2024",
     });
+  });
+
+  it("devrait annoncer poliment l'approche puis l'atteinte de la limite des notes", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), finalDeckCount: 0 }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    const notes = screen.getByLabelText(/^Notes/);
+    expect(screen.queryByText(/approchez de la limite/)).not.toBeInTheDocument();
+
+    // 90 % de 4 000 : une seule annonce, qui ne change pas à chaque frappe.
+    await user.type(notes, "x");
+    const near = screen.getByText(/Vous approchez de la limite de 4\s000 caractères\./);
+    expect(near.closest("[role='status']")).not.toBeNull();
+    await user.type(notes, "xx");
+    expect(screen.getByText(/Vous approchez de la limite de 4\s000 caractères\./)).toBe(near);
+
+    // La limite : la saisie s'arrête (maxLength), et c'est dit.
+    await user.click(notes);
+    await user.paste("y".repeat(500));
+    expect(notes).toHaveValue("x".repeat(3602) + "y".repeat(398));
+    const reached = screen.getByText(/Limite de 4\s000 caractères atteinte/);
+    expect(reached.closest("[role='status']")).not.toBeNull();
+    expect(screen.queryByText(/approchez de la limite/)).not.toBeInTheDocument();
   });
 
   it("devrait refuser des notes trop longues avec l'erreur reliée au champ", async () => {

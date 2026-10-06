@@ -88,6 +88,30 @@ describe("ClaudeConnect — sans clé", () => {
     expect(field()).toHaveValue("");
   });
 
+  it("devrait placer le focus sur « Remplacer » quand la clé activée apparaît (après rafraîchissement)", async () => {
+    activateClaude.mockResolvedValue({ ok: true, data: { last4: "AAAA" } });
+    const user = userEvent.setup();
+    const { rerender } = render(<ClaudeConnect claude={NO_KEY} onActivated={vi.fn()} />);
+    await user.type(field(), VALID_KEY);
+    await user.click(submit());
+    expect(await screen.findByText("Claude est activé : clé •••• AAAA vérifiée et enregistrée.")).toBeInTheDocument();
+    // router.refresh() : la page renvoie la clé enregistrée, le formulaire (et son bouton focalisé) disparaît.
+    rerender(
+      <ClaudeConnect
+        claude={{ available: true, source: "user", userKey: { last4: "AAAA", addedAtLabel: "" } }}
+        onActivated={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText("Clé API Anthropic")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remplacer" })).toHaveFocus();
+  });
+
+  it("ne devrait pas voler le focus quand la clé apparaît sans activation dans cette page", () => {
+    const { rerender } = render(<ClaudeConnect claude={NO_KEY} onActivated={vi.fn()} />);
+    rerender(<ClaudeConnect claude={USER_KEY} onActivated={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Remplacer" })).not.toHaveFocus();
+  });
+
   it("devrait afficher le refus d'Anthropic sur le champ, sans activer", async () => {
     const message = "Cette clé est refusée par Anthropic. Vérifiez-la ou créez-en une nouvelle sur console.anthropic.com.";
     activateClaude.mockResolvedValue({ ok: false, error: message, fieldErrors: { apiKey: [message] } });
@@ -131,6 +155,25 @@ describe("ClaudeConnect — clé présente", () => {
     expect(replace).toHaveAttribute("aria-expanded", "true");
     expect(field()).toBeInTheDocument();
     await vi.waitFor(() => expect(field()).toHaveFocus());
+  });
+
+  it("devrait placer le focus sur « Remplacer » quand le formulaire de remplacement disparaît après activation", async () => {
+    activateClaude.mockResolvedValue({ ok: true, data: { last4: "AAAA" } });
+    const getRects = vi
+      .spyOn(Element.prototype, "getClientRects")
+      .mockReturnValue([new DOMRect(0, 0, 10, 10)] as unknown as DOMRectList);
+    try {
+      const user = userEvent.setup();
+      render(<ClaudeConnect claude={USER_KEY} onActivated={vi.fn()} />);
+      await user.click(screen.getByRole("button", { name: "Remplacer" }));
+      await user.type(field(), VALID_KEY);
+      await user.click(submit());
+      expect(await screen.findByText("Claude est activé : clé •••• AAAA vérifiée et enregistrée.")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Clé API Anthropic")).not.toBeInTheDocument();
+      await vi.waitFor(() => expect(screen.getByRole("button", { name: "Remplacer" })).toHaveFocus());
+    } finally {
+      getRects.mockRestore();
+    }
   });
 
   it("devrait supprimer la clé après confirmation", async () => {

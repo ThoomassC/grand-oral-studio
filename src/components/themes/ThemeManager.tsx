@@ -169,9 +169,10 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
+          {/* Sous-bloc de la page Sujets (h2) : h3, et ses panneaux et sujets en h4. */}
+          <h3 id={IDS.listTitle} tabIndex={-1} className="text-2xl focus:outline-none">
             Vos sujets
-          </h2>
+          </h3>
           <p className="max-w-3xl text-sm text-muted">
             Saisissez-les un par un ou collez une liste. L&apos;ordre des sujets est celui de votre projet ; les
             mots-clés aident à reconnaître le sujet d&apos;une problématique.
@@ -202,9 +203,9 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
       {panel === "add" ? (
         <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="opale-card opale-card--e1 block p-5">
-          <h3 id="titre-ajout-theme" className="text-lg font-semibold">
+          <h4 id="titre-ajout-theme" className="text-lg font-semibold">
             Nouveau sujet
-          </h3>
+          </h4>
           <div className="mt-4">
             <ThemeForm
               nameId={IDS.addName}
@@ -221,9 +222,9 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
 
       {panel === "import" ? (
         <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="opale-card opale-card--e1 block p-5">
-          <h3 id="titre-import-themes" className="text-lg font-semibold">
+          <h4 id="titre-import-themes" className="text-lg font-semibold">
             Importer des sujets
-          </h3>
+          </h4>
           <ThemeImport programId={programId} textareaId={IDS.importText} onClose={closePanel} />
         </section>
       ) : null}
@@ -285,10 +286,10 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                         {index + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="pt-1 text-lg">
+                        <h4 className="pt-1 text-lg">
                           <span className="sr-only">Sujet {index + 1} : </span>
                           {theme.name}
-                        </h3>
+                        </h4>
                         {theme.description ? <p className="mt-1 text-muted">{theme.description}</p> : null}
                         {theme.keywords.length > 0 ? (
                           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Mots-clés">

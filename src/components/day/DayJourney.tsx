@@ -71,7 +71,8 @@ function StepTitle({
   state: "current" | "done" | "todo";
 }) {
   return (
-    <h2 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
+    // h3 : les étapes sont des sous-blocs du titre « Jour J » (h2) de la page.
+    <h3 id={id} tabIndex={-1} className="flex items-center gap-3 text-xl focus:outline-none sm:text-2xl">
       <span
         aria-hidden="true"
         className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-bold ${
@@ -91,7 +92,7 @@ function StepTitle({
         {children}
         {state === "done" ? <span className="sr-only"> (terminée)</span> : null}
       </span>
-    </h2>
+    </h3>
   );
 }
 
@@ -630,7 +631,11 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 variant="text" size="small"
                 onClick={() => {
                   if (generating) return;
+                  // Retour à l'étape 1 : cette étape et ce bouton (focalisé) disparaissent. Le focus
+                  // passe à la problématique, où la progression et une éventuelle erreur
+                  // s'affichent ; au succès, classify() le porte au titre de l'étape 2.
                   update({ stage: "input" });
+                  focusLater([ids.problem]);
                   window.setTimeout(classify, 0);
                 }}
                 aria-disabled={generating || undefined}

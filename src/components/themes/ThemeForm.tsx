@@ -10,11 +10,26 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 import { formatCount } from "@/components/ui/format";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { KeywordInput } from "./KeywordInput";
 
 const NOTES_MAX = LIMITS.subjectNotes;
+/** Seuil d'avertissement des notes : 90 % de la limite. */
+const NOTES_NEAR = Math.ceil(NOTES_MAX * 0.9);
+
+/**
+ * Message de la région polie sous les notes : un texte fixe par palier (approche,
+ * limite atteinte), pour une seule annonce à chaque changement de palier et non à
+ * chaque frappe. `maxLength` arrête la saisie à la limite : sans ce message, elle
+ * s'arrêterait sans bruit.
+ */
+function notesLimitMessage(length: number): string | null {
+  if (length >= NOTES_MAX) return `Limite de ${formatCount(NOTES_MAX)} caractères atteinte : la saisie s'arrête ici.`;
+  if (length >= NOTES_NEAR) return `Vous approchez de la limite de ${formatCount(NOTES_MAX)} caractères.`;
+  return null;
+}
 
 interface ThemeFormProps {
   initial?: ThemeInput;
@@ -193,12 +208,10 @@ export function ThemeForm({
         <p id={ids.notesHint} className="opale-field__helper">
           Chiffres, exemples, sources : le jour J, le diaporama s&apos;appuie dessus.
         </p>
-        <p
-          id={ids.notesCount}
-          className={`opale-field__helper num ${notes.length > NOTES_MAX ? "font-semibold text-danger" : ""}`}
-        >
+        <p id={ids.notesCount} className="opale-field__helper num">
           {`${formatCount(notes.length)} / ${formatCount(NOTES_MAX)} caractères`}
         </p>
+        <LiveRegion className="opale-field__helper font-semibold">{notesLimitMessage(notes.length)}</LiveRegion>
         <FieldError id={`${ids.notes}-err`} message={firstError(fieldErrors, "notes")} />
       </div>
       <FormStatus state={status} />

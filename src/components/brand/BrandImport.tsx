@@ -36,9 +36,10 @@ export function BrandImport({
       className="opale-card opale-card--e2 block scroll-mt-4 p-4 sm:p-6"
     >
       <p className="eyebrow">Facultatif</p>
-      <h2 id={TITLE_ID} className="mt-1 text-2xl">
+      {/* Sous-bloc de la page Apparence (h2) : h3. */}
+      <h3 id={TITLE_ID} className="mt-1 text-2xl">
         Partir d&apos;un exemple
-      </h2>
+      </h3>
       <p className="mt-1 max-w-3xl text-muted">
         Reprenez les couleurs, les polices et le logo d&apos;une présentation existante, ou décrivez-les dans un texte.
         Vous vérifiez un aperçu avant d&apos;appliquer ; tout reste modifiable ensuite. Rien n&apos;est envoyé à une IA.

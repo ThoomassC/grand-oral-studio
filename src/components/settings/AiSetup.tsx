@@ -8,7 +8,7 @@ import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { SelectInput } from "@/components/ui/Field";
 import { FieldError } from "@/components/ui/FieldError";
-import { focusFirstInvalid } from "@/components/ui/focus";
+import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { setAiEngine, testAnthropicApiKey } from "@/server/actions/settings";
 import { isReady, writerLabel, type AiSetupStatus, type EngineId } from "./ai-status";
@@ -52,7 +52,9 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const baseId = useId();
-  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, model: `${baseId}-model`, engineErr: `${baseId}-engine-err` };
+  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, model: `${baseId}-model` };
+  /** Id du radio d'un moteur : cible du focus quand le bouton « Choisir … » disparaît. */
+  const radioId = (engine: EngineId) => `${baseId}-engine-${engine}`;
   const { ollama } = status;
   const ollamaUsable = ollama !== null && ollama.reachable && ollama.models.length > 0;
 
@@ -90,6 +92,9 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
       return { status: { kind: "error", message: result.error }, fieldErrors };
     }
     setSaved((prev) => ({ engine, model: engine === "ollama" ? ollamaModel : prev.model }));
+    // Le bouton « Choisir … », qui a le focus, disparaît : le focus passe au radio du choix
+    // enregistré (coché, juste au-dessus), pas sur la page. La confirmation reste annoncée.
+    focusLater([radioId(engine)]);
     router.refresh();
     return { status: { kind: "success", message: `Choix enregistré : ${choiceLabel(engine, ollamaModel)}.` }, fieldErrors: {} };
   }, INITIAL);
@@ -163,16 +168,23 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
             onValueChange={(value) => {
               if (value === "claude" || value === "ollama" || value === "free") setChoice(value);
             }}
-            aria-describedby={engineError ? ids.engineErr : undefined}
+            error={engineError}
           >
             <Radio
+              id={radioId("free")}
               value="free"
               label="Sans IA"
               description="La trame remplie avec vos notes : le texte reste à écrire. Gratuit et instantané."
             />
-            <Radio value="claude" label="Claude" description="Rédaction complète et notes d'orateur. Quelques centimes par diaporama." />
+            <Radio
+              id={radioId("claude")}
+              value="claude"
+              label="Claude"
+              description="Rédaction complète et notes d'orateur. Quelques centimes par diaporama."
+            />
             {ollama !== null ? (
               <Radio
+                id={radioId("ollama")}
                 value="ollama"
                 label="Modèle local (Ollama)"
                 disabled={!ollamaUsable}
@@ -185,7 +197,6 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
               />
             ) : null}
           </RadioGroup>
-          <FieldError id={ids.engineErr} message={engineError} />
 
           {choice === "ollama" && ollamaUsable ? (
             <div>

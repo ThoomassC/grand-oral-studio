@@ -71,6 +71,7 @@ export function TemplateEditor({
   const baseId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
 
   const dirty = draftSignature(template, durations) !== draftSignature(saved, durationTexts(saved));
   useUnsavedChanges(dirty);
@@ -157,6 +158,21 @@ export function TemplateEditor({
     focusLater([`${baseId}-title-${id}`], { select: true });
   }
 
+  /**
+   * Revient à la trame enregistrée. Le bouton « Annuler » disparaît avec les
+   * modifications : le focus passe à « Enregistrer la trame », juste à côté,
+   * plutôt que de retomber sur la page, et l'annulation est annoncée.
+   */
+  function discardChanges() {
+    if (pending) return;
+    setTemplate(saved);
+    setDurations(durationTexts(saved));
+    setFieldErrors({});
+    setAnnounce("");
+    setStatus({ kind: "success", message: "Modifications annulées." });
+    saveRef.current?.focus();
+  }
+
   function reset() {
     const fresh = defaultTemplate();
     setTemplate(fresh);
@@ -221,9 +237,10 @@ export function TemplateEditor({
     <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
+          {/* Sous-bloc de la page Trame (h2) : h3. */}
+          <h3 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
             Diapos de la trame
-          </h2>
+          </h3>
           <p className="max-w-2xl text-sm text-muted">
             Format et durée de l&apos;oral, puis les lignes de la trame dans l&apos;ordre : titre, nombre de diapos,
             contenu type et durée.
@@ -514,7 +531,7 @@ export function TemplateEditor({
         <p className="num text-sm text-muted">{footerParts.join(" · ")}</p>
         <FormStatus state={status} />
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" aria-disabled={pending || undefined}>
+          <Button ref={saveRef} type="submit" aria-disabled={pending || undefined}>
             <ButtonLabel idle="Enregistrer la trame" busy="Enregistrement…" isBusy={pending} />
           </Button>
           {dirty ? (
@@ -522,13 +539,7 @@ export function TemplateEditor({
               <Button
                 type="button"
                 variant="text"
-                onClick={() => {
-                  if (pending) return;
-                  setTemplate(saved);
-                  setDurations(durationTexts(saved));
-                  setFieldErrors({});
-                  setStatus(IDLE);
-                }}
+                onClick={discardChanges}
                 aria-disabled={pending || undefined}
               >
                 Annuler les modifications

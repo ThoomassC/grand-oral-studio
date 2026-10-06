@@ -2,7 +2,7 @@
 
 import { Button } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useId, useRef, useState } from "react";
+import { startTransition, useActionState, useCallback, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
@@ -49,6 +49,12 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
   const formRef = useRef<HTMLFormElement>(null);
   /** Garde synchrone contre le double clic : `pending` n'est vrai qu'au rendu suivant. */
   const submittingRef = useRef(false);
+  /**
+   * Activation réussie alors que « Remplacer » n'existe pas encore (première clé) :
+   * le formulaire, et son bouton focalisé, disparaîtront au rafraîchissement de la
+   * page ; « Remplacer » prendra alors le focus en apparaissant.
+   */
+  const focusReplaceOnMountRef = useRef(false);
   const baseId = useId();
   const ids = { form: `${baseId}-form`, key: `${baseId}-key`, hint: `${baseId}-hint`, replace: `${baseId}-replace` };
   const [replacing, setReplacing] = useState(false);
@@ -79,6 +85,10 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
       formRef.current?.reset();
       setReplacing(false);
       setAnnounce(`Claude est activé : clé •••• ${result.data.last4} vérifiée et enregistrée.`);
+      // Le formulaire disparaît avec le bouton focalisé : le focus passe à « Remplacer », à côté de
+      // l'état de la clé. Déjà là (remplacement) : tout de suite ; sinon, à son apparition.
+      if (document.getElementById(ids.replace)) focusLater([ids.replace]);
+      else focusReplaceOnMountRef.current = true;
       onActivated();
       router.refresh();
       return INITIAL;
@@ -88,6 +98,15 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
   }, INITIAL);
 
   const showForm = claude.userKey === null || replacing;
+
+  /** Ref de « Remplacer » : prend le focus à son apparition après une activation, s'il est perdu. */
+  const replaceRef = useCallback((node: HTMLButtonElement | null) => {
+    if (!node || !focusReplaceOnMountRef.current) return;
+    focusReplaceOnMountRef.current = false;
+    const active = node.ownerDocument.activeElement;
+    // Ne pas voler le focus si l'utilisateur est allé ailleurs entre-temps.
+    if (active === null || active === node.ownerDocument.body) node.focus();
+  }, []);
   const keyError = firstError(state.fieldErrors, "apiKey");
   const note = claude.userKey === null ? SOURCE_NOTE[claude.source] : undefined;
 
@@ -102,6 +121,7 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
           <div className="flex flex-wrap gap-2">
             <Button
               id={ids.replace}
+              ref={replaceRef}
               type="button"
               variant="ghost"
               size="small"

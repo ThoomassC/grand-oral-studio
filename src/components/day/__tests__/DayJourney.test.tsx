@@ -1,6 +1,6 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClassificationOutcome } from "@/domain/contracts";
 
 const classify = vi.fn();
@@ -149,6 +149,60 @@ describe("DayJourney — plusieurs sujets", () => {
     const user = await recognize(outcome({}));
     await user.dblClick(screen.getByRole("button", { name: /Générer le diaporama|Génération en cours/ }));
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DayJourney — « Reconnaître le sujet » depuis l'étape 2 (focus)", () => {
+  beforeEach(() => {
+    // jsdom ne calcule pas de boîtes : focusLater exige getClientRects() non vide.
+    vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 10, 10)] as unknown as DOMRectList);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Sujet indiqué sur l'énoncé, « Continuer avec ce sujet », puis « Reconnaître le sujet » à l'étape 2. */
+  async function recognizeFromStep2(user: ReturnType<typeof userEvent.setup>) {
+    renderJourney();
+    await typeProblem(user);
+    await user.selectOptions(screen.getByLabelText(/Sujet indiqué sur l'énoncé/), "t2");
+    await user.click(screen.getByRole("button", { name: "Continuer avec ce sujet" }));
+    const step2 = screen.getByRole("region", { name: /Étape 2 sur 3/ });
+    const button = within(step2).getByRole("button", { name: "Reconnaître le sujet" });
+    await user.click(button);
+    return button;
+  }
+
+  it("devrait placer le focus sur la problématique, puis y laisser l'erreur compréhensible", async () => {
+    classify.mockRejectedValue(new TypeError("fetch failed"));
+    const user = userEvent.setup();
+    const button = await recognizeFromStep2(user);
+    expect(button).not.toBeInTheDocument();
+    const problem = screen.getByLabelText("Problématique tirée au sort");
+    await waitFor(() => expect(problem).toHaveFocus());
+    expect(
+      await screen.findByText("La connexion a été interrompue. Votre problématique est conservée : réessayez."),
+    ).toBeInTheDocument();
+    expect(problem).toHaveValue(PROBLEM);
+    expect(problem).toHaveFocus();
+  });
+
+  it("devrait placer le focus sur le titre de l'étape 2 une fois le sujet reconnu", async () => {
+    classify.mockResolvedValue({ ok: true, data: outcome({}) });
+    const user = userEvent.setup();
+    await recognizeFromStep2(user);
+    expect(classify).toHaveBeenCalledWith("p1", { problem: PROBLEM, hintedThemeId: "t2" });
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Étape 2 sur 3 :\s*Le sujet/ })).toHaveFocus());
+  });
+});
+
+describe("DayJourney — titres", () => {
+  it("devrait titrer les étapes au niveau 3, sous le titre « Jour J » de la page", async () => {
+    const user = userEvent.setup();
+    renderJourney([]);
+    expect(screen.getByRole("heading", { name: /Étape 1 sur 2 :\s*La problématique/, level: 3 })).toBeInTheDocument();
+    await typeProblem(user);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(screen.getByRole("heading", { name: /Étape 2 sur 2 :\s*Le diaporama/, level: 3 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
   });
 });
 

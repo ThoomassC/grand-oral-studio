@@ -78,7 +78,7 @@ export function ProjectSteps({ programId, steps, deckCount }: { programId: strin
                       <span className="sr-only">Étape {meta.index} : </span>
                       {meta.label}
                     </span>
-                    <span className="project-step__summary max-lg:hidden">
+                    <span className="project-step__summary max-lg:sr-only">
                       <span className="sr-only">, </span>
                       {step.summary}
                     </span>
