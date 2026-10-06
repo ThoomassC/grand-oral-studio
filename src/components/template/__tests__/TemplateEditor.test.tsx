@@ -54,7 +54,7 @@ describe("Éditeur de trame — lignes et contenu type", () => {
     expect(line(4)).toHaveAccessibleName(/^Ligne 4, diapos 5-7$/i);
     expect(within(line(1)).getByLabelText("Titre de la ligne 1")).toHaveValue("Introduction");
     expect(within(line(1)).getByLabelText("Contenu type de la ligne 1")).toHaveAccessibleDescription(
-      /Ce que disent ces diapos ; le jour J, l'IA le développe pour la problématique\./,
+      /Ce que disent ces diapos ; le jour J, ce contenu est développé pour la problématique\./,
     );
   });
 
@@ -224,7 +224,7 @@ describe("Éditeur de trame — ajout, suppression, ordre", () => {
   it("devrait recharger la trame par défaut sans enregistrer", async () => {
     const user = userEvent.setup();
     renderEditor(TIMED);
-    await user.click(screen.getByRole("button", { name: "Trame par défaut" }));
+    await user.click(screen.getByRole("button", { name: "Revenir à la trame par défaut" }));
     expect(within(line(1)).getByLabelText("Titre de la ligne 1")).toHaveValue("Introduction");
     expect(within(line(1)).getByLabelText("Durée de la ligne 1")).toHaveValue("");
     expect(screen.getByText("Trame par défaut chargée. Enregistrez pour l'appliquer.")).toBeInTheDocument();

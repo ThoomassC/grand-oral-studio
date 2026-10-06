@@ -152,12 +152,19 @@ describe("getAiSettingsView — sonde Ollama", () => {
 });
 
 describe("getEngineForUser — pas de bascule silencieuse", () => {
-  it("devrait refuser Claude choisi quand la clé a disparu (et sans clé serveur)", async () => {
+  it("devrait refuser Claude choisi quand la clé a disparu sans action de l'utilisateur (et sans clé serveur)", async () => {
+    const a = await createUser("a");
+    // Ligne « Claude choisi, aucune clé » (clé effacée hors de l'app) : pas de repli silencieux.
+    await db().userAiSettings.create({ data: { userId: a.id, engine: "claude" } });
+    await expect(getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).rejects.toBeInstanceOf(AiKeyRequiredError);
+  });
+
+  it("devrait revenir au choix par défaut (sans IA) quand l'utilisateur supprime sa clé", async () => {
     const a = await createUser("a");
     await saveKey(a.id);
     await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD));
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
-    await expect(getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).rejects.toBeInstanceOf(AiKeyRequiredError);
+    expect((await getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).engine).toBe("free");
   });
 
   it("devrait refuser Ollama choisi quand le serveur ne le configure plus", async () => {

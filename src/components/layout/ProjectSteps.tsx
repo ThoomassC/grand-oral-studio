@@ -19,6 +19,9 @@ const SCROLL_MARGIN = 16;
  *
  * - `aria-current="step"` sur l'étape de la page affichée (la Trame couvre
  *   ses diapos et ses sujets) ;
+ * - l'apparence et la trame, par défaut ou personnalisées, sont « faites »
+ *   (utilisables) ; leur résumé dit lequel. Seul le Jour J reste « à faire »
+ *   tant qu'aucun diaporama n'existe (cf. `computeProjectProgress`) ;
  * - l'état de chaque étape est dit en texte (masqué à l'œil, lu à l'oreille),
  *   et montré par une coche ou le numéro dans la pastille, à toutes les
  *   largeurs : jamais par la couleur seule ;

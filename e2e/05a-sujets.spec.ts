@@ -23,7 +23,7 @@ function subjectList(page: Page) {
 }
 
 function subjectTitles(page: Page) {
-  return subjectList(page).getByRole("heading", { level: 3 });
+  return subjectList(page).getByRole("heading", { level: 4 });
 }
 
 function addPanel(page: Page) {

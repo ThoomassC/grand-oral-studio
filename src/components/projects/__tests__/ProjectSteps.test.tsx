@@ -22,7 +22,8 @@ afterEach(async () => {
   pathname = "/projets/p1/trame/sujets";
 });
 
-const STEPS = makeSteps(["appearance"]);
+// Apparence et trame (par défaut ou personnalisées) sont toujours faites ; seul le jour J reste à faire.
+const STEPS = makeSteps(["appearance", "template"]);
 
 function Dirty() {
   useUnsavedChanges(true);
@@ -60,7 +61,7 @@ describe("ProjectSteps", () => {
     render(<ProjectSteps programId="p1" steps={STEPS} deckCount={2} />);
     expect(within(nav()).getByRole("link", { current: "step" })).toHaveAttribute("href", "/projets/p1/trame");
     expect(within(nav()).getByRole("link", { name: /Étape 1.*Apparence.*faite/ })).toBeInTheDocument();
-    expect(within(nav()).getByRole("link", { name: /Étape 2.*Trame.*à faire/ })).toBeInTheDocument();
+    expect(within(nav()).getByRole("link", { name: /Étape 2.*Trame.*faite/ })).toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: /Étape 3.*Jour J.*à faire/ })).toBeInTheDocument();
   });
 
@@ -146,7 +147,8 @@ describe("ProjectSteps", () => {
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Quitter sans enregistrer" }));
     // La destination remplace la sentinelle d'historique de la garde : pas d'entrée en double.
-    expect(replace).toHaveBeenCalledWith("/projets/p1/trame/sujets");
+    // De la Trame, l'étape suivante est le Jour J (les sujets ne sont pas une étape).
+    expect(replace).toHaveBeenCalledWith("/projets/p1/jour-j");
     expect(push).not.toHaveBeenCalled();
   });
 

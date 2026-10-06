@@ -690,8 +690,9 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 </p>
                 {elapsed > SLOW_AFTER_MS ? (
                   <p className="mt-2 text-sm font-medium">
-                    La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou relancer : votre
-                    problématique est conservée.
+                    La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou recharger la page :
+                    votre problématique est conservée. Si le diaporama se termine entre-temps, il apparaîtra en haut de
+                    cette page et dans Decks : attendez avant de générer à nouveau.
                   </p>
                 ) : null}
               </Notice>
@@ -704,9 +705,10 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               </p>
               {elapsed > SLOW_AFTER_MS ? (
                 // Une Server Action en cours ne s'annule pas : on recharge la page, la saisie est restaurée
-                // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau.
+                // depuis sessionStorage et un deck terminé entre-temps apparaît dans le bandeau du haut
+                // (moins de 15 min) et dans les Decks.
                 <Button type="button" variant="ghost" size="small" onClick={() => window.location.reload()}>
-                  Relancer
+                  Recharger la page
                 </Button>
               ) : null}
             </div>

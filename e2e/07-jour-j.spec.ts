@@ -29,7 +29,7 @@ function problemField(page: Page) {
 }
 
 function subjectHeading(page: Page) {
-  return page.getByRole("main").getByRole("heading", { name: /Le sujet/, level: 2 });
+  return page.getByRole("main").getByRole("heading", { name: /Le sujet/, level: 3 });
 }
 
 test.describe("7. Jour J — saisie", () => {
@@ -70,11 +70,11 @@ test.describe("7. Jour J — saisie", () => {
 });
 
 test.describe("7. Jour J — projet sans sujet", () => {
-  test("devrait annoncer deux étapes, sans étape sujet, et une rédaction Sans IA", async ({ page, account }) => {
+  test("devrait annoncer problématique puis diaporama, sans étape sujet, et une rédaction Sans IA", async ({ page, account }) => {
     void account;
     await setup(page, "free", 0, "Jour J sans sujet");
     const main = page.getByRole("main");
-    await expect(main.getByText("Problématique, puis diaporama : deux étapes, puis place à la répétition.")).toBeVisible();
+    await expect(main.getByText("Recopiez la problématique, puis générez le diaporama.")).toBeVisible();
     await expect(main.getByText("Sans sujet : le diaporama part de la problématique et de la trame.")).toBeVisible();
     await expect(main.getByRole("link", { name: "Ajouter des sujets" })).toBeVisible();
     await expect(main.getByLabel(/Sujet indiqué sur l'énoncé/)).toHaveCount(0);
@@ -108,7 +108,7 @@ test.describe("7. Jour J — projet à un sujet", () => {
     void account;
     await setup(page, "free", 1, "Un seul sujet");
     const main = page.getByRole("main");
-    await expect(main.getByText("Problématique, sujet, diaporama : trois étapes, puis place à la répétition.")).toBeVisible();
+    await expect(main.getByText("Recopiez la problématique, vérifiez le sujet, générez le diaporama.")).toBeVisible();
     await expect(main.getByRole("button", { name: "Reconnaître le sujet" })).toHaveCount(0);
     await problemField(page).fill(PROBLEM);
     await main.getByRole("button", { name: "Continuer", exact: true }).click();

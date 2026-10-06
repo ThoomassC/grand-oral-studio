@@ -83,6 +83,13 @@ describe("AiSetup — question 1", () => {
     expect(screen.queryByRole("radio", { name: /Ollama/ })).not.toBeInTheDocument();
   });
 
+  it("devrait annoncer que Claude est facturé à l'usage sur le compte Anthropic, pas par l'abonnement Claude.ai", () => {
+    render(<AiSetup status={status()} />);
+    expect(screen.getByRole("radio", { name: "Claude" })).toHaveAccessibleDescription(
+      "Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas.",
+    );
+  });
+
   it("devrait proposer le modèle local quand le serveur le configure", () => {
     render(<AiSetup status={status({ ollama: { reachable: true, models: ["mistral"], selectedModel: null } })} />);
     expect(screen.getByRole("radio", { name: "Modèle local (Ollama)" })).toBeEnabled();

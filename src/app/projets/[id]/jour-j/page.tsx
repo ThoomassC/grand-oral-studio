@@ -60,8 +60,8 @@ export default async function DayPage({ params }: PageProps<"/projets/[id]/jour-
           <h2 className="text-2xl">Jour J</h2>
           <p className="text-muted">
             {themes.length === 0
-              ? "Problématique, puis diaporama : deux étapes, puis place à la répétition."
-              : "Problématique, sujet, diaporama : trois étapes, puis place à la répétition."}
+              ? "Recopiez la problématique, puis générez le diaporama."
+              : "Recopiez la problématique, vérifiez le sujet, générez le diaporama."}
           </p>
         </div>
         {/* Repère du temps de préparation : rappel visuel, ne décompte rien. */}

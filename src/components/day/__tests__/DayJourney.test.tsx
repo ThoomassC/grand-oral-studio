@@ -83,6 +83,28 @@ describe("DayJourney — projet sans sujet", () => {
   });
 });
 
+describe("DayJourney — génération longue", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("devrait proposer « Recharger la page » et dire où apparaîtra le diaporama terminé entre-temps", async () => {
+    generate.mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderJourney([]);
+    await typeProblem(user);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    const start = Date.now();
+    await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
+    // Plus de 3 minutes plus tard (horloge lue à chaque seconde).
+    vi.spyOn(Date, "now").mockReturnValue(start + 4 * 60 * 1000);
+    const reload = await screen.findByRole("button", { name: "Recharger la page" }, { timeout: 2500 });
+    expect(reload).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Relancer" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Si le diaporama se termine entre-temps, il apparaîtra en haut de cette page et dans Decks : attendez avant de générer à nouveau\./),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("DayJourney — un seul sujet", () => {
   it("devrait présélectionner le sujet sans reconnaissance, avec l'option « Sans sujet »", async () => {
     generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });

@@ -42,6 +42,7 @@ describe("ClaudeConnect — sans clé", () => {
     const link = screen.getByRole("link", { name: /console Anthropic, rubrique API Keys/ });
     expect(link).toHaveAttribute("href", "https://console.anthropic.com/settings/keys");
     expect(link).toHaveAttribute("target", "_blank");
+    expect(steps[0]).toHaveTextContent(/puis ajoutez quelques euros de crédit \(rubrique Billing\)\.$/);
     expect(field()).toHaveAttribute("autocomplete", "off");
     expect(screen.getByText(/Chiffrée, jamais réaffichée/)).toBeInTheDocument();
   });
@@ -182,7 +183,7 @@ describe("ClaudeConnect — clé présente", () => {
     render(<ClaudeConnect claude={USER_KEY} onActivated={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Supprimer ma clé" }));
     const dialog = await screen.findByRole("dialog", { name: "Supprimer votre clé ?" });
-    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Le jour J, la rédaction se fera sans IA tant qu'aucune clé n'est connectée.");
     await user.click(screen.getByRole("button", { name: "Supprimer la clé" }));
     await vi.waitFor(() => expect(deleteAnthropicApiKey).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Votre clé a été supprimée.")).toBeInTheDocument();

@@ -3,61 +3,60 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
-import { PAGE_ORDER, decksHref, exactPageOfPath, pageHref, stepHref } from "./steps";
+import { PAGE_NAV, decksHref, exactPageOfPath, pageHref, pageLabel } from "./steps";
 
 const BUTTON = "opale-button no-underline";
 
 /**
- * Barre de bas de page du parcours : Apparence → Trame → Sujets → Jour J.
+ * Barre de bas de page du parcours : Apparence → Trame → Jour J.
  * « ← Étape précédente » et « Étape suivante : … → » ; sur le Jour J,
- * « Voir les diaporamas ». Sur l'Apparence et la Trame, « Passer au Jour J »
- * permet de sauter la suite : rien ne bloque (apparence et trame par défaut
- * utilisables, sujets facultatifs). Rendue seulement sur la page exacte d'une
- * étape (pas dans les Decks).
+ * « Voir les diaporamas ». Les sujets, facultatifs, ne sont pas une étape :
+ * depuis la Trame, « Ajouter des sujets (facultatif) » est un lien secondaire
+ * et l'étape suivante reste le Jour J. Sur l'Apparence, « Passer au Jour J »
+ * permet de sauter la trame : rien ne bloque (apparence et trame par défaut
+ * utilisables). Rendue seulement sur la page exacte d'une étape (pas dans les
+ * Decks).
  *
  * Les liens annoncent leur vraie destination (de l'Apparence, l'étape suivante
- * est la Trame ; du Jour J, l'étape précédente est la page des Sujets).
+ * est la Trame ; du Jour J, l'étape précédente est la Trame).
  */
 export function StepNav({ programId }: { programId: string }) {
   const pathname = usePathname();
   const { onLinkClick } = useGuardedNavigation();
   const id = exactPageOfPath(programId, pathname);
   if (!id) return null;
-  const i = PAGE_ORDER.findIndex((p) => p.id === id);
-  const prev = PAGE_ORDER[i - 1];
-  const next = PAGE_ORDER[i + 1];
-  const nextHref = next ? pageHref(programId, next.id) : decksHref(programId);
-  // Raccourci seulement quand l'étape suivante n'est pas déjà le Jour J.
-  const skip = next !== undefined && next.id !== "day";
-  const day = stepHref(programId, "day");
+  const { prev, next, aside } = PAGE_NAV[id];
+  const nextHref = next ? pageHref(programId, next) : decksHref(programId);
+  const asideHref = aside ? pageHref(programId, aside.page) : null;
 
   return (
     <nav aria-label="Étapes précédente et suivante" className="mt-10 border-t border-border pt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {prev ? (
           <Link
-            href={pageHref(programId, prev.id)}
+            href={pageHref(programId, prev)}
             className={`${BUTTON} opale-button--ghost`}
-            onClick={(e) => onLinkClick(e, pageHref(programId, prev.id))}
+            onClick={(e) => onLinkClick(e, pageHref(programId, prev))}
           >
             <span>
-              <span aria-hidden="true">← </span>Étape précédente<span className="sr-only"> : {prev.label}</span>
+              <span aria-hidden="true">← </span>Étape précédente<span className="sr-only"> : {pageLabel(prev)}</span>
             </span>
           </Link>
         ) : (
           <span />
         )}
         <div className="flex flex-wrap items-center gap-2">
-          {skip ? (
-            <Link href={day} className={`${BUTTON} opale-button--ghost`} onClick={(e) => onLinkClick(e, day)}>
+          {aside && asideHref ? (
+            <Link href={asideHref} className={`${BUTTON} opale-button--ghost`} onClick={(e) => onLinkClick(e, asideHref)}>
               <span>
-                Passer au Jour J<span aria-hidden="true"> →</span>
+                {aside.label}
+                <span aria-hidden="true"> →</span>
               </span>
             </Link>
           ) : null}
           <Link href={nextHref} className={`${BUTTON} opale-button--primary`} onClick={(e) => onLinkClick(e, nextHref)}>
             <span>
-              {next ? `Étape suivante : ${next.label}` : "Voir les diaporamas"}
+              {next ? `Étape suivante : ${pageLabel(next)}` : "Voir les diaporamas"}
               <span aria-hidden="true"> →</span>
             </span>
           </Link>

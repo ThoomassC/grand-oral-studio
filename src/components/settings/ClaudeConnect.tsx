@@ -148,7 +148,7 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
               triggerLabel="Supprimer ma clé"
               title="Supprimer votre clé ?"
               triggerDisabled={pending}
-              question="Votre clé est effacée de Grand Oral Studio. Elle reste valable dans votre console Anthropic."
+              question="Votre clé est effacée de Grand Oral Studio. Elle reste valable dans votre console Anthropic. Le jour J, la rédaction se fera sans IA tant qu'aucune clé n'est connectée."
               confirmLabel="Supprimer la clé"
               onConfirm={async () => {
                 const result = await deleteAnthropicApiKey();
@@ -189,7 +189,7 @@ export function ClaudeConnect({ claude, onActivated }: { claude: AiSetupStatus["
                 console Anthropic, rubrique API Keys
                 <span className="sr-only"> (nouvel onglet)</span>
               </a>
-              .
+              , puis ajoutez quelques euros de crédit (rubrique Billing).
             </li>
             <li>
               <label htmlFor={ids.key} className="opale-field__label">

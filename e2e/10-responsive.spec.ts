@@ -116,11 +116,13 @@ test.describe("10. Parcours d'un projet à 375 px", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("devrait passer de la Trame aux Sujets puis au Jour J par la barre du bas", async () => {
+  test("devrait passer de la Trame aux Sujets (facultatifs) puis au Jour J par la barre du bas", async () => {
     await page.goto(paths["Étape 2 · Trame"]!);
     const bar = page.getByRole("main").getByRole("navigation", { name: "Étapes précédente et suivante" });
     await expect(bar.getByRole("link", { name: "Étape précédente : Apparence" })).toBeVisible();
-    await bar.getByRole("link", { name: "Étape suivante : Sujets" }).click();
+    // Les sujets ne sont pas une étape : l'étape suivante de la Trame est le Jour J.
+    await expect(bar.getByRole("link", { name: "Étape suivante : Jour J" })).toBeVisible();
+    await bar.getByRole("link", { name: "Ajouter des sujets (facultatif)" }).click();
     await page.waitForURL(/\/trame\/sujets$/);
     await expect(page.getByRole("main").getByRole("heading", { name: "Sujets", level: 2 })).toBeVisible();
     // Depuis les Sujets, l'étape suivante est déjà le Jour J : pas de raccourci en double.

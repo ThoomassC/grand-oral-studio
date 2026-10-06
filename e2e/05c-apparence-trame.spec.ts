@@ -272,7 +272,7 @@ test.describe("5. Trame — contenu type et durée par ligne", () => {
     const id = await createProject(page, "Trame par défaut");
     await openStep(page, id, "trame");
     await line(page, 1).title.fill("Titre modifié");
-    await main(page).getByRole("button", { name: "Trame par défaut" }).click();
+    await main(page).getByRole("button", { name: "Revenir à la trame par défaut" }).click();
     await expect(main(page).getByText("Trame par défaut chargée. Enregistrez pour l'appliquer.")).toBeVisible();
     await expect(line(page, 1).title).toHaveValue("Introduction");
     await expect(lineTitles(page)).toHaveCount(7);
@@ -402,12 +402,14 @@ test.describe("5. Trame — limites et passage au Jour J", () => {
     await expect(main(page).getByText("Une ligne compte au plus 8 diapos.")).toBeVisible();
   });
 
-  test("devrait proposer « Passer au Jour J » depuis la Trame, sans sujet ni étape bloquée", async ({ page, account }) => {
+  test("devrait mener de la Trame au Jour J (sujets en lien facultatif), sans sujet ni étape bloquée", async ({ page, account }) => {
     void account;
     const id = await createProject(page, "Vers le Jour J");
     await openStep(page, id, "trame");
     await expect(projectSteps(page)).not.toContainText("bloquée");
-    await page.getByRole("navigation", { name: "Étapes précédente et suivante" }).getByRole("link", { name: "Passer au Jour J" }).click();
+    const bar = page.getByRole("navigation", { name: "Étapes précédente et suivante" });
+    await expect(bar.getByRole("link", { name: "Ajouter des sujets (facultatif)" })).toHaveAttribute("href", `/projets/${id}/trame/sujets`);
+    await bar.getByRole("link", { name: "Étape suivante : Jour J" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/jour-j`);
   });
 });
@@ -418,7 +420,8 @@ test.describe("5. Apparence — enregistrement et validations", () => {
     const id = await createProject(page, "Apparence nommée");
     await openStep(page, id, "apparence");
     const appearance = projectSteps(page).getByRole("link", { name: /^Étape 1 : Apparence/ });
-    await expect(appearance).toHaveAccessibleName(/Apparence, Par défaut — à faire/);
+    // L'apparence par défaut est utilisable : l'étape est faite, son résumé dit « Par défaut ».
+    await expect(appearance).toHaveAccessibleName(/Apparence, Par défaut — faite/);
     await main(page).getByLabel("Nom de l'apparence").fill("Couleurs du master");
     await main(page).getByRole("button", { name: "Enregistrer l'apparence" }).click();
     await expect(main(page).getByText("Apparence enregistrée.")).toBeVisible();

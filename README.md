@@ -40,7 +40,7 @@ Chaque utilisateur choisit dans la **Configuration IA** qui rédige le jour J :
 | **Claude** | crédits Anthropic de l'utilisateur (ou du serveur) | contenu rédigé | une clé API (voir « Clé API ») |
 | **Ollama** | calcul local | dépend du modèle ; lent | Ollama sur le serveur |
 
-Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Si le moteur choisi n'est plus disponible (clé supprimée, Ollama arrêté), la génération échoue avec un message qui renvoie vers la Configuration IA : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du sujet** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
+Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon le moteur gratuit, y compris en production. Supprimer sa clé alors que Claude est choisi ramène la rédaction au choix par défaut (le moteur gratuit, sauf clé serveur `ANTHROPIC_API_KEY`) ; un autre moteur choisi est conservé. Si le moteur choisi n'est plus disponible (Ollama arrêté, par exemple), la génération échoue avec un message qui renvoie vers la Configuration IA : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du sujet** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
 
 Chaque deck garde la trace du moteur qui l'a produit (`engine` : `claude`, `ollama`, `free`, `mock`, ou `null` pour les decks antérieurs).
 

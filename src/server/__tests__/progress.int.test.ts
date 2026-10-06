@@ -69,12 +69,16 @@ describe("dates d'enregistrement de l'apparence et de la trame", () => {
 });
 
 describe("getProgram — progression", () => {
-  it("devrait tout marquer à faire pour un projet neuf, sans aucun blocage", async () => {
+  it("devrait marquer apparence et trame par défaut faites et seul le jour J à faire pour un projet neuf, sans blocage", async () => {
     const a = await createUser("a");
     const id = await seedProgram(a.id);
     const { progress } = await programs.getProgram(a.id, id);
-    expect(progress).toMatchObject({ doneCount: 0, total: 3, nextStep: "appearance" });
-    expect(progress.steps.map((s) => s.id)).toEqual(["appearance", "template", "day"]);
+    expect(progress).toMatchObject({ doneCount: 2, total: 3, nextStep: "day" });
+    expect(progress.steps.map((s) => [s.id, s.status])).toEqual([
+      ["appearance", "done"],
+      ["template", "done"],
+      ["day", "todo"],
+    ]);
     for (const s of progress.steps) expect(s).not.toHaveProperty("blockedBy");
     expect(progress.templateTabs.map((t) => t.status)).toEqual(["default", "optional"]);
   });
@@ -93,12 +97,12 @@ describe("getProgram — progression", () => {
     const steps = Object.fromEntries(progress.steps.map((s) => [s.id, s]));
     const tabs = Object.fromEntries(progress.templateTabs.map((t) => [t.id, t]));
     const detail = `${totalSlides(makeTemplate())} diapos · ${makeTemplate().durationMinutes} min`;
-    expect(steps.appearance).toMatchObject({ status: "todo", summary: "Par défaut" });
+    expect(steps.appearance).toMatchObject({ status: "done", summary: "Par défaut" });
     expect(steps.template).toMatchObject({ status: "done", summary: `${detail} · 3 sujets` });
     expect(steps.day).toMatchObject({ status: "done", summary: "2 diaporamas" });
     expect(tabs.slides).toMatchObject({ status: "done", summary: detail });
     expect(tabs.subjects).toMatchObject({ status: "done", summary: "3 sujets" });
-    expect(progress).toMatchObject({ doneCount: 2, nextStep: "appearance" });
+    expect(progress).toMatchObject({ doneCount: 3, nextStep: null });
   });
 
   it("devrait annoncer la trame par défaut avec ses diapos et sa durée", async () => {
@@ -157,7 +161,7 @@ describe("listPrograms — progression résumée", () => {
 
     const list = await programs.listPrograms(a.id);
     const byId = Object.fromEntries(list.map((p) => [p.id, p]));
-    expect(byId[neuf]!.progress).toEqual({ doneCount: 0, total: 3, nextStep: "appearance" });
+    expect(byId[neuf]!.progress).toEqual({ doneCount: 2, total: 3, nextStep: "day" });
     expect(byId[avance]!.progress).toEqual({ doneCount: 3, total: 3, nextStep: null });
     expect(byId[avance]!.progress).not.toHaveProperty("steps");
     expect(byId[avance]!.progress).not.toHaveProperty("templateTabs");
@@ -197,8 +201,8 @@ describe("listPrograms — progression résumée", () => {
     try {
       const list = await programs.listPrograms(a.id, client);
       expect(list).toHaveLength(5);
-      // Deck final sans apparence ni trame enregistrées : seul le jour J est fait.
-      expect(list.every((p) => p.progress.doneCount === 1 && p.progress.nextStep === "appearance")).toBe(true);
+      // Deck final sans apparence ni trame enregistrées : celles par défaut comptent, tout est fait.
+      expect(list.every((p) => p.progress.doneCount === 3 && p.progress.nextStep === null)).toBe(true);
       expect(queries.length).toBeGreaterThanOrEqual(1);
       expect(queries.length).toBeLessThanOrEqual(2);
     } finally {

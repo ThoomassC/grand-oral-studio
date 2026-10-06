@@ -67,7 +67,7 @@ async function analyzeSubjectsPrompt(page: Page, programId: string, text: string
 }
 
 function subjectTitles(page: Page) {
-  return page.getByRole("main").getByRole("list", { name: "Sujets du projet" }).getByRole("heading", { level: 3 });
+  return page.getByRole("main").getByRole("list", { name: "Sujets du projet" }).getByRole("heading", { level: 4 });
 }
 
 test.describe("5. Apparence — partir d'un exemple depuis un fichier .pptx", () => {

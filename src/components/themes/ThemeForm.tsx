@@ -182,7 +182,7 @@ export function ThemeForm({
       </div>
       <div>
         <label htmlFor={ids.keywords} className="opale-field__label">
-          Mots-clés <span className="font-normal text-muted">(aident la reconnaissance du sujet)</span>
+          Mots-clés <span className="font-normal text-muted">(facultatif, aident à reconnaître le sujet)</span>
         </label>
         <KeywordInput
           id={ids.keywords}

@@ -210,6 +210,49 @@ describe("deleteApiKey", () => {
     expect(v.effectiveSource).toBe("server");
   });
 
+  it("devrait ramener la rédaction au choix par défaut (Sans IA sans clé serveur) quand Claude était choisi", async () => {
+    const a = await createUser("a");
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.deleteApiKey(a.id, { log: recordingLogger() });
+    const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(row).toMatchObject({ engine: null, anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null });
+    const v = await view(a.id, ENV);
+    expect(v.engine.selected).toBeNull();
+    expect(v.engine.effective).toBe("free");
+  });
+
+  it("devrait laisser Claude effectif via la clé serveur après suppression de la clé personnelle", async () => {
+    const a = await createUser("a");
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.deleteApiKey(a.id, { log: recordingLogger() });
+    const v = await view(a.id, { ...ENV, ANTHROPIC_API_KEY: "sk-ant-server-key" });
+    expect(v.engine).toMatchObject({ selected: null, effective: "claude" });
+  });
+
+  it("devrait conserver un autre moteur choisi (et son modèle) en supprimant la clé", async () => {
+    const a = await createUser("a");
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await db().userAiSettings.update({ where: { userId: a.id }, data: { engine: "ollama", ollamaModel: "mistral:latest" } });
+    await settings.deleteApiKey(a.id, { log: recordingLogger() });
+    const row = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(row).toMatchObject({ engine: "ollama", ollamaModel: "mistral:latest", anthropicKeyCiphertext: null });
+  });
+
+  it("ne devrait pas toucher au choix de Claude quand il n'y a aucune clé à supprimer (clé serveur)", async () => {
+    const a = await createUser("a");
+    await db().userAiSettings.create({ data: { userId: a.id, engine: "claude" } });
+    await settings.deleteApiKey(a.id, { log: recordingLogger() });
+    expect((await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } })).engine).toBe("claude");
+  });
+
+  it("ne devrait réinitialiser que le moteur de l'appelant", async () => {
+    const [a, b] = [await createUser("a"), await createUser("b")];
+    await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());
+    await settings.activateClaudeWithKey(b.id, { apiKey: KEY_B }, deps());
+    await settings.deleteApiKey(a.id, { log: recordingLogger() });
+    expect((await db().userAiSettings.findUniqueOrThrow({ where: { userId: b.id } })).engine).toBe("claude");
+  });
+
   it("devrait disparaître avec l'utilisateur (cascade)", async () => {
     const a = await createUser("a");
     await settings.activateClaudeWithKey(a.id, { apiKey: KEY_A }, deps());

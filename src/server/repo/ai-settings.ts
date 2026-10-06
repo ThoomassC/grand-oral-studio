@@ -95,13 +95,21 @@ export async function activateUserClaudeKey(
 
 /**
  * Idempotent : supprimer une clé absente n'est pas une erreur. La ligne est
- * conservée (préférence de moteur) ; seules les colonnes de clé sont effacées.
+ * conservée ; les colonnes de clé sont effacées et, si Claude était choisi, le
+ * moteur revient au choix par défaut (NULL : Sans IA sans clé serveur), dans
+ * la même transaction. Un autre moteur choisi (Ollama, Sans IA) est conservé.
+ * Sans clé enregistrée, rien ne change (Claude via la clé serveur reste choisi).
  */
 export async function deleteUserAiKey(userId: string): Promise<boolean> {
-  const { count } = await db().userAiSettings.updateMany({
-    where: { userId, anthropicKeyCiphertext: { not: null } },
-    data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
-  });
+  const client = db();
+  const withKey = { userId, anthropicKeyCiphertext: { not: null } };
+  const [, { count }] = await client.$transaction([
+    client.userAiSettings.updateMany({ where: { ...withKey, engine: "claude" }, data: { engine: null } }),
+    client.userAiSettings.updateMany({
+      where: withKey,
+      data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
+    }),
+  ]);
   return count > 0;
 }
 

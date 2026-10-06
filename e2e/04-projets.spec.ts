@@ -64,7 +64,7 @@ test.describe("4. Projets — création et carte", () => {
     await expect(page.getByRole("main").getByRole("heading", { name: "Projet double clic", level: 3 })).toHaveCount(1);
   });
 
-  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 0/3 avec « Reprendre : Apparence »", async ({
+  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 2/3 (apparence et trame par défaut) avec « Commencer le Jour J »", async ({
     page,
     account,
   }) => {
@@ -72,17 +72,17 @@ test.describe("4. Projets — création et carte", () => {
     const id = await createProject(page, "Master Management 2027", "Grand oral de fin d'études");
     await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/apparence`);
     await expect(page.getByRole("heading", { name: "Master Management 2027", level: 1 })).toBeVisible();
-    await expect(page.getByText("Préparation : 0/3 étapes")).toBeVisible();
+    await expect(page.getByText("Préparation : 2/3 étapes")).toBeVisible();
 
     await page.goto("/projets");
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Master Management 2027" }) });
-    await expect(card.getByRole("img", { name: "0 étape faite sur 3" })).toBeVisible();
+    await expect(card.getByRole("img", { name: "2 étapes faites sur 3" })).toBeVisible();
     await expect(card).toContainText("Grand oral de fin d'études");
     await expect(card).toContainText("Sujets :0");
-    const resume = card.getByRole("link", { name: "Reprendre : Apparence — Master Management 2027" });
-    await expect(resume).toHaveAttribute("href", `/projets/${id}/apparence`);
+    const resume = card.getByRole("link", { name: "Commencer le Jour J — Master Management 2027" });
+    await expect(resume).toHaveAttribute("href", `/projets/${id}/jour-j`);
     await resume.click();
-    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/apparence`);
+    await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/jour-j`);
   });
 
   test("devrait présenter les trois étapes Apparence, Trame, Jour J et ouvrir /projets/<id> sur l'Apparence", async ({ page, account }) => {
@@ -177,7 +177,7 @@ test.describe("4. Projets — duplication et suppression", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/projets");
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { level: 3 }) });
-    await expect(card.getByRole("link", { name: /^Reprendre : Apparence/ })).toBeVisible();
+    await expect(card.getByRole("link", { name: /^Commencer le Jour J/ })).toBeVisible();
     const trigger = card.getByRole("button", { name: /^Actions du projet / });
     const box = await trigger.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);

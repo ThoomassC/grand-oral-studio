@@ -19,7 +19,7 @@ export default async function AiConfigurationPage() {
       <h1 className="mt-2 text-3xl sm:text-4xl">Configuration IA</h1>
       <p className="mt-2 text-muted">
         L&apos;IA n&apos;intervient qu&apos;au jour J, pour rédiger le diaporama : tout le reste se prépare sans elle.
-        Thème, taille du texte et animations se règlent dans Réglages, depuis l&apos;en-tête.
+        Mode clair ou sombre, taille du texte et animations se règlent dans Réglages, depuis l&apos;en-tête.
       </p>
       <div className="mt-8">
         <AiSetup status={status} />

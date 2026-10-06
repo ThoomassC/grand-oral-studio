@@ -45,10 +45,14 @@ describe("computeProjectProgress — structure", () => {
     expect(p).not.toHaveProperty("prepare");
   });
 
-  it("devrait tout marquer à faire pour un projet neuf, l'étape suivante étant l'apparence", () => {
+  it("devrait marquer apparence et trame par défaut faites et seul le jour J à faire pour un projet neuf", () => {
     const p = computeProjectProgress(EMPTY);
-    expect(p.steps.every((s) => s.status === "todo")).toBe(true);
-    expect(p).toMatchObject({ doneCount: 0, nextStep: "appearance" });
+    expect(p.steps.map((s) => [s.id, s.status])).toEqual([
+      ["appearance", "done"],
+      ["template", "done"],
+      ["day", "todo"],
+    ]);
+    expect(p).toMatchObject({ doneCount: 2, nextStep: "day" });
   });
 
   it("devrait tout marquer fait, sans étape suivante, pour un projet complet", () => {
@@ -65,12 +69,12 @@ describe("computeProjectProgress — apparence", () => {
     expect(step(p, "appearance")).toMatchObject({ status: "done", summary: "Personnalisée" });
   });
 
-  it("devrait rester à faire, « Par défaut », tant qu'elle n'a jamais été enregistrée", () => {
-    expect(step(computeProjectProgress(EMPTY), "appearance")).toMatchObject({ status: "todo", summary: "Par défaut" });
+  it("devrait être faite, « Par défaut », même jamais enregistrée : l'apparence par défaut est utilisable", () => {
+    expect(step(computeProjectProgress(EMPTY), "appearance")).toMatchObject({ status: "done", summary: "Par défaut" });
   });
 
   it("ne devrait pas dépendre des sujets", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, subjectCount: 4 }), "appearance").status).toBe("todo");
+    expect(step(computeProjectProgress({ ...EMPTY, subjectCount: 4 }), "appearance")).toMatchObject({ status: "done", summary: "Par défaut" });
   });
 });
 
@@ -79,8 +83,12 @@ describe("computeProjectProgress — trame", () => {
     expect(step(computeProjectProgress({ ...EMPTY, templateSavedAt: SAVED }), "template").status).toBe("done");
   });
 
-  it("ne devrait pas être faite par les seuls sujets", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, subjectCount: 3 }), "template").status).toBe("todo");
+  it("devrait être faite par défaut, sans enregistrement ni sujet : la trame par défaut est utilisable", () => {
+    expect(step(computeProjectProgress(EMPTY), "template")).toMatchObject({ status: "done", summary: "Par défaut" });
+    expect(step(computeProjectProgress({ ...EMPTY, template: TPL }), "template")).toMatchObject({
+      status: "done",
+      summary: "Par défaut · 13 diapos · 20 min",
+    });
   });
 
   it.each([
@@ -135,17 +143,16 @@ describe("computeProjectProgress — jour J", () => {
 });
 
 describe("computeProjectProgress — nextStep et doneCount", () => {
-  it("devrait désigner la première étape non faite, même si une suivante est faite", () => {
-    const p = computeProjectProgress({ ...EMPTY, brandSavedAt: SAVED, finalDeckCount: 1 });
-    expect(p).toMatchObject({ nextStep: "template", doneCount: 2 });
+  it.each([
+    ["projet neuf", EMPTY],
+    ["apparence enregistrée", { ...EMPTY, brandSavedAt: SAVED }],
+    ["apparence et trame enregistrées", { ...FULL, finalDeckCount: 0 }],
+  ])("devrait désigner le jour J, à 2/3, tant qu'aucun diaporama n'existe (%s)", (_, input) => {
+    expect(computeProjectProgress(input)).toMatchObject({ nextStep: "day", doneCount: 2 });
   });
 
-  it("devrait désigner le jour J quand apparence et trame sont enregistrées", () => {
-    expect(computeProjectProgress({ ...FULL, finalDeckCount: 0 })).toMatchObject({ nextStep: "day", doneCount: 2 });
-  });
-
-  it("devrait désigner l'apparence même quand seul le jour J est fait", () => {
-    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 3 })).toMatchObject({ nextStep: "appearance", doneCount: 1 });
+  it("devrait tout compter fait dès un diaporama, même sans personnalisation", () => {
+    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 3 })).toMatchObject({ nextStep: null, doneCount: 3 });
   });
 });
 

@@ -180,7 +180,7 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
               id={radioId("claude")}
               value="claude"
               label="Claude"
-              description="Rédaction complète et notes d'orateur. Quelques centimes par diaporama."
+              description="Rédaction complète et notes d'orateur. Facturé à l'usage sur votre compte Anthropic (quelques centimes par diaporama) ; un abonnement Claude.ai ne suffit pas."
             />
             {ollama !== null ? (
               <Radio

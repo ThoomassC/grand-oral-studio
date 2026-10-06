@@ -3,13 +3,15 @@
  * compteurs et de dates d'enregistrement. Fonction pure (aucune base, aucun
  * réseau), partagée par le serveur et l'interface.
  *
- *   1. Apparence — faite dès qu'elle a été enregistrée (sinon : apparence par défaut)
- *   2. Trame     — faite dès qu'elle a été enregistrée (sinon : trame par défaut).
- *                  Les sujets, facultatifs, en sont un onglet.
- *   3. Jour J    — fait dès 1 diaporama final
+ *   1. Apparence — toujours faite : par défaut ou personnalisée (enregistrée),
+ *                  elle est utilisable ; le résumé dit laquelle.
+ *   2. Trame     — toujours faite, par défaut ou personnalisée, pour la même
+ *                  raison. Les sujets, facultatifs, en sont un onglet.
+ *   3. Jour J    — fait dès 1 diaporama final : la seule étape « à faire ».
  *
  * Rien ne bloque : l'apparence et la trame par défaut sont utilisables, les
  * sujets sont facultatifs et le moteur « Sans IA » est toujours disponible.
+ * Garder les réglages par défaut ne doit donc jamais paraître « à faire ».
  */
 
 export type StepId = "appearance" | "template" | "day";
@@ -37,7 +39,7 @@ export interface ProjectProgress {
   templateTabs: TemplateTab[];
   doneCount: number;
   total: 3;
-  /** Première étape non faite dans l'ordre ; null si tout est fait. */
+  /** Première étape non faite dans l'ordre (en pratique le jour J) ; null si tout est fait. */
   nextStep: StepId | null;
 }
 
@@ -103,11 +105,11 @@ export function computeProjectProgress(input: ProjectProgressInput): ProjectProg
   ];
 
   const steps: ProjectStep[] = [
-    { id: "appearance", index: 1, status: brandSaved ? "done" : "todo", summary: brandSaved ? CUSTOM : DEFAULT },
+    { id: "appearance", index: 1, status: "done", summary: brandSaved ? CUSTOM : DEFAULT },
     {
       id: "template",
       index: 2,
-      status: templateSaved ? "done" : "todo",
+      status: "done",
       summary: templateSummary(templateSaved, detail, subjects),
     },
     {

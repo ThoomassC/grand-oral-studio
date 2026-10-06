@@ -254,7 +254,7 @@ export function TemplateEditor({
           }}
           aria-disabled={pending || undefined}
         >
-          Trame par défaut
+          Revenir à la trame par défaut
         </Button>
       </div>
 
@@ -329,7 +329,7 @@ export function TemplateEditor({
           <li>
             <span className="font-semibold">Contenu type</span> :{" "}
             <span id={ids.guidanceHint}>
-              Ce que disent ces diapos ; le jour J, l&apos;IA le développe pour la problématique.
+              Ce que disent ces diapos ; le jour J, ce contenu est développé pour la problématique.
             </span>
           </li>
           <li>

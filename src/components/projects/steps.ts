@@ -13,7 +13,7 @@ export const TEMPLATE_TABS: readonly { id: TemplateTabId; label: string; segment
   { id: "subjects", label: "Sujets", segment: "trame/sujets" },
 ];
 
-/** Les pages du parcours dans l'ordre de lecture (barre précédent / suivant). */
+/** Les pages du parcours, dans l'ordre de lecture. */
 export type PageId = "appearance" | "template" | "subjects" | "day";
 export const PAGE_ORDER: readonly { id: PageId; label: string; segment: string }[] = [
   { id: "appearance", label: "Apparence", segment: "apparence" },
@@ -21,6 +21,28 @@ export const PAGE_ORDER: readonly { id: PageId; label: string; segment: string }
   { id: "subjects", label: "Sujets", segment: "trame/sujets" },
   { id: "day", label: "Jour J", segment: "jour-j" },
 ];
+
+/**
+ * Barre précédent / suivant de chaque page. Les sujets, facultatifs, ne sont
+ * pas une étape : de la Trame, l'étape suivante est le Jour J et les sujets un
+ * lien secondaire ; du Jour J, l'étape précédente est la Trame. `aside` : lien
+ * secondaire, à côté de l'étape suivante.
+ */
+export interface PageNav {
+  prev: PageId | null;
+  next: PageId | null;
+  aside: { page: PageId; label: string } | null;
+}
+export const PAGE_NAV: Readonly<Record<PageId, PageNav>> = {
+  appearance: { prev: null, next: "template", aside: { page: "day", label: "Passer au Jour J" } },
+  template: { prev: "appearance", next: "day", aside: { page: "subjects", label: "Ajouter des sujets (facultatif)" } },
+  subjects: { prev: "template", next: "day", aside: null },
+  day: { prev: "template", next: null, aside: null },
+};
+
+export function pageLabel(id: PageId): string {
+  return PAGE_ORDER.find((p) => p.id === id)!.label;
+}
 
 export function stepMeta(id: StepId) {
   return STEPS.find((s) => s.id === id)!;
