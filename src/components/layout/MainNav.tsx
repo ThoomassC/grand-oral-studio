@@ -31,8 +31,12 @@ export function MainNav({ className = "", signedIn }: { className?: string; sign
   const { onLinkClick } = useGuardedNavigation();
   const items = ITEMS.filter((item) => signedIn || !item.signedInOnly);
   return (
-    <nav aria-label="Navigation principale" className={className}>
-      <ul className="flex items-center gap-2">
+    <nav aria-label="Navigation principale" className={`min-w-0 max-w-full ${className}`}>
+      {/*
+        Sous 640 px, onglets resserrés pour que les trois tiennent à 375 px ; aux grandes
+        tailles de texte (Réglages), ils passent à la ligne plutôt que de déborder.
+      */}
+      <ul className="flex flex-wrap items-center justify-center gap-2 max-sm:gap-1 max-sm:[&_.app-tab]:px-2 max-sm:[&_.app-tab]:text-[0.85rem]">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
