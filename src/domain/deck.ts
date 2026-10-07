@@ -1,4 +1,4 @@
-import type { DeckSpec, PromptTemplate, Slide } from "./schemas";
+import { LIMITS, type DeckSpec, type PromptTemplate, type Slide } from "./schemas";
 
 /** Identifiant réservé de la diapo de couverture. */
 export const COVER_SECTION_ID = "cover";
@@ -86,4 +86,89 @@ function spokenWords(notes: string): number {
 /** Note vide ou réduite à une consigne / un minutage : ce n'est pas un texte à dire. */
 export function isThinNotes(notes: string): boolean {
   return spokenWords(notes) < THIN_NOTES_WORDS;
+}
+
+// ---------------------------------------------------------------------------
+// Édition structurelle d'un diaporama (v1.2)
+// ---------------------------------------------------------------------------
+
+/** Bornes du nombre de diapos d'un diaporama (mêmes que DeckSpecSchema). */
+export const MIN_DECK_SLIDES = LIMITS.minSlides;
+export const MAX_DECK_SLIDES = LIMITS.maxSlides;
+
+export type DeckEditErrorCode = "INDEX_OUT_OF_RANGE" | "TOO_MANY_SLIDES" | "TOO_FEW_SLIDES" | "COVER_LOCKED";
+
+/**
+ * Édition refusée. Sous-classe de RangeError (même style que `replaceSlide`) ;
+ * `code` permet à la couche serveur de répondre en 4xx sans analyser le message.
+ */
+export class DeckEditError extends RangeError {
+  readonly code: DeckEditErrorCode;
+
+  constructor(code: DeckEditErrorCode, message: string) {
+    super(message);
+    this.name = "DeckEditError";
+    this.code = code;
+  }
+}
+
+function copySlide(slide: Slide): Slide {
+  return { ...slide, bullets: [...slide.bullets] };
+}
+
+function assertIndex(index: number, max: number): void {
+  if (!Number.isInteger(index) || index < 0 || index > max) {
+    throw new DeckEditError("INDEX_OUT_OF_RANGE", `Index de diapo hors bornes : ${index} (0..${max}).`);
+  }
+}
+
+/** La couverture (layout « title » en tête) reste la première diapo : rien ne s'insère avant, elle ne bouge pas. */
+function hasCover(deck: DeckSpec): boolean {
+  return deck.slides[0]?.layout === "title";
+}
+
+function coverLocked(): DeckEditError {
+  return new DeckEditError("COVER_LOCKED", "La couverture reste la première diapo : elle ne se déplace pas et ne se supprime pas.");
+}
+
+/**
+ * Insère une diapo à `index` (0..longueur, longueur = en fin), sans muter l'entrée.
+ * Refuse au-delà de MAX_DECK_SLIDES, et avant la couverture.
+ */
+export function insertSlide(deck: DeckSpec, index: number, slide: Slide): DeckSpec {
+  assertIndex(index, deck.slides.length);
+  if (deck.slides.length >= MAX_DECK_SLIDES) {
+    throw new DeckEditError("TOO_MANY_SLIDES", `Un diaporama compte au plus ${MAX_DECK_SLIDES} diapos.`);
+  }
+  if (index === 0 && hasCover(deck)) throw coverLocked();
+  const slides = deck.slides.map(copySlide);
+  slides.splice(index, 0, copySlide(slide));
+  return { ...deck, slides };
+}
+
+/** Retire la diapo `index`, sans muter l'entrée. Refuse sous MIN_DECK_SLIDES et pour la couverture. */
+export function removeSlide(deck: DeckSpec, index: number): DeckSpec {
+  assertIndex(index, deck.slides.length - 1);
+  if (index === 0 && hasCover(deck)) throw coverLocked();
+  if (deck.slides.length <= MIN_DECK_SLIDES) {
+    throw new DeckEditError("TOO_FEW_SLIDES", `Un diaporama compte au moins ${MIN_DECK_SLIDES} diapos.`);
+  }
+  return { ...deck, slides: deck.slides.filter((_, i) => i !== index).map(copySlide) };
+}
+
+/** Déplace la diapo `from` à la position `to` (indices du deck d'origine), sans muter l'entrée. */
+export function moveSlide(deck: DeckSpec, from: number, to: number): DeckSpec {
+  const last = deck.slides.length - 1;
+  assertIndex(from, last);
+  assertIndex(to, last);
+  if ((from === 0 || to === 0) && from !== to && hasCover(deck)) throw coverLocked();
+  const slides = deck.slides.map(copySlide);
+  const [moved] = slides.splice(from, 1);
+  if (moved) slides.splice(to, 0, moved);
+  return { ...deck, slides };
+}
+
+/** Copie profonde d'un diaporama : aucun tableau ni objet partagé avec l'original. */
+export function duplicateDeckSpec(deck: DeckSpec): DeckSpec {
+  return { ...deck, slides: deck.slides.map(copySlide) };
 }
