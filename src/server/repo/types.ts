@@ -2,13 +2,14 @@ import type { ThemeRef } from "@/domain/contracts";
 import type { Brand, DeckSpec, PromptTemplate } from "@/domain/schemas";
 import type { ProjectProgress, ProjectProgressSummary } from "@/domain/progress";
 import type { DeckKind } from "../db/generated/prisma/enums";
+import type { ProgramRole } from "./access";
 
 /**
  * Vues renvoyées par la couche d'accès aux données. Les champs JSON sont
  * toujours typés par les schémas zod du domaine (validés à la lecture).
  */
 
-export type { DeckKind };
+export type { DeckKind, ProgramRole };
 
 export interface ProgramSummary {
   id: string;
@@ -20,6 +21,10 @@ export interface ProgramSummary {
   updatedAt: Date;
   /** Avancement du parcours en 3 étapes : Apparence, Trame, Jour J (résumé, sans le détail des étapes). */
   progress: ProjectProgressSummary;
+  /** Rôle de l'utilisateur sur ce projet. */
+  role: ProgramRole;
+  /** Nom du propriétaire d'un projet partagé ; null quand l'utilisateur est le propriétaire. */
+  ownerName: string | null;
 }
 
 /** Moteur qui a produit un deck ("free" : généré sans IA, à compléter). */
@@ -34,6 +39,8 @@ export interface DeckView {
   problem: string | null;
   /** null : deck antérieur au suivi du moteur. */
   engine: DeckEngine | null;
+  /** Deck d'entraînement (true) ou du jour J (false). Toujours false pour un squelette. */
+  practice: boolean;
   spec: DeckSpec;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +49,10 @@ export interface DeckView {
 export interface ThemeView extends ThemeRef {
   programId: string;
   position: number;
+  /** Problématiques candidates du sujet (30 au plus). */
+  problems: string[];
+  /** Version du sujet (ISO) : base de la concurrence optimiste. */
+  updatedAt: string;
 }
 
 export interface ThemeWithSkeleton extends ThemeView {
@@ -66,6 +77,8 @@ export interface ProgramDetail {
   finalDeckCount: number;
   /** Parcours du projet en 3 étapes, avec les onglets de la Trame (cf. src/domain/progress.ts). */
   progress: ProjectProgress;
+  /** Rôle de l'utilisateur sur ce projet. */
+  role: ProgramRole;
 }
 
 /**
@@ -87,6 +100,8 @@ export interface FinalDeckSummary {
   themeName: string | null;
   problem: string;
   title: string;
+  /** Deck d'entraînement (true) ou du jour J (false). */
+  practice: boolean;
   createdAt: Date;
 }
 

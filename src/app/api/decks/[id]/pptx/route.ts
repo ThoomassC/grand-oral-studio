@@ -7,9 +7,10 @@ import { getUser } from "@/server/session";
 import { IdSchema } from "@/server/validation";
 
 /**
- * GET /api/decks/:id/pptx — export PowerPoint d'un deck possédé.
- * 401 sans session, 404 si le deck n'existe pas OU appartient à un autre
- * utilisateur (indistinguables), 500 générique sur panne (journalisée).
+ * GET /api/decks/:id/pptx — export PowerPoint d'un deck d'un projet auquel
+ * l'utilisateur a accès (lecteur au moins : l'export est ouvert au lecteur).
+ * 401 sans session, 404 si le deck n'existe pas, est à la corbeille OU relève
+ * d'un projet inaccessible (indistinguables), 500 générique sur panne (journalisée).
  */
 
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";

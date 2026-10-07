@@ -203,9 +203,10 @@ describe("repo decks — lectures et suppression", () => {
   it("devrait supprimer le deck puis lever NotFoundError au second appel", async () => {
     const { a, programId, themeId } = await ownedSetup();
     const deckId = await seedDeck(programId, themeId, "FINAL");
-    expect(await decks.deleteDeck(a.id, deckId)).toEqual({ programId, themeId });
+    // v1.2 : un deck final part à la corbeille (suppression douce, cf. undo.int.test.ts).
+    expect(await decks.deleteDeck(a.id, deckId)).toMatchObject({ programId, themeId });
     await expect(decks.deleteDeck(a.id, deckId)).rejects.toBeInstanceOf(NotFoundError);
-    expect(await db().deck.count({ where: { id: deckId } })).toBe(0);
+    expect(await db().deck.count({ where: { id: deckId, deletedAt: null } })).toBe(0);
   });
 });
 
@@ -294,7 +295,7 @@ describe("repo decks — decks finaux sans sujet", () => {
   it("devrait supprimer un deck sans sujet et renvoyer themeId null", async () => {
     const { a, programId } = await ownedSetup();
     const deckId = await seedDeck(programId, null, "FINAL");
-    expect(await decks.deleteDeck(a.id, deckId)).toEqual({ programId, themeId: null });
+    expect(await decks.deleteDeck(a.id, deckId)).toMatchObject({ programId, themeId: null });
   });
 });
 

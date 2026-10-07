@@ -3,16 +3,17 @@ import { db, type Tx } from "../db/client";
 import { ConflictError, LimitExceededError, NotFoundError } from "../errors";
 import { themeNameKey } from "../theme-import";
 import { MAX_THEMES_PER_PROGRAM } from "../validation";
+import { lockProgramFor, programAccess } from "./access";
 import { toThemeView } from "./mappers";
-import { lockOwnedProgram, ownedProgram } from "./ownership";
 import type { ThemeView } from "./types";
 
 /**
  * Sujets (identifiant de code historique : « theme »). Invariant : dans un programme, les positions forment 0..n-1 sans trou,
  * garanti par UNIQUE(programId, position) + réécriture complète sous verrou.
  *
- * Toute écriture qui touche aux positions verrouille d'abord la ligne Program
- * (FOR UPDATE) : deux ajouts simultanés ne calculent jamais la même position.
+ * Toute écriture verrouille d'abord la ligne Program (FOR UPDATE) sous condition
+ * de rôle (éditeur) et d'état (hors corbeille) : deux ajouts simultanés ne
+ * calculent jamais la même position. La lecture demande le rôle de lecteur.
  */
 
 /**
@@ -46,17 +47,17 @@ async function nextPosition(tx: Tx, programId: string): Promise<{ position: numb
 
 export async function listThemes(userId: string, programId: string): Promise<ThemeView[]> {
   const program = await db().program.findFirst({
-    where: { id: programId, ...ownedProgram(userId) },
+    where: { id: programId, ...programAccess(userId, "viewer") },
     select: { themes: { orderBy: { position: "asc" } } },
   });
-  // Programme absent ou étranger : même réponse, pour ne pas révéler son existence.
+  // Programme absent, étranger ou à la corbeille : même réponse, pour ne pas révéler son existence.
   if (!program) throw new NotFoundError("programme");
   return program.themes.map(toThemeView);
 }
 
 export async function addTheme(userId: string, programId: string, input: ThemeInput): Promise<ThemeView> {
   return db().$transaction(async (tx) => {
-    await lockOwnedProgram(tx, userId, programId);
+    await lockProgramFor(tx, userId, programId, "editor");
     const { position, count } = await nextPosition(tx, programId);
     if (count >= MAX_THEMES_PER_PROGRAM) {
       throw new LimitExceededError(`Un projet est limité à ${MAX_THEMES_PER_PROGRAM} sujets.`);
@@ -69,6 +70,7 @@ export async function addTheme(userId: string, programId: string, input: ThemeIn
         description: input.description,
         keywords: input.keywords,
         notes: input.notes,
+        problems: input.problems ?? [],
       },
     });
     await touchProgram(tx, programId);
@@ -76,15 +78,37 @@ export async function addTheme(userId: string, programId: string, input: ThemeIn
   });
 }
 
+/** Programme d'un sujet que `userId` peut au moins lire ; NotFoundError sinon (sujet étranger, projet à la corbeille). */
+async function visibleThemeProgram(tx: Tx, userId: string, themeId: string): Promise<string> {
+  const theme = await tx.theme.findFirst({
+    where: { id: themeId, program: programAccess(userId, "viewer") },
+    select: { programId: true },
+  });
+  if (!theme) throw new NotFoundError("thème");
+  return theme.programId;
+}
+
+/**
+ * Met à jour un sujet (éditeur). `input.problems` absent : problématiques inchangées
+ * (formulaires antérieurs à la 1.2) ; présent : remplacées.
+ */
 export async function updateTheme(userId: string, themeId: string, input: ThemeInput): Promise<ThemeView> {
   return db().$transaction(async (tx) => {
+    const programId = await visibleThemeProgram(tx, userId, themeId);
+    await lockProgramFor(tx, userId, programId, "editor");
     const { count } = await tx.theme.updateMany({
-      where: { id: themeId, program: ownedProgram(userId) },
-      data: { name: input.name, description: input.description, keywords: input.keywords, notes: input.notes },
+      where: { id: themeId, programId },
+      data: {
+        name: input.name,
+        description: input.description,
+        keywords: input.keywords,
+        notes: input.notes,
+        ...(input.problems !== undefined ? { problems: input.problems } : {}),
+      },
     });
-    if (count === 0) throw new NotFoundError("thème");
+    if (count === 0) throw new NotFoundError("thème"); // supprimé par un appel concurrent
     const row = await tx.theme.findUniqueOrThrow({ where: { id: themeId } });
-    await touchProgram(tx, row.programId);
+    await touchProgram(tx, programId);
     return toThemeView(row);
   });
 }
@@ -92,26 +116,22 @@ export async function updateTheme(userId: string, themeId: string, input: ThemeI
 /** Supprime un thème (ses decks partent en cascade) et recompacte les positions. */
 export async function deleteTheme(userId: string, themeId: string): Promise<{ programId: string }> {
   return db().$transaction(async (tx) => {
-    const theme = await tx.theme.findFirst({
-      where: { id: themeId, program: ownedProgram(userId) },
-      select: { programId: true },
-    });
-    if (!theme) throw new NotFoundError("thème");
-    await lockOwnedProgram(tx, userId, theme.programId);
-    const { count } = await tx.theme.deleteMany({ where: { id: themeId, programId: theme.programId } });
+    const programId = await visibleThemeProgram(tx, userId, themeId);
+    await lockProgramFor(tx, userId, programId, "editor");
+    const { count } = await tx.theme.deleteMany({ where: { id: themeId, programId } });
     if (count === 0) throw new NotFoundError("thème"); // supprimé par un appel concurrent
     const remaining = await tx.theme.findMany({
-      where: { programId: theme.programId },
+      where: { programId },
       orderBy: { position: "asc" },
       select: { id: true },
     });
     await rewritePositions(
       tx,
-      theme.programId,
+      programId,
       remaining.map((t) => t.id),
     );
-    await touchProgram(tx, theme.programId);
-    return { programId: theme.programId };
+    await touchProgram(tx, programId);
+    return { programId };
   });
 }
 
@@ -121,7 +141,7 @@ export async function deleteTheme(userId: string, themeId: string): Promise<{ pr
  */
 export async function reorderThemes(userId: string, programId: string, themeIds: string[]): Promise<void> {
   await db().$transaction(async (tx) => {
-    await lockOwnedProgram(tx, userId, programId);
+    await lockProgramFor(tx, userId, programId, "editor");
     const current = await tx.theme.findMany({ where: { programId }, select: { id: true } });
     const currentIds = new Set(current.map((t) => t.id));
     const requested = new Set(themeIds);
@@ -148,7 +168,7 @@ export async function importThemes(
   inputs: ThemeInput[],
 ): Promise<{ created: number; skipped: string[] }> {
   return db().$transaction(async (tx) => {
-    await lockOwnedProgram(tx, userId, programId);
+    await lockProgramFor(tx, userId, programId, "editor");
     const existing = await tx.theme.findMany({ where: { programId }, select: { name: true } });
     const known = new Set(existing.map((t) => themeNameKey(t.name)));
     const skipped: string[] = [];
@@ -177,6 +197,7 @@ export async function importThemes(
           description: t.description,
           keywords: t.keywords,
           notes: t.notes,
+          problems: t.problems ?? [],
         })),
       });
       await touchProgram(tx, programId);

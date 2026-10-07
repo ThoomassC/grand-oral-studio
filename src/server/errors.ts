@@ -10,6 +10,7 @@
 
 export type AppErrorCode =
   | "NOT_FOUND"
+  | "FORBIDDEN"
   | "VALIDATION"
   | "CONFLICT"
   | "LIMIT_EXCEEDED"
@@ -51,6 +52,19 @@ export class NotFoundError extends AppError {
   constructor(resource: "programme" | "thème" | "deck" = "programme") {
     // Clés internes « programme » et « thème » ; l'interface parle de « projet » et de « sujet ».
     super(`Ce ${RESOURCE_LABELS[resource]} est introuvable.`);
+  }
+}
+
+/**
+ * L'appelant voit le projet (il en est membre) mais son rôle ne permet pas
+ * l'action (ex. un lecteur qui modifie l'apparence). Jamais levée pour un
+ * inconnu : celui-ci reçoit NotFoundError, l'existence du projet n'est pas révélée.
+ */
+export class ForbiddenError extends AppError {
+  readonly code = "FORBIDDEN" as const;
+  readonly status = 403;
+  constructor() {
+    super("Vous n'avez pas les droits pour cette action sur ce projet.");
   }
 }
 

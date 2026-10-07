@@ -14,6 +14,7 @@ interface DeckRow {
   kind: DeckKind;
   problem: string | null;
   engine: string | null;
+  practice: boolean;
   spec: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
@@ -29,6 +30,7 @@ export function toDeckView(row: DeckRow): DeckView {
     kind: row.kind,
     problem: row.problem,
     engine: parseStored(DeckEngineSchema, row.engine, "Deck.engine", row.id),
+    practice: row.practice,
     spec: parseStored(DeckSpecSchema, row.spec, "Deck.spec", row.id),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -43,6 +45,8 @@ interface ThemeRow {
   description: string;
   keywords: string[];
   notes: string;
+  problems: string[];
+  updatedAt: Date;
 }
 
 export function toThemeView(row: ThemeRow): ThemeView {
@@ -54,6 +58,8 @@ export function toThemeView(row: ThemeRow): ThemeView {
     description: row.description,
     keywords: row.keywords,
     notes: row.notes,
+    problems: row.problems,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

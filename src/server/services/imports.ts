@@ -9,7 +9,7 @@ import type { Brand, PromptTemplate } from "@/domain/schemas";
 import { ValidationError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeImportQuota } from "../rate-limit";
-import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo/programs";
+import { assertProgramAccess, getProgramBrand, getProgramTemplate } from "../repo/programs";
 
 /**
  * Imports d'un projet (apparence depuis un fichier, trame depuis un prompt,
@@ -21,7 +21,8 @@ import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo
  * applique au formulaire ; l'enregistrement passe par les actions habituelles.
  *
  * Ordre immuable :
- *   1. autorisation sur le projet (requête filtrée par propriétaire),
+ *   1. autorisation sur le projet (requête filtrée par rôle : éditeur, car le
+ *      résultat est destiné à modifier l'apparence, la trame ou les sujets),
  *   2. limite de débit des imports (le seul quota consommé),
  *   3. type du fichier (extension ET signature, taille) avant toute lecture,
  *   4. lecture déterministe, hors de toute transaction.
@@ -90,6 +91,10 @@ export type ThemePromptResult = ThemePromptImport;
 // Dépendances injectables
 // ---------------------------------------------------------------------------
 
+/**
+ * Accès au projet, tous au rôle d'ÉDITEUR (le nom `assertProgramOwned` est
+ * historique : il est conservé pour les doublures de test existantes).
+ */
 export interface ImportsRepo {
   assertProgramOwned(userId: string, programId: string): Promise<void>;
   getProgramTemplate(userId: string, programId: string): Promise<PromptTemplate>;
@@ -106,7 +111,11 @@ export interface ImportsDeps {
   quotas?: ImportsQuotas;
 }
 
-const defaultRepo: ImportsRepo = { assertProgramOwned, getProgramTemplate, getProgramBrand };
+const defaultRepo: ImportsRepo = {
+  assertProgramOwned: (userId, programId) => assertProgramAccess(userId, programId, "editor"),
+  getProgramTemplate: (userId, programId) => getProgramTemplate(userId, programId, "editor"),
+  getProgramBrand: (userId, programId) => getProgramBrand(userId, programId, "editor"),
+};
 
 const defaultQuotas: ImportsQuotas = {
   consumeImport: (userId) => consumeImportQuota(userId),
@@ -186,7 +195,7 @@ export async function analyzeTemplatePrompt(
 
 /**
  * Sujets ET apparence proposés à partir d'un texte libre décrivant l'oral :
- * autorisation (lecture de l'apparence actuelle filtrée par propriétaire),
+ * autorisation (lecture de l'apparence actuelle filtrée par rôle : éditeur),
  * quota d'import, puis lecture déterministe. Rien n'est écrit ; le texte n'est
  * jamais journalisé.
  */

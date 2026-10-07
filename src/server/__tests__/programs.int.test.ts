@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/server/db/client";
 import { DataIntegrityError, NotFoundError } from "@/server/errors";
 import * as programs from "@/server/repo/programs";
+import { purgeTrash } from "@/server/repo/trash";
 import { makeBrand, makeTemplate } from "@/test/fixtures";
 import { createUser, setupTestDatabase } from "@/test/db";
 import { seedDeck, seedProgram, seedThemes, themeInput } from "./helpers";
@@ -109,6 +110,9 @@ describe("repo programmes — suppression en cascade", () => {
     await seedDeck(programId, null, "FINAL");
 
     await programs.deleteProgram(a.id, programId);
+    // v1.2 : corbeille d'abord ; la cascade a lieu à la purge (> 1 h, cf. undo.int.test.ts).
+    await db().program.update({ where: { id: programId }, data: { deletedAt: new Date(Date.now() - 2 * 3600 * 1000) } });
+    await purgeTrash();
 
     expect(await db().theme.count({ where: { programId } })).toBe(0);
     expect(await db().deck.count({ where: { programId } })).toBe(0);

@@ -29,6 +29,8 @@ function program(id: string, name: string, nextStep: ProgramSummary["progress"][
     createdAt: new Date("2026-09-01"),
     updatedAt: new Date("2026-09-02"),
     progress: { doneCount, total: 3, nextStep },
+    role: "owner",
+    ownerName: null,
   };
 }
 
