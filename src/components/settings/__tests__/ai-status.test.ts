@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseChoice, teamProvider, toAiSetupStatus } from "@/components/settings/ai-status";
+import { parseChoice, retiredProvider, teamProvider, toAiSetupStatus } from "@/components/settings/ai-status";
 import type { AiSettingsView } from "@/server/repo/types";
 
 describe("toAiSetupStatus", () => {
@@ -65,9 +65,18 @@ describe("toAiSetupStatus", () => {
     expect(c).toMatchObject({ model: "claude-opus-5-5", modelLabel: "claude-ancien" });
   });
 
-  it("devrait proposer la clé d'équipe des fournisseurs configurés, et celle de Claude en démonstration", () => {
-    expect(toAiSetupStatus(view({ team: ["openai", "mistral"] }), String).team).toEqual(["mistral", "openai"]);
-    expect(toAiSetupStatus(view({ mock: true }), String).team).toEqual(["claude"]);
+  it("devrait proposer la clé d'équipe des seuls fournisseurs proposés, et la démo à part (plus de « Claude, clé de l'équipe »)", () => {
+    expect(toAiSetupStatus(view({ team: ["claude", "mistral", "gemini", "openai"] }), String).team).toEqual(["mistral", "gemini"]);
+    expect(toAiSetupStatus(view({ mock: true }), String)).toMatchObject({ team: [], demo: true });
+    expect(toAiSetupStatus(view(), String).demo).toBe(false);
+  });
+
+  it("devrait garder une connexion héritée Claude ou OpenAI dans la liste (pour pouvoir la supprimer)", () => {
+    const openai = { ...MISTRAL, provider: "openai", model: "gpt-5-mini" } as const;
+    expect(toAiSetupStatus(view({ connections: [openai, MISTRAL] }), String).connections.map((c) => c.provider)).toEqual([
+      "mistral",
+      "openai",
+    ]);
   });
 
   it("devrait traduire le choix enregistré en carte : clé personnelle, clé d'équipe, Ollama, Sans IA", () => {
@@ -85,16 +94,24 @@ describe("toAiSetupStatus", () => {
   it("devrait retenir, sans choix enregistré, le rédacteur que le serveur applique", () => {
     const effective = (engine: AiSettingsView["effective"]["engine"], keySource: AiSettingsView["effective"]["keySource"]) =>
       toAiSetupStatus(view({ effective: { engine, keySource, model: null, ready: true, problem: null } }), String).saved;
-    expect(effective("mock", null)).toBe("team-claude");
-    expect(effective("claude", "user")).toBe("claude");
-    expect(effective("claude", "server")).toBe("team-claude");
+    expect(effective("mock", null)).toBe("demo");
+    expect(effective("mistral", "server")).toBe("team-mistral");
+    expect(effective("gemini", "server")).toBe("team-gemini");
     expect(effective("free", null)).toBe("free");
+  });
+
+  it("devrait présenter en démo une clé d'équipe Claude héritée que AI_PROVIDER=mock remplace", () => {
+    const s = toAiSetupStatus(
+      view({ selection: { engine: "claude", keySource: "server" }, effective: { engine: "mock", keySource: null, model: "mock", ready: true, problem: null } }),
+      String,
+    );
+    expect(s.saved).toBe("demo");
   });
 });
 
 describe("parseChoice / teamProvider", () => {
   it("devrait accepter les seuls choix connus", () => {
-    for (const raw of ["free", "ollama", "claude", "gemini", "team-openai"]) expect(parseChoice(raw)).toBe(raw);
+    for (const raw of ["free", "demo", "ollama", "claude", "gemini", "team-openai"]) expect(parseChoice(raw)).toBe(raw);
     for (const raw of ["team-", "team-llama", "mock", "", null, 3]) expect(parseChoice(raw)).toBeNull();
   });
 
@@ -102,5 +119,11 @@ describe("parseChoice / teamProvider", () => {
     expect(teamProvider("team-mistral")).toBe("mistral");
     expect(teamProvider("mistral")).toBeNull();
     expect(teamProvider("free")).toBeNull();
+  });
+
+  it("devrait reconnaître un choix hérité d'un fournisseur qui n'est plus proposé", () => {
+    expect(retiredProvider("claude")).toBe("claude");
+    expect(retiredProvider("team-openai")).toBe("openai");
+    for (const choice of ["mistral", "team-gemini", "free", "demo", "ollama"] as const) expect(retiredProvider(choice)).toBeNull();
   });
 });

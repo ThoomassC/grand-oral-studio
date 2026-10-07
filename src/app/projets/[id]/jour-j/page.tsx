@@ -87,9 +87,10 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
     ready: writer.ready,
     problem: writer.problem,
   };
+  // Repli en un clic : fournisseurs proposés seulement (engineChoices écarte Claude et OpenAI, plus proposés).
   const choices = engineChoices(
     settings.connections.map((c) => c.provider),
-    settings.mock ? settings.team.filter((p) => p !== "claude") : settings.team,
+    settings.team,
   );
   const prepMinutes = prepMinutesOf(program.template);
   const prepKey = prepStorageKey(program.id, practice);

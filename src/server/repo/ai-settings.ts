@@ -71,10 +71,12 @@ export async function findUserAiKeyMeta(userId: string): Promise<UserAiKeyMeta |
  */
 export async function saveUserSelection(
   userId: string,
-  selection: { engine: EngineId; keySource: KeySource | null },
+  /** engine null : pas de préférence (rédacteur par défaut, cf. src/server/ai/engine.ts). */
+  selection: { engine: EngineId | null; keySource: KeySource | null },
   ollamaModel?: string,
 ): Promise<void> {
-  const keySource = selection.engine === "ollama" || selection.engine === "free" ? null : selection.keySource;
+  const keySource =
+    selection.engine === null || selection.engine === "ollama" || selection.engine === "free" ? null : selection.keySource;
   const data = { engine: selection.engine, keySource, ...(ollamaModel !== undefined ? { ollamaModel } : {}) };
   await db().userAiSettings.upsert({ where: { userId }, create: { userId, ...data }, update: data, select: { userId: true } });
 }

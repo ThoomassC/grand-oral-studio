@@ -28,9 +28,9 @@ npm run setup                 # .env complété (secrets générés), bases dev/
 npm run dev
 ```
 
-`npm run setup` ne remplace jamais une valeur déjà présente dans `.env` : on peut le relancer sans risque. Les variables facultatives (Google, e-mails Resend, domaines autorisés, clés d'équipe Anthropic/Mistral/Gemini/OpenAI, Ollama, échéance de génération) sont documentées dans [`.env.example`](.env.example).
+`npm run setup` ne remplace jamais une valeur déjà présente dans `.env` : on peut le relancer sans risque. Les variables facultatives (Google, e-mails Resend, domaines autorisés, clés d'équipe Mistral/Gemini, Ollama, échéance de génération) sont documentées dans [`.env.example`](.env.example).
 
-Sans aucune clé, la rédaction **Sans IA** produit des diaporamas à compléter : le parcours complet fonctionne. `AI_PROVIDER=mock` (dev/tests) remplace la clé serveur Claude par un mock déterministe. Voir « Rédaction ».
+Sans aucune clé, la rédaction **Sans IA** produit des diaporamas à compléter : le parcours complet fonctionne. `AI_PROVIDER=mock` (dev/tests) fait de la carte **Démo** (contenus factices, sans clé) le choix par défaut, servi par un mock déterministe. Voir « Rédaction ».
 
 ## Rédaction
 
@@ -41,13 +41,13 @@ Chaque utilisateur choisit dans la **Rédaction IA** (`/configuration-ia`) qui r
 | **Sans IA** | aucun, instantané, sans réseau | diaporama à compléter, construit avec la trame et les notes du sujet | aucun |
 | **Mistral** | offre gratuite possible ; hébergé dans l'UE | contenu rédigé | sa clé, ou la clé de l'équipe (`MISTRAL_API_KEY`) |
 | **Gemini** | offre gratuite possible | contenu rédigé | sa clé, ou la clé de l'équipe (`GEMINI_API_KEY`) |
-| **Claude** | crédits Anthropic | contenu rédigé | sa clé, ou la clé de l'équipe (`ANTHROPIC_API_KEY`) |
-| **OpenAI** | crédits OpenAI | contenu rédigé | sa clé, ou la clé de l'équipe (`OPENAI_API_KEY`) |
 | **Ollama** | calcul local | dépend du modèle ; lent | Ollama sur le serveur |
 
 Chaque carte détaille l'hébergement, l'usage des données pour l'entraînement et la conservation. Une **clé de l'équipe** n'est proposée que si la variable correspondante est renseignée sur le serveur ; elle est facturée au compte de l'équipe et soumise aux quotas `AI_QUOTA_PER_HOUR` et `AI_GLOBAL_HOURLY_LIMIT`.
 
-Sans préférence enregistrée : Claude si une clé existe (la sienne, sinon `ANTHROPIC_API_KEY`), sinon Sans IA, y compris en production. Supprimer une connexion alors qu'elle rédige ramène la rédaction au choix par défaut ; un autre rédacteur choisi est conservé. Si le rédacteur choisi n'est plus disponible (clé refusée, crédit épuisé, limite du fournisseur, Ollama arrêté…), la génération échoue avec un message qui renvoie vers la Rédaction IA et propose le repli en un clic : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du sujet** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
+Claude et OpenAI ne sont plus proposés depuis la 1.2 : aucune nouvelle connexion ni sélection n'est acceptée. Une connexion existante reste listée dans « Mes connexions », avec « Supprimer » seulement ; un utilisateur qui avait explicitement choisi Claude ou OpenAI le garde (avec sa clé, ou `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) jusqu'à ce qu'il choisisse un autre rédacteur.
+
+Sans préférence enregistrée : la démo si `AI_PROVIDER=mock`, sinon la clé de l'équipe Mistral, sinon celle de Gemini, sinon Sans IA, y compris en production (jamais une clé personnelle implicitement). Supprimer une connexion alors qu'elle rédige ramène la rédaction au choix par défaut ; un autre rédacteur choisi est conservé. Si le rédacteur choisi n'est plus disponible (clé refusée, crédit épuisé, limite du fournisseur, Ollama arrêté…), la génération échoue avec un message qui renvoie vers la Rédaction IA et propose le repli en un clic : aucune bascule silencieuse. Exception le jour J : la **reconnaissance du sujet** se replie toujours sur la version sans IA si l'IA échoue, et l'indique.
 
 Chaque diaporama garde la trace de la rédaction qui l'a produit (`engine` : `claude`, `mistral`, `gemini`, `openai`, `ollama`, `free`, `mock`, ou `null` pour les diaporamas antérieurs).
 
@@ -67,14 +67,9 @@ Limites : délai `AI_OLLAMA_TIMEOUT_MS` pour un diaporama (défaut 10 min) et `A
 
 ## Clés API
 
-Chaque utilisateur peut enregistrer **sa** clé API par fournisseur (Claude, Mistral, Gemini, OpenAI) dans la **Rédaction IA** (`/configuration-ia`), choisir le modèle dans une liste fermée, tester la connexion et l'activer. Ses générations (reconnaissance du sujet, diaporama, régénération d'une diapo, questions du jury) l'utilisent alors. Pour Claude, ordre de résolution sans choix explicite :
+Chaque utilisateur peut enregistrer **sa** clé API par fournisseur proposé (Mistral, Gemini) dans la **Rédaction IA** (`/configuration-ia`), choisir le modèle dans une liste fermée, tester la connexion et l'activer. Ses générations (reconnaissance du sujet, diaporama, régénération d'une diapo, questions du jury) l'utilisent alors. Une clé Claude ou OpenAI enregistrée avant la 1.2 reste chiffrée et utilisable par la sélection qui la désigne, jusqu'à sa suppression.
 
-1. la clé de l'utilisateur ;
-2. la clé du serveur `ANTHROPIC_API_KEY` (sauf `AI_PROVIDER=mock`) ;
-3. le mode simulé, hors production uniquement ;
-4. sinon : « Ajoutez votre clé API Anthropic dans la Rédaction IA pour lancer une génération. »
-
-Mistral, Gemini et OpenAI sont appelés en `fetch` sur des URL fixes (API compatible OpenAI). Une limite du fournisseur (429) est affichée avec l'heure à laquelle réessayer et rembourse l'unité de quota interne.
+Mistral et Gemini sont appelés en `fetch` sur des URL fixes (API compatible OpenAI). Une limite du fournisseur (429) est affichée avec l'heure à laquelle réessayer et rembourse l'unité de quota interne.
 
 Prérequis serveur : la clé maître de chiffrement, à générer une fois puis à ajouter au `.env` (redémarrer ensuite `npm run dev`) :
 
@@ -84,7 +79,7 @@ openssl rand -base64 32   # → SETTINGS_ENCRYPTION_KEY=...
 
 - À l'enregistrement, la clé est vérifiée auprès du fournisseur par un appel gratuit (liste des modèles, aucune génération), puis stockée chiffrée (AES-256-GCM, liée à l'utilisateur et au fournisseur, table `user_ai_credential`). Seuls ses 4 derniers caractères sont affichés ; elle n'est jamais renvoyée au navigateur ni journalisée.
 - Vérifications limitées à 10 par heure et par utilisateur, 200 par heure au total.
-- La clé ne part que vers `ANTHROPIC_API_URL` (défaut `https://api.anthropic.com`) : les variables `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` et `ANTHROPIC_CUSTOM_HEADERS` de l'environnement du processus sont ignorées. Les arguments des Server Actions ne sont pas journalisés par `next dev` (`logging.serverFunctions: false`).
+- Une clé Claude héritée ne part que vers `ANTHROPIC_API_URL` (défaut `https://api.anthropic.com`) : les variables `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` et `ANTHROPIC_CUSTOM_HEADERS` de l'environnement du processus sont ignorées. Les arguments des Server Actions ne sont pas journalisés par `next dev` (`logging.serverFunctions: false`).
 - Avec sa propre clé, le plafond global `AI_GLOBAL_HOURLY_LIMIT` ne s'applique pas ; le quota par utilisateur reste (`AI_QUOTA_PER_HOUR_OWN_KEY`, défaut 200/h).
 - Rotation de la clé maître : voir `SETTINGS_ENCRYPTION_KEY_VERSION` et `SETTINGS_ENCRYPTION_KEY_PREVIOUS` dans `.env.example`. Perdre la clé maître rend les clés enregistrées illisibles : les utilisateurs devront les saisir à nouveau.
 

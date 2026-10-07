@@ -15,7 +15,7 @@ import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { Notice } from "@/components/ui/Notice";
-import { PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+import { PROVIDER_INFO, type SelectableProvider } from "@/domain/ai-providers";
 import { connectProvider, deleteConnection, setConnectionModel, testConnection } from "@/server/actions/settings";
 import { failureMessage } from "./action-error";
 import type { ConnectionStatus } from "./ai-status";
@@ -41,8 +41,6 @@ interface ProviderCopy {
   /** Format, lu avec le champ (description du lecteur d'écran). */
   formatHint: string;
   placeholder?: string;
-  /** Rappel visible : un abonnement grand public ne donne pas accès à l'API. */
-  subscriptionNote?: string;
   /** Aides sur la clé, derrière le bouton « i » du champ (et du résumé de la clé). */
   keyInfo: readonly ChoiceInfoItem[];
 }
@@ -60,22 +58,8 @@ function prefixDetail(prefix: string) {
   );
 }
 
-const COPY: Readonly<Record<CloudProvider, ProviderCopy>> = {
-  claude: {
-    consoleLink: "console Anthropic, rubrique API Keys",
-    consolePlace: "votre console Anthropic",
-    formatHint: "Elle commence par « sk-ant- ».",
-    placeholder: "sk-ant-…",
-    subscriptionNote: "Un abonnement Claude.ai ne donne pas accès à l'API.",
-    keyInfo: [
-      { term: "Format", detail: prefixDetail("sk-ant-") },
-      {
-        term: "Crédits",
-        detail: "Ajoutez quelques euros de crédit dans la console Anthropic (rubrique Billing) : sans crédit, la clé est refusée.",
-      },
-      SECURITY_INFO,
-    ],
-  },
+/** Fournisseurs proposés seulement : Claude et OpenAI ne se connectent plus depuis la 1.2. */
+const COPY: Readonly<Record<SelectableProvider, ProviderCopy>> = {
   mistral: {
     consoleLink: "console Mistral, rubrique API Keys",
     consolePlace: "votre console Mistral",
@@ -97,21 +81,6 @@ const COPY: Readonly<Record<CloudProvider, ProviderCopy>> = {
       SECURITY_INFO,
     ],
   },
-  openai: {
-    consoleLink: "console OpenAI, rubrique API Keys",
-    consolePlace: "votre console OpenAI",
-    formatHint: "Elle commence par « sk- ».",
-    placeholder: "sk-…",
-    subscriptionNote: "Un abonnement ChatGPT ne donne pas accès à l'API.",
-    keyInfo: [
-      { term: "Format", detail: prefixDetail("sk-") },
-      {
-        term: "Crédits",
-        detail: "Ajoutez quelques euros de crédit dans la console OpenAI (rubrique Billing) : sans crédit, la rédaction échoue.",
-      },
-      SECURITY_INFO,
-    ],
-  },
 };
 
 /** « d'Anthropic », « de Mistral ». */
@@ -130,8 +99,9 @@ function fromName(name: string): string {
  * le champ), « Tester la connexion » et « Supprimer ma clé ».
  *
  * La forme de la clé est contrôlée ici (aucun appel serveur pour une clé
- * vide ou, pour Claude, mal formée) ; le serveur revérifie la forme exacte,
- * puis la validité réelle auprès du fournisseur.
+ * vide ou trop longue) ; le serveur revérifie la forme exacte, puis la
+ * validité réelle auprès du fournisseur. Fournisseurs proposés seulement
+ * (Mistral, Gemini) : une connexion héritée Claude/OpenAI ne s'ouvre pas ici.
  */
 export function ProviderConnect({
   provider,
@@ -139,7 +109,7 @@ export function ProviderConnect({
   onActivated,
   startReplacing = false,
 }: {
-  provider: CloudProvider;
+  provider: SelectableProvider;
   connection: ConnectionStatus | null;
   onActivated: () => void;
   /** Ouvre directement le remplacement de la clé (« Remplacer » de Mes connexions). */
@@ -392,7 +362,7 @@ export function ProviderConnect({
                 {copy.consoleLink}
                 <span className="sr-only"> (nouvel onglet)</span>
               </a>
-              , puis collez-la ci-dessous.{copy.subscriptionNote ? ` ${copy.subscriptionNote}` : null}
+              , puis collez-la ci-dessous.
             </p>
             <div>
               <div className="flex items-center justify-between gap-2">

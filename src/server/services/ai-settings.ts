@@ -1,19 +1,21 @@
 import { z } from "zod";
-import { AnthropicApiKeySchema, SaveApiKeyInputSchema } from "@/domain/api-key";
+import { SaveApiKeyInputSchema } from "@/domain/api-key";
 import {
   CLOUD_PROVIDERS,
   CloudProviderSchema,
   engineLabel,
   isCloudProvider,
   isKnownModel,
+  isSelectableProvider,
   KeySourceSchema,
+  notSelectableMessage,
   PROVIDER_INFO,
   type CloudProvider,
 } from "@/domain/ai-providers";
 import { apiKeyMatches, modelFor, teamKeyProviders } from "../ai/catalog";
 import { claudeAvailable, effectiveEngine, ollamaBaseUrl, safePlanEngine, teamAvailable, type EngineInputs } from "../ai/engine";
 import type { OllamaModels } from "../ai/ollama";
-import { configuredModel, resolveAiSource, safeResolveAiSource, serverApiKey } from "../ai/resolve";
+import { configuredModel, mockForced, resolveAiSource, safeResolveAiSource, serverApiKey } from "../ai/resolve";
 import type { KeyCheck } from "../ai/verify-key";
 import { loadSecretBoxFromEnv, type SecretBox } from "../crypto/secret-box";
 import { AiKeyRejectedError, AiKeyRequiredError, AiUnavailableError, isAppError, ValidationError } from "../errors";
@@ -56,6 +58,19 @@ function checkUnavailable(): AiUnavailableError {
   return new AiUnavailableError("vérification de clé : API injoignable", { userMessage: KEY_CHECK_UNAVAILABLE_MESSAGE });
 }
 
+/**
+ * Claude et OpenAI ne sont plus proposés depuis la 1.2 : toute NOUVELLE
+ * connexion ou sélection qui les vise est refusée, avec un message clair (avant
+ * la validation détaillée, qui ne dirait que « valeur invalide »). Une
+ * connexion ou une sélection héritée reste lisible, testable et supprimable.
+ */
+function rejectRetiredProvider(input: unknown, field: "provider" | "engine"): void {
+  const value = typeof input === "object" && input !== null ? (input as Record<string, unknown>)[field] : undefined;
+  if (!isCloudProvider(value) || isSelectableProvider(value)) return;
+  const message = notSelectableMessage(value);
+  throw new ValidationError(message, { [field]: [message] });
+}
+
 // ---------------------------------------------------------------------------
 // Connexions (une clé par fournisseur)
 // ---------------------------------------------------------------------------
@@ -85,11 +100,11 @@ export const ConnectProviderInputSchema = z
     activate: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.provider === "claude") {
-      // Mêmes messages que le champ de la 1.1 (validation partagée avec le front).
-      const checked = AnthropicApiKeySchema.safeParse(value.apiKey);
-      if (!checked.success) ctx.addIssue({ code: "custom", path: ["apiKey"], message: checked.error.issues[0]!.message });
-    } else if (!apiKeyMatches(value.provider, value.apiKey)) {
+    if (!isSelectableProvider(value.provider)) {
+      ctx.addIssue({ code: "custom", path: ["provider"], message: notSelectableMessage(value.provider) });
+      return;
+    }
+    if (!apiKeyMatches(value.provider, value.apiKey)) {
       ctx.addIssue({
         code: "custom",
         path: ["apiKey"],
@@ -115,7 +130,8 @@ export const ConnectionModelInputSchema = z
 export type ConnectionModelInput = z.input<typeof ConnectionModelInputSchema>;
 
 /**
- * « Vérifier et enregistrer » une clé : format → clé maître (échec immédiat,
+ * « Vérifier et enregistrer » une clé d'un fournisseur PROPOSÉ (Claude et OpenAI
+ * refusés) : format → clé maître (échec immédiat,
  * avant tout appel réseau) → quota de vérification → vérification réseau (hors
  * transaction) → écriture unique (upsert, et choix du rédacteur si `activate`).
  * Clé refusée ou invérifiable : rien n'est écrit.
@@ -125,6 +141,7 @@ export async function connectProvider(
   input: unknown,
   deps: ConnectionDeps,
 ): Promise<{ provider: CloudProvider; last4: string; model: string }> {
+  rejectRetiredProvider(input, "provider");
   const parsed = parseInput(ConnectProviderInputSchema, input);
   const { provider, apiKey } = parsed;
   const box = deps.box ?? loadSecretBoxFromEnv(deps.env);
@@ -208,16 +225,28 @@ const [firstCloud, ...otherClouds] = CLOUD_PROVIDERS.map((engine) =>
   z.object({ engine: z.literal(engine), keySource: KeySourceSchema }),
 );
 
-export const SelectWriterInputSchema = z.discriminatedUnion(
-  "engine",
-  [
-    z.object({ engine: z.literal("free") }),
-    z.object({ engine: z.literal("ollama"), ollamaModel: OllamaModelNameSchema }),
-    firstCloud!,
-    ...otherClouds,
-  ],
-  { error: "Rédacteur inconnu." },
-);
+/**
+ * Rédacteur choisi. `mock` : la carte « Démo » (AI_PROVIDER=mock seulement), qui
+ * efface la préférence (le mock est alors le rédacteur par défaut). Claude et
+ * OpenAI restent dans l'union (pour un message clair) mais sont refusés.
+ */
+export const SelectWriterInputSchema = z
+  .discriminatedUnion(
+    "engine",
+    [
+      z.object({ engine: z.literal("free") }),
+      z.object({ engine: z.literal("mock") }),
+      z.object({ engine: z.literal("ollama"), ollamaModel: OllamaModelNameSchema }),
+      firstCloud!,
+      ...otherClouds,
+    ],
+    { error: "Rédacteur inconnu." },
+  )
+  .superRefine((value, ctx) => {
+    if (isCloudProvider(value.engine) && !isSelectableProvider(value.engine)) {
+      ctx.addIssue({ code: "custom", path: ["engine"], message: notSelectableMessage(value.engine) });
+    }
+  });
 export type SelectWriterInput = z.input<typeof SelectWriterInputSchema>;
 
 export interface AiSettingsViewDeps {
@@ -249,11 +278,21 @@ async function checkOllama(model: string, deps: AiSettingsViewDeps): Promise<voi
  * Choisit le rédacteur, après vérification qu'il est utilisable : clé
  * personnelle enregistrée, clé d'équipe présente sur le serveur, ou Ollama
  * configuré, joignable et modèle installé. « Clé d'équipe » = keySource 'server'.
+ * Claude et OpenAI ne peuvent plus être choisis (une sélection héritée reste
+ * honorée tant que l'utilisateur n'en change pas : cf. src/server/ai/engine.ts).
  */
 export async function selectWriter(userId: string, input: unknown, deps: AiSettingsViewDeps & { log: Logger }): Promise<void> {
+  rejectRetiredProvider(input, "engine");
   const parsed = parseInput(SelectWriterInputSchema, input);
   if (parsed.engine === "free") {
     await saveUserSelection(userId, { engine: "free", keySource: null });
+  } else if (parsed.engine === "mock") {
+    if (!mockForced(deps.env)) {
+      const message = "Le mode démo n'est pas proposé sur ce serveur.";
+      throw new ValidationError(message, { engine: [message] });
+    }
+    // Démo : rédacteur par défaut avec AI_PROVIDER=mock ; choisir la carte efface la préférence.
+    await saveUserSelection(userId, { engine: null, keySource: null });
   } else if (parsed.engine === "ollama") {
     await checkOllama(parsed.ollamaModel, deps);
     await saveUserSelection(userId, { engine: "ollama", keySource: null }, parsed.ollamaModel);
@@ -361,7 +400,8 @@ export async function getAiSettingsView(userId: string, deps: AiSettingsViewDeps
 
   return {
     connections: connectionView(prefs, env),
-    team: teamKeyProviders(env),
+    // Clés d'équipe des seuls fournisseurs proposés (une clé ANTHROPIC/OPENAI_API_KEY ne sert qu'aux sélections héritées).
+    team: teamKeyProviders(env).filter(isSelectableProvider),
     selection: prefs.selection,
     effective,
     mock: safeResolveAiSource({ hasUserKey: false, env }) === "mock",
@@ -391,9 +431,12 @@ export interface AiSettingsDeps {
 
 /**
  * @deprecated « Vérifier et activer » 1.1 : connectProvider("claude") qui choisit
- * aussi Claude sur cette clé, en une seule écriture.
+ * aussi Claude sur cette clé. Claude n'étant plus proposé depuis la 1.2, toujours
+ * refusé (ValidationError) par connectProvider, sans appel réseau ni quota.
  */
 export async function activateClaudeWithKey(userId: string, input: unknown, deps: AiSettingsDeps): Promise<{ last4: string }> {
+  // Refus avant toute validation de la clé : le message dit pourquoi, quelle que soit la saisie.
+  rejectRetiredProvider({ provider: "claude" }, "provider");
   const { apiKey } = parseInput(SaveApiKeyInputSchema, input);
   const result = await connectProvider(
     userId,
@@ -447,19 +490,17 @@ export const SetEngineInputSchema = z.discriminatedUnion(
 export type SetEngineInput = z.input<typeof SetEngineInputSchema>;
 
 /**
- * @deprecated Enregistre le moteur 1.1 : Claude exige une clé (la sienne ou celle du
- * serveur ; keySource NULL = règle 1.1), Ollama exige qu'il soit configuré,
- * joignable, et que le modèle soit installé.
+ * @deprecated Enregistre le moteur 1.1 : Ollama exige qu'il soit configuré,
+ * joignable, et que le modèle soit installé. Claude n'est plus proposé depuis la
+ * 1.2 : refusé (une sélection héritée reste honorée, cf. src/server/ai/engine.ts).
  */
 export async function setEngine(userId: string, input: unknown, deps: AiSettingsViewDeps & { log: Logger }): Promise<void> {
+  rejectRetiredProvider(input, "engine");
   const parsed = parseInput(SetEngineInputSchema, input);
   if (parsed.engine === "claude") {
-    const own = await findCredential(userId, "claude");
-    if (!claudeAvailable({ hasUserKey: own !== null, env: deps.env })) {
-      const message = "Connectez d'abord Claude avec votre clé API Anthropic.";
-      throw new ValidationError(message, { engine: [message] });
-    }
-    await saveUserEngine(userId, "claude");
+    // Inatteignable (rejectRetiredProvider) ; garde-fou si la liste des fournisseurs proposés change.
+    const message = notSelectableMessage("claude");
+    throw new ValidationError(message, { engine: [message] });
   } else if (parsed.engine === "ollama") {
     await checkOllama(parsed.ollamaModel, deps);
     await saveUserEngine(userId, "ollama", parsed.ollamaModel);

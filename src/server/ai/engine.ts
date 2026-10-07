@@ -1,8 +1,16 @@
-import { isCloudProvider, PROVIDER_INFO, type CloudProvider, type EngineId, type KeySource } from "@/domain/ai-providers";
+import {
+  isCloudProvider,
+  PROVIDER_INFO,
+  SELECTABLE_PROVIDERS,
+  type CloudProvider,
+  type EngineId,
+  type KeySource,
+  type SelectableProvider,
+} from "@/domain/ai-providers";
 import { AiKeyRequiredError, EngineUnavailableError, type AppError } from "../errors";
 import type { AiBilling } from "../rate-limit";
 import { teamKey } from "./catalog";
-import { resolveAiSource, safeResolveAiSource } from "./resolve";
+import { mockForced, resolveAiSource, safeResolveAiSource } from "./resolve";
 
 /**
  * Moteur de rédaction d'un utilisateur (fonctions pures, sans réseau ni base).
@@ -12,9 +20,16 @@ import { resolveAiSource, safeResolveAiSource } from "./resolve";
  * (fournisseurs pour lesquels l'utilisateur a enregistré une clé) et
  * l'environnement (clés d'équipe, Ollama, AI_PROVIDER).
  *
- * - Sans préférence : règle 1.1 conservée — Claude sur la clé de l'utilisateur,
- *   sinon sur la clé du serveur (ou le mock avec AI_PROVIDER=mock), sinon Sans
- *   IA. Jamais un autre fournisseur implicitement.
+ * - Sans préférence (1.2) : le mock si AI_PROVIDER=mock (dev/tests), sinon la
+ *   clé d'équipe du premier fournisseur PROPOSÉ qui en a une (Mistral, puis
+ *   Gemini), sinon Sans IA. Jamais une clé personnelle implicitement, et plus
+ *   jamais Claude ni OpenAI (ni via une clé personnelle, ni via
+ *   ANTHROPIC_API_KEY / OPENAI_API_KEY) : ils ne sont plus proposés.
+ * - Sélection EXPLICITE héritée de Claude ou d'OpenAI : toujours honorée
+ *   (compatibilité : pas de bascule silencieuse d'un rédacteur que
+ *   l'utilisateur a choisi), jusqu'à ce qu'il en choisisse un autre — le
+ *   serveur refuse toute NOUVELLE sélection ou connexion de ces fournisseurs
+ *   (services/ai-settings.ts), et la surcharge ponctuelle ne les accepte pas.
  * - Fournisseur choisi avec keySource NULL (sélection héritée de la 1.1) : sa
  *   clé personnelle, sinon la clé d'équipe.
  * - keySource 'user' : la clé personnelle, rien d'autre ; 'server' : la clé
@@ -41,8 +56,11 @@ export interface EngineSelection {
   keySource: KeySource | null;
 }
 
-/** Choix ponctuel pour UNE génération (bouton de repli), prioritaire sur la sélection. */
-export type EngineOverride = { engine: "free" } | { engine: CloudProvider; keySource: KeySource };
+/**
+ * Choix ponctuel pour UNE génération (bouton de repli), prioritaire sur la
+ * sélection : Sans IA ou un fournisseur proposé (jamais Claude ni OpenAI).
+ */
+export type EngineOverride = { engine: "free" } | { engine: SelectableProvider; keySource: KeySource };
 
 export interface EngineInputs {
   selection: EngineSelection;
@@ -127,6 +145,17 @@ function cloudPlan(provider: CloudProvider, keySource: KeySource | null, input: 
   return plan;
 }
 
+/**
+ * Rédacteur par défaut (aucune préférence enregistrée) : le mock imposé par
+ * l'opérateur, sinon la première clé d'équipe d'un fournisseur proposé, sinon
+ * Sans IA. Ne lève jamais : un AI_PROVIDER invalide ne concerne que Claude.
+ */
+function defaultPlan(env: Env): EnginePlan {
+  if (mockForced(env)) return { engine: "mock" };
+  const provider = SELECTABLE_PROVIDERS.find((p) => teamKey(p, env) !== null);
+  return provider ? { engine: provider, keySource: "server" } : { engine: "free" };
+}
+
 export function planEngine(input: EngineInputs): EnginePlan {
   const override = input.override ?? null;
   if (override) {
@@ -134,13 +163,7 @@ export function planEngine(input: EngineInputs): EnginePlan {
   }
 
   const { engine, keySource } = input.selection;
-  if (engine === null) {
-    // La source Claude n'est résolue (et AI_PROVIDER lu) que si Claude est en jeu :
-    // une mauvaise configuration Claude ne doit pas bloquer les moteurs gratuit et Ollama.
-    const source = resolveAiSource({ hasUserKey: input.connections.includes("claude"), env: input.env });
-    if (source === "mock") return { engine: "mock" };
-    return source === "none" ? { engine: "free" } : { engine: "claude", keySource: source };
-  }
+  if (engine === null) return defaultPlan(input.env);
   if (engine === "free") return { engine: "free" };
   if (engine === "ollama") {
     const baseUrl = ollamaBaseUrl(input.env);

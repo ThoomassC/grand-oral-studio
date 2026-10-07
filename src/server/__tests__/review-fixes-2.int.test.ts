@@ -4,7 +4,7 @@ import { getEngineForUser } from "@/server/ai";
 import { createMockProvider } from "@/server/ai/mock";
 import type { AiProvider } from "@/server/ai/types";
 import { db } from "@/server/db/client";
-import { AiUnavailableError, RateLimitedError } from "@/server/errors";
+import { AiKeyRequiredError, AiUnavailableError, RateLimitedError } from "@/server/errors";
 import {
   AI_LOCAL_GLOBAL_QUOTA,
   AI_LOCAL_GLOBAL_QUOTA_KEY,
@@ -16,13 +16,15 @@ import * as decks from "@/server/repo/decks";
 import * as settings from "@/server/services/ai-settings";
 import * as gen from "@/server/services/generation";
 import { createUser, setupTestDatabase } from "@/test/db";
-import { recordingLogger, seedProgram, seedThemes, themeInput } from "./helpers";
+import { recordingLogger, seedLegacyCredential, seedProgram, seedThemes, themeInput } from "./helpers";
 
 setupTestDatabase();
 
 const MASTER = randomBytes(32).toString("base64");
 const PROD = { NODE_ENV: "production", SETTINGS_ENCRYPTION_KEY: MASTER } as const;
+/** Clé Claude héritée (Claude n'est plus proposé depuis la 1.2). */
 const KEY = `sk-ant-api03-${"k".repeat(60)}KKKK`;
+const MISTRAL_KEY = `${"k".repeat(28)}KKKK`;
 const PROBLEM = "Comment réduire la consommation de données sur internet ?";
 
 async function count(key: string): Promise<number> {
@@ -70,7 +72,11 @@ describe("S4 — plafond global des vérifications de clé", () => {
     });
     let called = false;
     const error = await settings
-      .activateClaudeWithKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ((called = true), { ok: true }) })
+      .connectProvider(
+        a.id,
+        { provider: "mistral", apiKey: MISTRAL_KEY, activate: true },
+        { env: PROD, log: recordingLogger(), verifyKey: async () => ((called = true), { ok: true }) },
+      )
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(RateLimitedError);
     expect(called).toBe(false);
@@ -103,11 +109,19 @@ describe("B1 — AI_PROVIDER invalide", () => {
 describe("B6 — clé supprimée entre les deux lectures", () => {
   it("devrait appliquer la règle par défaut (gratuit) quand aucune préférence n'est enregistrée", async () => {
     const a = await createUser("a");
-    await settings.activateClaudeWithKey(a.id, { apiKey: KEY }, { env: PROD, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
-    // Ligne de la version 1.0 : clé enregistrée sans préférence de moteur.
-    await db().userAiSettings.update({ where: { userId: a.id }, data: { engine: null } });
+    // Ligne de la version 1.0 : clé Claude enregistrée sans préférence de moteur.
+    await seedLegacyCredential(a.id, "claude", KEY, PROD, null);
     const r = await getEngineForUser(a.id, { env: PROD, log: recordingLogger(), loadUserApiKey: async () => null });
     expect(r).toEqual({ engine: "free" });
+  });
+
+  it("devrait refuser, sans bascule, une sélection Claude héritée (origine NULL) dont la clé disparaît", async () => {
+    const a = await createUser("a");
+    await seedLegacyCredential(a.id, "claude", KEY, PROD, null);
+    await db().userAiSettings.create({ data: { userId: a.id, engine: "claude", keySource: null } });
+    await expect(
+      getEngineForUser(a.id, { env: { ...PROD, MISTRAL_API_KEY: "m-team" }, log: recordingLogger(), loadUserApiKey: async () => null }),
+    ).rejects.toBeInstanceOf(AiKeyRequiredError);
   });
 });
 

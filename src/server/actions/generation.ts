@@ -14,10 +14,10 @@ import { runAction, type ActionContext } from "./run";
 type ProblemFormInput = z.input<typeof ProblemInputSchema>;
 
 /**
- * Moteur de l'utilisateur (sa préférence, sinon Claude s'il a une clé, sinon
- * gratuit), ou le choix ponctuel `override` (repli en un clic). Un moteur
- * choisi mais indisponible lève une erreur qui renvoie vers la Configuration
- * IA : pas de bascule silencieuse.
+ * Moteur de l'utilisateur (sa préférence, sinon la clé d'équipe Mistral ou
+ * Gemini, sinon Sans IA : cf. src/server/ai/engine.ts), ou le choix ponctuel
+ * `override` (repli en un clic). Un moteur choisi mais indisponible lève une
+ * erreur qui renvoie vers la Rédaction IA : pas de bascule silencieuse.
  */
 async function deps(ctx: ActionContext, override: EngineOverride | null = null): Promise<service.GenerationDeps> {
   const resolved = await getEngineForUser(ctx.user.id, { log: ctx.log, override });

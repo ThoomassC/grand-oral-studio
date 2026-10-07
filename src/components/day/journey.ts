@@ -1,4 +1,11 @@
-import { CLOUD_PROVIDERS, engineLabel, type CloudProvider, type EngineId, type KeySource } from "@/domain/ai-providers";
+import {
+  engineLabel,
+  SELECTABLE_PROVIDERS,
+  type CloudProvider,
+  type EngineId,
+  type KeySource,
+  type SelectableProvider,
+} from "@/domain/ai-providers";
 import type { ClassificationOutcome } from "@/domain/contracts";
 
 /**
@@ -109,23 +116,25 @@ export function draftKey(programId: string, practice: boolean): string {
   return practice ? `${base}:entrainement` : base;
 }
 
-/** Rédacteur ponctuel d'une génération (même forme que EngineOverride côté serveur). */
-export type WriterOverride = { engine: "free" } | { engine: CloudProvider; keySource: KeySource };
+/** Rédacteur ponctuel d'une génération (même forme que EngineOverride côté serveur : jamais Claude ni OpenAI). */
+export type WriterOverride = { engine: "free" } | { engine: SelectableProvider; keySource: KeySource };
 
 /** Une connexion utilisable pour un repli : clé personnelle ou clé d'équipe d'un fournisseur. */
 export interface EngineChoice {
-  override: { engine: CloudProvider; keySource: KeySource };
-  /** « Mistral (votre clé) », « Claude (clé d'équipe) ». */
+  override: { engine: SelectableProvider; keySource: KeySource };
+  /** « Mistral (votre clé) », « Gemini (clé d'équipe) ». */
   label: string;
 }
 
 /**
- * Connexions proposées au repli, dans l'ordre du catalogue : pour chaque
- * fournisseur, la clé personnelle enregistrée puis la clé d'équipe disponible.
+ * Connexions proposées au repli, dans l'ordre des fournisseurs proposés : pour
+ * chacun, la clé personnelle enregistrée puis la clé d'équipe disponible. Une
+ * connexion héritée (Claude, OpenAI) n'est jamais proposée : ces fournisseurs ne
+ * sont plus proposés depuis la 1.2 (le serveur refuserait la surcharge).
  */
 export function engineChoices(connections: readonly CloudProvider[], team: readonly CloudProvider[]): EngineChoice[] {
   const out: EngineChoice[] = [];
-  for (const provider of CLOUD_PROVIDERS) {
+  for (const provider of SELECTABLE_PROVIDERS) {
     if (connections.includes(provider)) {
       out.push({ override: { engine: provider, keySource: "user" }, label: `${engineLabel(provider)} (votre clé)` });
     }

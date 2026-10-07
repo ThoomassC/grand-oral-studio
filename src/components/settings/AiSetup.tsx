@@ -11,18 +11,23 @@ import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
-import { isCloudProvider, PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+import {
+  isCloudProvider,
+  isSelectableProvider,
+  PROVIDER_INFO,
+  SELECTABLE_PROVIDERS,
+  type CloudProvider,
+  type SelectableProvider,
+} from "@/domain/ai-providers";
 import { selectWriter } from "@/server/actions/settings";
 import { failureMessage } from "./action-error";
-import { parseChoice, teamChoice, teamProvider, type AiSetupStatus, type WriterChoice } from "./ai-status";
+import { parseChoice, retiredProvider, teamChoice, teamProvider, type AiSetupStatus, type WriterChoice } from "./ai-status";
 import type { ChoiceInfoItem } from "./ChoiceInfo";
 import { ConnectionList } from "./ConnectionList";
 import { ProviderConnect } from "./ProviderConnect";
 
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
 
-/** Fournisseurs à clé personnelle, dans l'ordre des cartes. */
-const OWN_KEY_CARDS: readonly CloudProvider[] = ["mistral", "gemini", "claude", "openai"];
 
 interface SaveState {
   status: FormStatusState;
@@ -34,6 +39,7 @@ const INITIAL: SaveState = { status: IDLE, fieldErrors: {} };
 /** Nom d'une carte (et de son radio) : court, le détail est dans la carte. */
 function cardLabel(choice: WriterChoice): string {
   if (choice === "free") return "Sans IA";
+  if (choice === "demo") return "Démo (contenus factices)";
   if (choice === "ollama") return "Modèle local (Ollama)";
   if (isCloudProvider(choice)) return PROVIDER_INFO[choice].label;
   const team = teamProvider(choice);
@@ -52,6 +58,7 @@ function saveLabel(choice: WriterChoice): string {
 /** Ce que l'action attend pour un choix de la question 1. */
 function writerInput(choice: WriterChoice, ollamaModel: string): Parameters<typeof selectWriter>[0] {
   if (choice === "free") return { engine: "free" };
+  if (choice === "demo") return { engine: "mock" };
   if (choice === "ollama") return { engine: "ollama", ollamaModel };
   if (isCloudProvider(choice)) return { engine: choice, keySource: "user" };
   const team = teamProvider(choice);
@@ -64,32 +71,26 @@ const DRAFTED: ChoiceInfoItem = {
 };
 
 /** Société qui reçoit le texte envoyé pour la rédaction. */
-const RECIPIENT: Readonly<Record<CloudProvider, string>> = {
-  claude: "Anthropic",
+const RECIPIENT: Readonly<Record<SelectableProvider, string>> = {
   mistral: "Mistral AI",
   gemini: "Google",
-  openai: "OpenAI",
 };
 
 /** Coût avec sa propre clé. */
-const OWN_KEY_COST: Readonly<Record<CloudProvider, string>> = {
-  claude:
-    "Quelques centimes par diaporama, facturés à l'usage sur votre compte Anthropic (crédits prépayés, rubrique Billing de la console). Un abonnement Claude.ai (Pro, Max) ne donne pas de crédits API.",
+const OWN_KEY_COST: Readonly<Record<SelectableProvider, string>> = {
   mistral: "Gratuit avec le palier « Experiment » de Mistral, au débit limité ; au-delà, facturé à l'usage sur votre compte Mistral.",
   gemini: "Gratuit avec le palier gratuit de Google AI Studio, au débit limité ; au-delà, facturé à l'usage sur votre compte Google.",
-  openai:
-    "Quelques centimes par diaporama, facturés à l'usage sur votre compte OpenAI (crédits prépayés, rubrique Billing de la console). Un abonnement ChatGPT (Plus, Pro) ne donne pas de crédits API.",
 };
 
 /** Hébergement et entraînement, tirés de la fiche du fournisseur (src/domain/ai-providers.ts). */
-function dataDetail(provider: CloudProvider, ownKey: boolean): string {
+function dataDetail(provider: SelectableProvider, ownKey: boolean): string {
   const { hosting, training } = PROVIDER_INFO[provider].data;
   const key = ownKey ? " Votre clé est chiffrée et n'est jamais réaffichée." : "";
   return `La problématique, la trame et les notes du sujet sont envoyées à ${RECIPIENT[provider]} pour la rédaction. ${hosting} ${training}${key}`;
 }
 
 /** Résumé d'une carte à clé personnelle, sous le nom du radio. */
-function ownKeySummary(provider: CloudProvider): string {
+function ownKeySummary(provider: SelectableProvider): string {
   const { free, data } = PROVIDER_INFO[provider];
   return `${free ? "Palier gratuit" : "Quelques centimes par diaporama"}${data.euHosted ? ", hébergé dans l'UE" : ""}.`;
 }
@@ -99,6 +100,16 @@ const FREE_INFO: readonly ChoiceInfoItem[] = [
     term: "Ce que vous obtenez",
     detail:
       "Un diaporama construit à partir de votre trame et des notes du sujet. Le texte des diapos et les notes d'orateur restent à écrire.",
+  },
+  { term: "Coût", detail: "Gratuit et instantané." },
+  { term: "Vos données", detail: "Rien n'est envoyé à un service externe." },
+];
+
+/** AI_PROVIDER=mock (dev/tests) : contenus factices et déterministes, sans aucune clé. */
+const DEMO_INFO: readonly ChoiceInfoItem[] = [
+  {
+    term: "Ce que vous obtenez",
+    detail: "Un diaporama de démonstration aux contenus factices, pour essayer le parcours sans clé API. Rien n'est rédigé pour de vrai.",
   },
   { term: "Coût", detail: "Gratuit et instantané." },
   { term: "Vos données", detail: "Rien n'est envoyé à un service externe." },
@@ -116,12 +127,13 @@ const OLLAMA_INFO: readonly ChoiceInfoItem[] = [
 /** Le détail de chaque choix, écrit dans sa carte : résultat, coût, devenir des données. */
 function engineInfo(choice: WriterChoice): readonly ChoiceInfoItem[] {
   if (choice === "free") return FREE_INFO;
+  if (choice === "demo") return DEMO_INFO;
   if (choice === "ollama") return OLLAMA_INFO;
-  if (isCloudProvider(choice)) {
+  if (isSelectableProvider(choice)) {
     return [DRAFTED, { term: "Coût", detail: OWN_KEY_COST[choice] }, { term: "Vos données", detail: dataDetail(choice, true) }];
   }
   const team = teamProvider(choice);
-  if (team) {
+  if (team && isSelectableProvider(team)) {
     return [
       DRAFTED,
       {
@@ -205,12 +217,20 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+/** « Claude (votre clé) », « OpenAI (clé de l'équipe) » : un choix hérité, sans carte. */
+function retiredLabel(choice: WriterChoice, provider: CloudProvider): string {
+  return `${PROVIDER_INFO[provider].label} (${teamProvider(choice) ? "clé de l'équipe" : "votre clé"})`;
+}
+
 /**
- * Rédaction IA guidée : la question 1 « Qui rédige le jour J ? » (Sans IA, clés
- * de l'équipe, fournisseurs à clé personnelle, modèle local) ; si un
- * fournisseur à clé personnelle est coché, la question 2 « Connecter … » ; puis
- * « Mes connexions ». Un seul bouton d'enregistrement visible à la fois, et
- * aucun quand le choix coché est déjà enregistré.
+ * Rédaction IA guidée : la question 1 « Qui rédige le jour J ? » (Sans IA, la
+ * démo en dev, clés de l'équipe, fournisseurs à clé personnelle proposés —
+ * Mistral, Gemini —, modèle local) ; si un fournisseur à clé personnelle est
+ * coché, la question 2 « Connecter … » ; puis « Mes connexions ». Un seul bouton
+ * d'enregistrement visible à la fois, et aucun quand le choix coché est déjà
+ * enregistré. Un choix hérité de Claude ou d'OpenAI (plus proposés) n'a pas de
+ * carte : il est signalé, rien n'est coché, et il reste en vigueur tant que
+ * l'utilisateur n'en choisit pas un autre.
  */
 export function AiSetup({ status }: { status: AiSetupStatus }) {
   const router = useRouter();
@@ -223,21 +243,31 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
   const ollamaUsable = ollama !== null && ollama.reachable && ollama.models.length > 0;
   const connectionOf = (provider: CloudProvider) => connections.find((c) => c.provider === provider) ?? null;
 
-  /** Cartes proposées : Sans IA, les clés d'équipe, les fournisseurs, le modèle local s'il est configuré. */
-  const cards: WriterChoice[] = ["free", ...team.map(teamChoice), ...OWN_KEY_CARDS, ...(ollama !== null ? (["ollama"] as const) : [])];
+  /** Cartes proposées : Sans IA, la démo, les clés d'équipe, les fournisseurs proposés, le modèle local s'il est configuré. */
+  const cards: WriterChoice[] = [
+    "free",
+    ...(status.demo ? (["demo"] as const) : []),
+    ...team.map(teamChoice),
+    ...SELECTABLE_PROVIDERS,
+    ...(ollama !== null ? (["ollama"] as const) : []),
+  ];
 
   /** Choix enregistré : mis à jour au succès, avant le rafraîchissement de la page. */
   const [saved, setSaved] = useState<{ choice: WriterChoice; model: string | null }>(() => ({
     choice: status.saved,
     model: ollama?.selectedModel ?? null,
   }));
-  // Un choix enregistré dont la carte n'est plus proposée (clé d'équipe retirée, Ollama arrêté) : rien d'invisible ne reste coché.
-  const [choice, setChoice] = useState<WriterChoice>(() => (cards.includes(saved.choice) ? saved.choice : "free"));
+  // Un choix enregistré dont la carte n'est plus proposée : rien d'invisible ne reste coché. Clé d'équipe retirée,
+  // Ollama arrêté → Sans IA (le choix enregistré échouerait) ; Claude ou OpenAI hérités → rien de coché (ils
+  // rédigent encore : aucun enregistrement n'est suggéré tant que l'utilisateur ne coche pas une carte).
+  const [choice, setChoice] = useState<WriterChoice | null>(() =>
+    cards.includes(saved.choice) ? saved.choice : retiredProvider(saved.choice) ? null : "free",
+  );
   const [model, setModel] = useState<string | null>(() =>
     ollama?.selectedModel && ollama.models.includes(ollama.selectedModel) ? ollama.selectedModel : (ollama?.models[0] ?? null),
   );
   /** « Remplacer » de Mes connexions : rouvre la question 2 de ce fournisseur, champ révélé (nonce : nouvelle demande). */
-  const [replaceRequest, setReplaceRequest] = useState<{ provider: CloudProvider; nonce: number } | null>(null);
+  const [replaceRequest, setReplaceRequest] = useState<{ provider: SelectableProvider; nonce: number } | null>(null);
 
   /**
    * La question 2 apparaît en douceur (déroulé + fondu, globals.css `.step-reveal`) quand
@@ -258,12 +288,15 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
   }, [reveal]);
 
   /** Fournisseur à clé personnelle coché (question 2), null sinon. */
-  const connecting: CloudProvider | null = isCloudProvider(choice) ? choice : null;
-  const choiceSaved = choice === saved.choice && (choice !== "ollama" || model === saved.model);
+  const connecting: SelectableProvider | null = isSelectableProvider(choice) ? choice : null;
+  /** Rien de coché (choix hérité sans carte) : rien à enregistrer. */
+  const choiceSaved = choice === null || (choice === saved.choice && (choice !== "ollama" || model === saved.model));
   const choiceUsable =
-    choice === "free" ||
-    teamProvider(choice) !== null ||
-    (choice === "ollama" ? ollamaUsable : connecting !== null && connectionOf(connecting) !== null);
+    choice !== null &&
+    (choice === "free" ||
+      choice === "demo" ||
+      teamProvider(choice) !== null ||
+      (choice === "ollama" ? ollamaUsable : connecting !== null && connectionOf(connecting) !== null));
   useUnsavedChanges(!choiceSaved);
 
   const [state, submit, saving] = useActionState<SaveState, FormData>(async (_prev, formData) => {
@@ -292,14 +325,14 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
 
   /** Coche un choix (radio ou clic sur sa carte) ; la question 2 apparaît en douceur pour un fournisseur. */
   function pick(value: WriterChoice) {
-    if (isCloudProvider(value) && value !== choice) setReveal("enter");
-    if (!isCloudProvider(value)) setReveal("idle");
+    if (isSelectableProvider(value) && value !== choice) setReveal("enter");
+    if (!isSelectableProvider(value)) setReveal("idle");
     if (replaceRequest && replaceRequest.provider !== value) setReplaceRequest(null);
     setChoice(value);
   }
 
   /** « Remplacer » de Mes connexions : coche le fournisseur et ouvre sa question 2, champ révélé. */
-  function replaceKey(provider: CloudProvider) {
+  function replaceKey(provider: SelectableProvider) {
     pick(provider);
     setReplaceRequest((prev) => ({ provider, nonce: (prev?.nonce ?? 0) + 1 }));
   }
@@ -315,6 +348,7 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
 
   function cardDescription(card: WriterChoice): ReactNode {
     if (card === "free") return "Gratuit et instantané.";
+    if (card === "demo") return "Contenus factices, sans clé : pour essayer le parcours.";
     if (card === "ollama") {
       return (
         <>
@@ -323,11 +357,12 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
         </>
       );
     }
-    if (isCloudProvider(card)) return ownKeySummary(card);
+    if (isSelectableProvider(card)) return ownKeySummary(card);
     return "Clé fournie par votre équipe.";
   }
 
   const activeOwnKey = isCloudProvider(saved.choice) ? saved.choice : null;
+  const retired = retiredProvider(saved.choice);
   const replacing = connecting !== null && replaceRequest?.provider === connecting ? replaceRequest : null;
 
   return (
@@ -336,6 +371,12 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
         <h2 id={ids.q1} className="text-2xl">
           1. Qui rédige le jour J ?
         </h2>
+        {retired ? (
+          <p className="mt-2 text-muted">
+            {retiredLabel(saved.choice, retired)} rédige encore vos diaporamas, mais ce fournisseur n&apos;est plus
+            proposé : choisissez un autre rédacteur ci-dessous.
+          </p>
+        ) : null}
         <form
           ref={formRef}
           noValidate
@@ -349,7 +390,8 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
           <RadioGroup
             aria-labelledby={ids.q1}
             name="engine"
-            value={choice}
+            // '' ne coche rien (choix hérité sans carte).
+            value={choice ?? ""}
             className="engine-cards"
             onValueChange={(value) => {
               const picked = parseChoice(value);
@@ -400,7 +442,7 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
           ) : null}
 
           <FormStatus state={state.status} />
-          {!choiceSaved && choiceUsable ? (
+          {choice !== null && !choiceSaved && choiceUsable ? (
             <div>
               <Button type="submit" aria-disabled={saving || undefined}>
                 <ButtonLabel idle={saveLabel(choice)} busy="Enregistrement…" isBusy={saving} />

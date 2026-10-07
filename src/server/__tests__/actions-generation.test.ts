@@ -161,7 +161,9 @@ describe("generateFinalDeck — repli en un clic, entraînement et chrono", () =
   it.each([
     { label: "Ollama (pas de surcharge locale)", override: { engine: "ollama" } },
     { label: "fournisseur inconnu", override: { engine: "skynet", keySource: "user" } },
-    { label: "fournisseur sans origine de clé", override: { engine: "claude" } },
+    { label: "fournisseur sans origine de clé", override: { engine: "mistral" } },
+    { label: "Claude (plus proposé)", override: { engine: "claude", keySource: "user" } },
+    { label: "OpenAI (plus proposé)", override: { engine: "openai", keySource: "server" } },
   ])("devrait refuser une surcharge invalide : $label", async ({ override }) => {
     const result = await actions.generateFinalDeck("prog-1", null, PROBLEM, { override } as never);
     expect(result).toMatchObject({ ok: false, code: "VALIDATION" });

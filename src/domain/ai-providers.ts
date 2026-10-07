@@ -16,6 +16,25 @@ export const CLOUD_PROVIDERS = ["claude", "mistral", "gemini", "openai"] as cons
 export type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 export const CloudProviderSchema = z.enum(CLOUD_PROVIDERS, { error: "Fournisseur d'IA inconnu." });
 
+/**
+ * Fournisseurs PROPOSÉS dans l'interface (cartes, « Connecter … », repli du jour
+ * J), dans l'ordre d'affichage. Depuis la 1.2, Claude et OpenAI ne sont plus
+ * proposés : leurs adaptateurs et leur catalogue restent en place pour honorer
+ * une connexion ou une sélection héritée, mais aucune NOUVELLE connexion ni
+ * sélection ne peut les viser (refus côté serveur).
+ */
+export const SELECTABLE_PROVIDERS = ["mistral", "gemini"] as const satisfies readonly CloudProvider[];
+export type SelectableProvider = (typeof SELECTABLE_PROVIDERS)[number];
+
+export function isSelectableProvider(value: unknown): value is SelectableProvider {
+  return typeof value === "string" && (SELECTABLE_PROVIDERS as readonly string[]).includes(value);
+}
+
+/** Refus d'une nouvelle connexion ou sélection d'un fournisseur qui n'est plus proposé. */
+export function notSelectableMessage(provider: CloudProvider): string {
+  return `${PROVIDER_INFO[provider].label} n'est plus proposé dans Grand Oral Studio : choisissez Mistral, Gemini ou Sans IA.`;
+}
+
 /** Rédacteurs possibles : un fournisseur cloud, un modèle local (Ollama) ou Sans IA. */
 export const ENGINE_IDS = [...CLOUD_PROVIDERS, "ollama", "free"] as const;
 export type EngineId = (typeof ENGINE_IDS)[number];

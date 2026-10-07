@@ -89,7 +89,7 @@ export async function getEngineForUser(userId: string, options: GetEngineOptions
     own = await load(provider);
     if (own === null) {
       // Clé supprimée entre les deux lectures : on rejoue la règle comme si elle n'avait jamais existé
-      // (sans préférence → clé serveur ou gratuit ; choix explicite → erreur, jamais de bascule).
+      // (keySource NULL hérité → clé d'équipe, sinon erreur ; choix explicite → erreur, jamais de bascule).
       plan = planEngine({ ...inputs, connections: inputs.connections.filter((p) => p !== provider) });
     }
   }

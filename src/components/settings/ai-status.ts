@@ -1,4 +1,12 @@
-import { CLOUD_PROVIDERS, isCloudProvider, isKnownModel, PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+import {
+  CLOUD_PROVIDERS,
+  isCloudProvider,
+  isKnownModel,
+  isSelectableProvider,
+  PROVIDER_INFO,
+  type CloudProvider,
+  type SelectableProvider,
+} from "@/domain/ai-providers";
 import type { AiSettingsView } from "@/server/repo/types";
 
 /**
@@ -11,10 +19,12 @@ import type { AiSettingsView } from "@/server/repo/types";
 export type TeamChoice = `team-${CloudProvider}`;
 
 /**
- * Un choix de la question 1 : Sans IA, la clé de l'équipe d'un fournisseur, la
- * clé personnelle d'un fournisseur (son id seul), ou le modèle local.
+ * Un choix de la question 1 : Sans IA, la démo (AI_PROVIDER=mock), la clé de
+ * l'équipe d'un fournisseur, la clé personnelle d'un fournisseur (son id seul),
+ * ou le modèle local. Claude et OpenAI n'ont plus de carte depuis la 1.2 : ils
+ * n'apparaissent ici que comme choix enregistré hérité (cf. retiredProvider).
  */
-export type WriterChoice = "free" | "ollama" | CloudProvider | TeamChoice;
+export type WriterChoice = "free" | "demo" | "ollama" | CloudProvider | TeamChoice;
 
 export function teamChoice(provider: CloudProvider): TeamChoice {
   return `team-${provider}`;
@@ -27,9 +37,18 @@ export function teamProvider(choice: WriterChoice): CloudProvider | null {
   return isCloudProvider(provider) ? provider : null;
 }
 
+/**
+ * Fournisseur d'un choix (clé personnelle ou clé de l'équipe) qui n'est plus
+ * proposé (Claude, OpenAI), null sinon : un choix hérité, sans carte.
+ */
+export function retiredProvider(choice: WriterChoice): CloudProvider | null {
+  const provider = isCloudProvider(choice) ? choice : teamProvider(choice);
+  return provider !== null && !isSelectableProvider(provider) ? provider : null;
+}
+
 /** Valeur d'un radio (ou d'un formulaire) relue en choix connu, sinon null. */
 export function parseChoice(raw: unknown): WriterChoice | null {
-  if (raw === "free" || raw === "ollama" || isCloudProvider(raw)) return raw;
+  if (raw === "free" || raw === "demo" || raw === "ollama" || isCloudProvider(raw)) return raw;
   if (typeof raw === "string" && raw.startsWith("team-") && isCloudProvider(raw.slice("team-".length))) {
     return raw as TeamChoice;
   }
@@ -51,9 +70,11 @@ export interface ConnectionStatus {
 export interface AiSetupStatus {
   /** Choix en vigueur : l'enregistré, sinon celui que le serveur applique par défaut. */
   saved: WriterChoice;
-  /** Fournisseurs dont le serveur fournit une clé d'équipe (Claude compris en démonstration). */
-  team: CloudProvider[];
-  /** Clés personnelles enregistrées, dans l'ordre des fournisseurs. */
+  /** Fournisseurs proposés dont le serveur fournit une clé d'équipe. */
+  team: SelectableProvider[];
+  /** AI_PROVIDER=mock (dev/tests) : la carte « Démo » est proposée. */
+  demo: boolean;
+  /** Clés personnelles enregistrées, dans l'ordre des fournisseurs (connexions héritées Claude/OpenAI comprises). */
   connections: ConnectionStatus[];
   /** null : Ollama non configuré sur ce serveur → l'option n'est pas affichée. */
   ollama: { reachable: boolean; models: string[]; selectedModel: string | null } | null;
@@ -61,6 +82,8 @@ export interface AiSetupStatus {
 
 function savedChoice(view: AiSettingsView): WriterChoice {
   const { selection, effective, connections } = view;
+  // Démo (AI_PROVIDER=mock) : le rédacteur par défaut, ou une clé d'équipe Claude héritée que le mock remplace.
+  if (effective.engine === "mock") return "demo";
   const engine = selection.engine;
   if (engine === "free" || engine === "ollama") return engine;
   if (engine !== null) {
@@ -68,8 +91,7 @@ function savedChoice(view: AiSettingsView): WriterChoice {
     const source = selection.keySource ?? (connections.some((c) => c.provider === engine) ? "user" : "server");
     return source === "server" ? teamChoice(engine) : engine;
   }
-  // Aucun choix enregistré : celui que le serveur applique (Claude si une clé existe, sinon Sans IA).
-  if (effective.engine === "mock") return teamChoice("claude");
+  // Aucun choix enregistré : celui que le serveur applique (clé d'équipe Mistral ou Gemini, sinon Sans IA).
   if (isCloudProvider(effective.engine)) {
     return effective.keySource === "server" ? teamChoice(effective.engine) : effective.engine;
   }
@@ -82,8 +104,7 @@ function modelLabel(provider: CloudProvider, model: string): string {
 
 export function toAiSetupStatus(view: AiSettingsView, formatDate: (iso: string) => string): AiSetupStatus {
   const { ollama } = view;
-  // En démonstration (AI_PROVIDER=mock), la clé d'équipe Claude est remplacée par le mode démo.
-  const team = CLOUD_PROVIDERS.filter((p) => view.team.includes(p) || (p === "claude" && view.mock));
+  const team = view.team.filter(isSelectableProvider);
   const connections = CLOUD_PROVIDERS.flatMap((provider) => {
     const c = view.connections.find((conn) => conn.provider === provider);
     if (!c) return [];
@@ -101,6 +122,7 @@ export function toAiSetupStatus(view: AiSettingsView, formatDate: (iso: string) 
   return {
     saved: savedChoice(view),
     team,
+    demo: view.mock,
     connections,
     ollama: ollama.configured ? { reachable: ollama.reachable, models: ollama.models, selectedModel: ollama.selectedModel } : null,
   };

@@ -35,26 +35,36 @@ const input = (over: Over = {}): EngineInputs => ({
   override: over.override ?? null,
 });
 
-describe("planEngine — sans préférence", () => {
-  it("devrait choisir Claude avec la clé de l'utilisateur", () => {
-    expect(planEngine(input({ hasUserKey: true }))).toEqual({ engine: "claude", keySource: "user" });
+describe("planEngine — sans préférence (1.2 : Claude et OpenAI ne sont plus proposés)", () => {
+  it("ne devrait plus choisir Claude, ni avec la clé de l'utilisateur ni avec ANTHROPIC_API_KEY", () => {
+    expect(planEngine(input({ hasUserKey: true }))).toEqual({ engine: "free" });
+    expect(planEngine(input({ env: { ...prod, ...SERVER } }))).toEqual({ engine: "free" });
+    expect(planEngine(input({ connections: ["openai"], env: { ...prod, OPENAI_API_KEY: "o" } }))).toEqual({ engine: "free" });
   });
 
-  it("devrait choisir Claude avec la clé du serveur", () => {
-    expect(planEngine(input({ env: { ...prod, ...SERVER } }))).toEqual({ engine: "claude", keySource: "server" });
+  it("devrait choisir la clé d'équipe Mistral, sinon celle de Gemini", () => {
+    const both = { ...prod, ...SERVER, MISTRAL_API_KEY: "m", GEMINI_API_KEY: "g" };
+    expect(planEngine(input({ env: both }))).toEqual({ engine: "mistral", keySource: "server" });
+    expect(planEngine(input({ hasUserKey: true, env: { ...prod, ...SERVER, GEMINI_API_KEY: "g" } }))).toEqual({
+      engine: "gemini",
+      keySource: "server",
+    });
   });
 
-  it("devrait choisir le moteur gratuit sans aucune clé, y compris en production", () => {
+  it("ne devrait jamais utiliser implicitement une clé personnelle, même d'un fournisseur proposé", () => {
+    expect(planEngine(input({ connections: ["mistral", "gemini"] }))).toEqual({ engine: "free" });
+  });
+
+  it("devrait choisir le moteur gratuit sans aucune clé d'équipe proposée, y compris en production", () => {
     expect(planEngine(input())).toEqual({ engine: "free" });
     expect(planEngine(input({ env: { NODE_ENV: "development" } }))).toEqual({ engine: "free" });
   });
 
-  it("devrait utiliser le mock uniquement quand AI_PROVIDER=mock", () => {
-    expect(planEngine(input({ env: { NODE_ENV: "development", AI_PROVIDER: "mock", ...SERVER } }))).toEqual({ engine: "mock" });
-  });
-
-  it("devrait garder la clé de l'utilisateur prioritaire sur AI_PROVIDER=mock", () => {
-    expect(planEngine(input({ hasUserKey: true, env: { AI_PROVIDER: "mock" } }))).toEqual({ engine: "claude", keySource: "user" });
+  it("devrait utiliser le mock quand AI_PROVIDER=mock, avant toute clé d'équipe", () => {
+    expect(planEngine(input({ env: { NODE_ENV: "development", AI_PROVIDER: "mock", ...SERVER, MISTRAL_API_KEY: "m" } }))).toEqual({
+      engine: "mock",
+    });
+    expect(planEngine(input({ hasUserKey: true, env: { AI_PROVIDER: "mock" } }))).toEqual({ engine: "mock" });
   });
 });
 
@@ -87,7 +97,8 @@ describe("planEngine — moteur choisi", () => {
 describe("effectiveEngine (sans lever)", () => {
   it.each([
     [input(), "free"],
-    [input({ hasUserKey: true }), "claude"],
+    [input({ hasUserKey: true }), "free"],
+    [input({ env: { GEMINI_API_KEY: "g" } }), "gemini"],
     [input({ selected: "claude" }), "claude"],
     [input({ selected: "ollama" }), "ollama"],
     [input({ env: { AI_PROVIDER: "mock" } }), "mock"],
@@ -135,6 +146,11 @@ describe("AI_PROVIDER invalide", () => {
     expect(planEngine(input({ selected: "ollama", ollamaModel: "m", env: bad }))).toMatchObject({ engine: "ollama" });
   });
 
+  it("ne devrait pas empêcher le rédacteur par défaut (clé d'équipe proposée, sinon Sans IA)", () => {
+    expect(planEngine(input({ env: bad }))).toEqual({ engine: "free" });
+    expect(planEngine(input({ env: { ...bad, MISTRAL_API_KEY: "m" } }))).toEqual({ engine: "mistral", keySource: "server" });
+  });
+
   it("ne devrait pas lever dans les fonctions d'affichage", () => {
     expect(() => effectiveEngine(input({ env: bad }))).not.toThrow();
     expect(claudeAvailable({ hasUserKey: false, env: bad })).toBe(false);
@@ -153,8 +169,15 @@ describe("planEngine — sélection héritée de la 1.1 (keySource NULL)", () =>
     expect(planEngine(input({ selected: "claude", env: { ...prod, ...SERVER } }))).toEqual({ engine: "claude", keySource: "server" });
   });
 
-  it("ne devrait jamais choisir implicitement un autre fournisseur que Claude sans préférence", () => {
-    expect(planEngine(input({ connections: ["mistral"], env: { ...prod, ...MISTRAL_TEAM } }))).toEqual({ engine: "free" });
+  it("devrait honorer une sélection explicite de Claude ou d'OpenAI (plus proposés), sans bascule vers une clé d'équipe proposée", () => {
+    const env = { ...prod, ...MISTRAL_TEAM, OPENAI_API_KEY: "o" };
+    expect(planEngine(input({ selected: "claude", keySource: "user", connections: ["claude"], env }))).toEqual({
+      engine: "claude",
+      keySource: "user",
+    });
+    expect(planEngine(input({ selected: "openai", keySource: "server", env }))).toEqual({ engine: "openai", keySource: "server" });
+    // Clé disparue : erreur qui renvoie vers la Rédaction IA, jamais Mistral en silence.
+    expect(() => planEngine(input({ selected: "claude", keySource: "user", env }))).toThrow(AiKeyRequiredError);
   });
 
   it("devrait appliquer la même règle à un autre fournisseur choisi sans origine de clé", () => {
@@ -202,7 +225,7 @@ describe("planEngine — origine de clé explicite", () => {
 describe("planEngine — surcharge ponctuelle (repli en un clic)", () => {
   it("devrait primer sur la sélection enregistrée", () => {
     expect(planEngine(input({ selected: "claude", hasUserKey: true, override: { engine: "free" } }))).toEqual({ engine: "free" });
-    expect(planEngine(input({ selected: "claude", hasUserKey: true, connections: ["claude", "mistral"], override: { engine: "mistral", keySource: "user" } }))).toEqual({
+    expect(planEngine(input({ selected: "claude", connections: ["claude", "mistral"], override: { engine: "mistral", keySource: "user" } }))).toEqual({
       engine: "mistral",
       keySource: "user",
     });
@@ -214,7 +237,7 @@ describe("planEngine — surcharge ponctuelle (repli en un clic)", () => {
 
   it("ne devrait jamais basculer quand la surcharge est inutilisable", () => {
     expect(() => planEngine(input({ hasUserKey: true, override: { engine: "mistral", keySource: "user" } }))).toThrow(AiKeyRequiredError);
-    expect(() => planEngine(input({ connections: ["openai"], override: { engine: "openai", keySource: "server" } }))).toThrow(EngineUnavailableError);
+    expect(() => planEngine(input({ connections: ["gemini"], override: { engine: "gemini", keySource: "server" } }))).toThrow(EngineUnavailableError);
   });
 });
 

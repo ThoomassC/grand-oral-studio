@@ -257,9 +257,9 @@ describe("DayJourney — brouillon", () => {
 
 describe("DayJourney — reconnaissance sans IA", () => {
   it("devrait expliquer le repli sur le moteur sans IA et inviter à vérifier le sujet", async () => {
-    await recognize(outcome({ source: "free", fallbackReason: "Claude est momentanément indisponible." }));
+    await recognize(outcome({ source: "free", fallbackReason: "Mistral est momentanément indisponible." }));
     expect(
-      screen.getByText("Reconnaissance sans IA : Claude est momentanément indisponible. Vérifiez le sujet proposé."),
+      screen.getByText("Reconnaissance sans IA : Mistral est momentanément indisponible. Vérifiez le sujet proposé."),
     ).toBeInTheDocument();
   });
 
@@ -302,8 +302,8 @@ const MISTRAL_WRITER: Props["writer"] = {
 };
 const CHOICES: NonNullable<Props["engineChoices"]> = [
   { override: { engine: "mistral", keySource: "user" }, label: "Mistral (votre clé)" },
-  { override: { engine: "claude", keySource: "server" }, label: "Claude (clé d'équipe)" },
-  { override: { engine: "openai", keySource: "user" }, label: "OpenAI (votre clé)" },
+  { override: { engine: "mistral", keySource: "server" }, label: "Mistral (clé d'équipe)" },
+  { override: { engine: "gemini", keySource: "user" }, label: "Gemini (votre clé)" },
 ];
 const RATE_LIMITED = {
   ok: false,
@@ -361,8 +361,8 @@ describe("DayJourney — repli en un clic", () => {
     expect(alert).not.toHaveTextContent("Configuration IA");
     expect(within(alert).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Réessayer",
-      "Générer avec Claude (clé d'équipe)",
-      "Générer avec OpenAI (votre clé)",
+      "Générer avec Mistral (clé d'équipe)",
+      "Générer avec Gemini (votre clé)",
       "Générer sans IA maintenant",
     ]);
   });
@@ -374,10 +374,10 @@ describe("DayJourney — repli en un clic", () => {
     expect(generate).toHaveBeenLastCalledWith("p1", null, PROBLEM, DEFAULT_OPTIONS);
 
     generate.mockResolvedValueOnce(RATE_LIMITED);
-    await user.click(await screen.findByRole("button", { name: "Générer avec Claude (clé d'équipe)" }));
+    await user.click(await screen.findByRole("button", { name: "Générer avec Mistral (clé d'équipe)" }));
     expect(generate).toHaveBeenLastCalledWith("p1", null, PROBLEM, {
       ...DEFAULT_OPTIONS,
-      override: { engine: "claude", keySource: "server" },
+      override: { engine: "mistral", keySource: "server" },
     });
 
     generate.mockResolvedValueOnce({ ok: true, data: { deckId: "d9", warnings: [], reused: false, engine: "free" } });

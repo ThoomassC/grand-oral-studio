@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CloudProviderSchema, KeySourceSchema } from "@/domain/ai-providers";
+import { KeySourceSchema, SELECTABLE_PROVIDERS } from "@/domain/ai-providers";
 import { MAX_PREP_STATE_AGE_MS } from "@/domain/prep-clock";
 import { stripControlChars, ThemeInputSchema } from "@/domain/schemas";
 import { DataIntegrityError, ValidationError } from "./errors";
@@ -114,14 +114,15 @@ export const SlideIndexSchema = z.number().int().min(0).max(59);
 
 /**
  * Choix ponctuel du rédacteur pour UNE génération (repli en un clic) : « Sans
- * IA », ou un fournisseur cloud avec l'origine de sa clé. Ollama n'en fait pas
- * partie (il se choisit dans la Rédaction IA). Même forme que EngineOverride.
+ * IA », ou un fournisseur PROPOSÉ (Mistral, Gemini) avec l'origine de sa clé.
+ * Ni Ollama (il se choisit dans la Rédaction IA), ni Claude ou OpenAI (plus
+ * proposés depuis la 1.2). Même forme que EngineOverride.
  */
 export const EngineOverrideSchema = z.discriminatedUnion(
   "engine",
   [
     z.object({ engine: z.literal("free") }).strict(),
-    z.object({ engine: CloudProviderSchema, keySource: KeySourceSchema }).strict(),
+    z.object({ engine: z.enum(SELECTABLE_PROVIDERS), keySource: KeySourceSchema }).strict(),
   ],
   { error: "Rédacteur inconnu." },
 );

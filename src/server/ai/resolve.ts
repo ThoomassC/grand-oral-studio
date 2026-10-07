@@ -33,6 +33,14 @@ function aiProviderChoice(env: Env): "mock" | "anthropic" | null {
   });
 }
 
+/**
+ * AI_PROVIDER=mock (dev/tests), sans lever : une valeur invalide vaut « pas de
+ * mock » ici (le démarrage la refuse déjà, cf. assertAiProviderEnv).
+ */
+export function mockForced(env: Env): boolean {
+  return env.AI_PROVIDER?.trim().toLowerCase() === "mock";
+}
+
 /** Validation au démarrage (next.config.ts) : échoue tôt, avec un message explicite. */
 export function assertAiProviderEnv(env: Env): void {
   try {

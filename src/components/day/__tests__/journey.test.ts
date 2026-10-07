@@ -113,12 +113,18 @@ describe("restoreDraft — brouillon confronté aux sujets actuels", () => {
 });
 
 describe("repli en un clic et tirage (v1.2)", () => {
-  it("engineChoices : clé personnelle puis clé d'équipe, dans l'ordre du catalogue", () => {
-    expect(engineChoices(["openai", "mistral"], ["claude", "mistral"]).map((c) => c.label)).toEqual([
-      "Claude (clé d'équipe)",
+  it("engineChoices : clé personnelle puis clé d'équipe, dans l'ordre des fournisseurs proposés", () => {
+    expect(engineChoices(["gemini", "mistral"], ["gemini", "mistral"]).map((c) => c.label)).toEqual([
       "Mistral (votre clé)",
       "Mistral (clé d'équipe)",
-      "OpenAI (votre clé)",
+      "Gemini (votre clé)",
+      "Gemini (clé d'équipe)",
+    ]);
+  });
+
+  it("engineChoices : jamais Claude ni OpenAI (plus proposés), même avec une connexion ou une clé d'équipe héritée", () => {
+    expect(engineChoices(["claude", "openai", "mistral"], ["claude", "openai"]).map((c) => c.override)).toEqual([
+      { engine: "mistral", keySource: "user" },
     ]);
   });
 

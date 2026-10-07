@@ -8,7 +8,7 @@ Plus de choix pour la rédaction, un jour J fiable, l'entraînement et le travai
 
 ### Ajouts
 
-- Rédaction IA : Mistral et Gemini (offres gratuites), OpenAI ou Claude avec votre clé, ou la clé de l'équipe quand le serveur en a une.
+- Rédaction IA : Mistral et Gemini (offres gratuites), avec votre clé, ou la clé de l'équipe quand le serveur en a une.
 - Jour J : si la génération échoue, réessayez, changez de rédaction ou générez sans IA en un clic, sans perdre votre problématique.
 - Un vrai chrono de préparation, qui démarre quand vous collez la problématique ; sa durée se règle dans la trame.
 - Mode entraînement : tirage d'une problématique au hasard parmi celles du sujet, et liste « Avant l'examen ».
@@ -26,6 +26,10 @@ Plus de choix pour la rédaction, un jour J fiable, l'entraînement et le travai
 - La suppression d'un diaporama ou d'un projet s'annule pendant quelques secondes.
 - Le jour J n'est « prêt » qu'après deux diaporamas et deux répétitions.
 - Un seul mot par notion : « diaporama », « Sans IA », « Rédaction IA » et « vos consignes ».
+
+### Retraits
+
+- Claude n'est plus proposé dans la Rédaction IA. Si vous l'aviez choisi, il continue de rédiger jusqu'à ce que vous choisissiez une autre rédaction ; une clé déjà enregistrée reste dans « Mes connexions », où vous pouvez la supprimer.
 
 ### Corrections
 

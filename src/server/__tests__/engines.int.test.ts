@@ -17,7 +17,7 @@ import * as decks from "@/server/repo/decks";
 import * as settings from "@/server/services/ai-settings";
 import * as gen from "@/server/services/generation";
 import { createUser, setupTestDatabase } from "@/test/db";
-import { recordingLogger, seedProgram, seedThemes, themeInput } from "./helpers";
+import { recordingLogger, seedLegacyCredential, seedProgram, seedThemes, themeInput } from "./helpers";
 
 setupTestDatabase();
 
@@ -37,9 +37,12 @@ function engineDeps(env: Record<string, string | undefined>, probe = ollamaProbe
   return { env, log: recordingLogger(), listOllamaModels: probe };
 }
 
-/** Clé de l'utilisateur enregistrée (et Claude choisi) ; les tests fixent ensuite le moteur voulu. */
-async function saveKey(userId: string, env: Record<string, string | undefined> = PROD) {
-  await settings.activateClaudeWithKey(userId, { apiKey: KEY }, { env, log: recordingLogger(), verifyKey: async () => ({ ok: true }) });
+/**
+ * Clé Claude HÉRITÉE de l'utilisateur (et Claude choisi), écrite comme avant la 1.2 :
+ * Claude n'est plus proposé, le service refuse toute nouvelle connexion.
+ */
+async function saveKey(userId: string, env: Record<string, string | undefined> = PROD, select: "user" | null = "user") {
+  await seedLegacyCredential(userId, "claude", KEY, env, select);
 }
 
 async function count(key: string): Promise<number> {
@@ -54,20 +57,22 @@ describe("setEngine — validation et stockage", () => {
     expect(view.engine).toMatchObject({ selected: "free", effective: "free", available: { free: true, claude: false } });
   });
 
-  it("devrait refuser Claude sans clé disponible, avec une erreur sur le champ engine", async () => {
+  it("devrait refuser Claude (plus proposé depuis la 1.2), avec une erreur sur le champ engine", async () => {
     const a = await createUser("a");
     const error = (await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD)).catch((e: unknown) => e)) as ValidationError;
     expect(error).toBeInstanceOf(ValidationError);
-    expect(error.fieldErrors?.engine?.[0]).toMatch(/clé API Anthropic/);
+    expect(error.fieldErrors?.engine?.[0]).toMatch(/^Claude n'est plus proposé/);
     expect(await db().userAiSettings.count()).toBe(0);
   });
 
-  it("devrait accepter Claude avec la clé de l'utilisateur ou celle du serveur", async () => {
+  it("devrait refuser Claude même avec la clé de l'utilisateur ou celle du serveur", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    await saveKey(a.id);
-    await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD));
-    await settings.setEngine(b.id, { engine: "claude" }, engineDeps({ ...PROD, ANTHROPIC_API_KEY: "sk-ant-srv" }));
-    expect((await db().userAiSettings.findMany({ orderBy: { userId: "asc" } })).map((r) => r.engine)).toEqual(["claude", "claude"]);
+    await saveKey(a.id, PROD, null);
+    await expect(settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD))).rejects.toBeInstanceOf(ValidationError);
+    await expect(settings.setEngine(b.id, { engine: "claude" }, engineDeps({ ...PROD, ANTHROPIC_API_KEY: "sk-ant-srv" }))).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(await db().userAiSettings.count({ where: { engine: "claude" } })).toBe(0);
   });
 
   it("devrait refuser Ollama quand le serveur ne le configure pas, sans sonder", async () => {
@@ -126,7 +131,6 @@ describe("setEngine — validation et stockage", () => {
   it("ne devrait modifier que la ligne de l'appelant", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
     await saveKey(a.id);
-    await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD));
     await settings.setEngine(b.id, { engine: "free" }, engineDeps(PROD));
     expect((await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } })).engine).toBe("claude");
     expect((await settings.getAiSettingsView(b.id, engineDeps(PROD))).userKey.configured).toBe(false);
@@ -162,7 +166,6 @@ describe("getEngineForUser — pas de bascule silencieuse", () => {
   it("devrait revenir au choix par défaut (sans IA) quand l'utilisateur supprime sa clé", async () => {
     const a = await createUser("a");
     await saveKey(a.id);
-    await settings.setEngine(a.id, { engine: "claude" }, engineDeps(PROD));
     await settings.deleteApiKey(a.id, { log: recordingLogger() });
     expect((await getEngineForUser(a.id, { env: PROD, log: recordingLogger() })).engine).toBe("free");
   });

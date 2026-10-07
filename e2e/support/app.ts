@@ -68,15 +68,15 @@ export async function importThemeList(page: Page, programId: string, text = DEFA
   await expect(main.getByText(/^\d+ sujets? créés?\.$|^Aucun nouveau sujet créé\.$/)).toBeVisible();
 }
 
-export type EngineChoice = "free" | "claude" | "ollama";
+export type EngineChoice = "free" | "demo" | "ollama";
 
 const ENGINE_RADIO: Record<EngineChoice, string> = {
   free: "Sans IA",
-  claude: "Claude, clé de l'équipe",
+  demo: "Démo (contenus factices)",
   ollama: "Modèle local (Ollama)",
 };
 
-/** Choisit et enregistre le rédacteur (page Rédaction IA). `claude` = clé d'équipe, moteur démo (AI_PROVIDER=mock). */
+/** Choisit et enregistre le rédacteur (page Rédaction IA). `demo` = moteur démo (AI_PROVIDER=mock). */
 export async function setEngine(page: Page, engine: EngineChoice, ollamaModel?: string): Promise<void> {
   await page.goto("/configuration-ia");
   const main = page.getByRole("main");
