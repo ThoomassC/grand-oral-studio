@@ -30,7 +30,7 @@ test.beforeAll(async ({ browser }) => {
   const skeletonId = await seedLegacySkeleton(deckId, "Squelette hérité de la 1.0 au titre assez long pour le retour à la ligne");
   Object.assign(paths, {
     Projets: "/projets",
-    "Configuration IA": "/configuration-ia",
+    "Rédaction IA": "/configuration-ia",
     "Notes de version": "/notes-de-version",
     Profil: "/profil",
     "Étape 1 · Apparence": `/projets/${id}/apparence`,
@@ -50,7 +50,7 @@ test.afterAll(async () => {
 
 const PAGES = [
   "Projets",
-  "Configuration IA",
+  "Rédaction IA",
   "Notes de version",
   "Profil",
   "Étape 1 · Apparence",

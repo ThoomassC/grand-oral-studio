@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toAiSetupStatus } from "@/components/settings/ai-status";
+import { parseChoice, teamProvider, toAiSetupStatus } from "@/components/settings/ai-status";
 import type { AiSettingsView } from "@/server/repo/types";
 
 describe("toAiSetupStatus", () => {
@@ -18,40 +18,89 @@ describe("toAiSetupStatus", () => {
       engine: {
         selected: null,
         effective: "free",
-        available: {
-          claude: false,
-          ollama: { configured: ollamaConfigured, reachable: ollamaConfigured, models: ollamaConfigured ? ["mistral"] : [], selectedModel: null },
-          free: true,
-        },
+        available: { claude: false, ollama, free: true },
       },
       ...overrides,
     };
   }
+
+  const MISTRAL = {
+    provider: "mistral",
+    last4: "9xQz",
+    model: "mistral-small-latest",
+    defaultModel: false,
+    verifiedAt: "2026-10-06T08:00:00.000Z",
+    updatedAt: "2026-10-05T08:00:00.000Z",
+  } as const;
 
   it("devrait masquer Ollama quand le serveur ne le propose pas", () => {
     expect(toAiSetupStatus(view(), String).ollama).toBeNull();
     expect(toAiSetupStatus(view({}, true), String).ollama).toEqual({ reachable: true, models: ["mistral"], selectedModel: null });
   });
 
-  it("ne devrait exposer de la clé que ses 4 derniers caractères et sa date formatée", () => {
-    const s = toAiSetupStatus(
-      view({
-        userKey: { configured: true, last4: "4f2a", updatedAt: "2026-10-05T08:00:00.000Z" },
-        effectiveSource: "user",
-        engine: { ...view().engine, selected: "claude", effective: "claude", available: { ...view().engine.available, claude: true } },
-      }),
-      (iso) => `le ${iso.slice(0, 10)}`,
-    );
-    expect(s).toEqual({
-      selected: "claude",
-      effective: "claude",
-      claude: { available: true, source: "user", userKey: { last4: "4f2a", addedAtLabel: "le 2026-10-05" } },
-      ollama: null,
-    });
+  it("ne devrait exposer d'une connexion que ses 4 derniers caractères, son modèle et ses dates formatées", () => {
+    const s = toAiSetupStatus(view({ connections: [MISTRAL] }), (iso) => `le ${iso.slice(0, 10)}`);
+    expect(s.connections).toEqual([
+      {
+        provider: "mistral",
+        last4: "9xQz",
+        model: "mistral-small-latest",
+        modelLabel: "Mistral Small",
+        verifiedAtLabel: "le 2026-10-06",
+        addedAtLabel: "le 2026-10-05",
+      },
+    ]);
   });
 
-  it("ne devrait pas inventer de clé utilisateur quand il n'y en a pas", () => {
-    const s = toAiSetupStatus(view({ effectiveSource: "server" }), String);
-    expect(s.claude).toEqual({ available: false, source: "server", userKey: null });
+  it("devrait ranger les connexions dans l'ordre des fournisseurs et signaler une clé jamais vérifiée", () => {
+    const claude = { ...MISTRAL, provider: "claude", model: "claude-opus-5-5", verifiedAt: null } as const;
+    const s = toAiSetupStatus(view({ connections: [MISTRAL, claude] }), String);
+    expect(s.connections.map((c) => c.provider)).toEqual(["claude", "mistral"]);
+    expect(s.connections[0]!.verifiedAtLabel).toBeNull();
+  });
+
+  it("devrait garder un modèle hors liste comme libellé, et retenir le défaut dans la liste fermée", () => {
+    const claude = { ...MISTRAL, provider: "claude", model: "claude-ancien", defaultModel: true } as const;
+    const [c] = toAiSetupStatus(view({ connections: [claude] }), String).connections;
+    expect(c).toMatchObject({ model: "claude-opus-5-5", modelLabel: "claude-ancien" });
+  });
+
+  it("devrait proposer la clé d'équipe des fournisseurs configurés, et celle de Claude en démonstration", () => {
+    expect(toAiSetupStatus(view({ team: ["openai", "mistral"] }), String).team).toEqual(["mistral", "openai"]);
+    expect(toAiSetupStatus(view({ mock: true }), String).team).toEqual(["claude"]);
+  });
+
+  it("devrait traduire le choix enregistré en carte : clé personnelle, clé d'équipe, Ollama, Sans IA", () => {
+    const saved = (selection: AiSettingsView["selection"], connections: AiSettingsView["connections"] = []) =>
+      toAiSetupStatus(view({ selection, connections }), String).saved;
+    expect(saved({ engine: "mistral", keySource: "user" })).toBe("mistral");
+    expect(saved({ engine: "mistral", keySource: "server" })).toBe("team-mistral");
+    expect(saved({ engine: "ollama", keySource: null })).toBe("ollama");
+    expect(saved({ engine: "free", keySource: null })).toBe("free");
+    // Choix de la 1.1 (origine non précisée) : la clé personnelle d'abord, sinon celle de l'équipe.
+    expect(saved({ engine: "mistral", keySource: null }, [MISTRAL])).toBe("mistral");
+    expect(saved({ engine: "claude", keySource: null })).toBe("team-claude");
+  });
+
+  it("devrait retenir, sans choix enregistré, le rédacteur que le serveur applique", () => {
+    const effective = (engine: AiSettingsView["effective"]["engine"], keySource: AiSettingsView["effective"]["keySource"]) =>
+      toAiSetupStatus(view({ effective: { engine, keySource, model: null, ready: true, problem: null } }), String).saved;
+    expect(effective("mock", null)).toBe("team-claude");
+    expect(effective("claude", "user")).toBe("claude");
+    expect(effective("claude", "server")).toBe("team-claude");
+    expect(effective("free", null)).toBe("free");
+  });
+});
+
+describe("parseChoice / teamProvider", () => {
+  it("devrait accepter les seuls choix connus", () => {
+    for (const raw of ["free", "ollama", "claude", "gemini", "team-openai"]) expect(parseChoice(raw)).toBe(raw);
+    for (const raw of ["team-", "team-llama", "mock", "", null, 3]) expect(parseChoice(raw)).toBeNull();
+  });
+
+  it("devrait lire le fournisseur d'une carte « Clé de l'équipe »", () => {
+    expect(teamProvider("team-mistral")).toBe("mistral");
+    expect(teamProvider("mistral")).toBeNull();
+    expect(teamProvider("free")).toBeNull();
   });
 });

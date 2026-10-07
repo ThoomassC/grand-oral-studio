@@ -11,12 +11,18 @@ import { FieldError } from "@/components/ui/FieldError";
 import { focusFirstInvalid, focusLater } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
-import { setAiEngine } from "@/server/actions/settings";
-import type { AiSetupStatus, EngineId } from "./ai-status";
+import { isCloudProvider, PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+import { selectWriter } from "@/server/actions/settings";
+import { failureMessage } from "./action-error";
+import { parseChoice, teamChoice, teamProvider, type AiSetupStatus, type WriterChoice } from "./ai-status";
 import type { ChoiceInfoItem } from "./ChoiceInfo";
-import { ClaudeConnect } from "./ClaudeConnect";
+import { ConnectionList } from "./ConnectionList";
+import { ProviderConnect } from "./ProviderConnect";
 
 const NETWORK_ERROR = "La connexion a été interrompue. Réessayez.";
+
+/** Fournisseurs à clé personnelle, dans l'ordre des cartes. */
+const OWN_KEY_CARDS: readonly CloudProvider[] = ["mistral", "gemini", "claude", "openai"];
 
 interface SaveState {
   status: FormStatusState;
@@ -25,55 +31,109 @@ interface SaveState {
 
 const INITIAL: SaveState = { status: IDLE, fieldErrors: {} };
 
-/** Choix en vigueur : l'enregistré, sinon celui que le serveur applique par défaut. */
-function savedEngine(status: AiSetupStatus): EngineId {
-  if (status.selected) return status.selected;
-  if (status.effective !== "mock") return status.effective;
-  return status.claude.available ? "claude" : "free";
+/** Nom d'une carte (et de son radio) : court, le détail est dans la carte. */
+function cardLabel(choice: WriterChoice): string {
+  if (choice === "free") return "Sans IA";
+  if (choice === "ollama") return "Modèle local (Ollama)";
+  if (isCloudProvider(choice)) return PROVIDER_INFO[choice].label;
+  const team = teamProvider(choice);
+  return team ? `${PROVIDER_INFO[team].label}, clé de l'équipe` : choice;
 }
 
-function choiceLabel(engine: EngineId, model: string | null): string {
-  if (engine === "free") return "Sans IA";
-  if (engine === "claude") return "Claude";
-  return model ? `Ollama · ${model}` : "Ollama";
+function choiceLabel(choice: WriterChoice, model: string | null): string {
+  if (choice === "ollama") return model ? `Ollama · ${model}` : "Ollama";
+  return cardLabel(choice);
 }
 
-/** Le détail de chaque choix, derrière le bouton « i » : résultat, coût, devenir des données. */
-const ENGINE_INFO: Record<EngineId, readonly ChoiceInfoItem[]> = {
-  free: [
-    {
-      term: "Ce que vous obtenez",
-      detail:
-        "Un diaporama construit à partir de votre trame et des notes du sujet. Le texte des diapos et les notes d'orateur restent à écrire.",
-    },
-    { term: "Coût", detail: "Gratuit et instantané." },
-    { term: "Vos données", detail: "Rien n'est envoyé à un service externe." },
-  ],
-  claude: [
-    {
-      term: "Ce que vous obtenez",
-      detail: "Un diaporama rédigé diapo par diapo, avec des notes d'orateur, à relire avant l'oral.",
-    },
-    {
-      term: "Coût",
-      detail:
-        "Quelques centimes par diaporama, facturés à l'usage sur votre compte Anthropic (crédits prépayés, rubrique Billing de la console). Un abonnement Claude.ai (Pro, Max) ne donne pas de crédits API.",
-    },
-    {
-      term: "Vos données",
-      detail:
-        "La problématique, la trame et les notes du sujet sont envoyées à Anthropic pour la rédaction. Votre clé est chiffrée et n'est jamais réaffichée.",
-    },
-  ],
-  ollama: [
-    {
-      term: "Ce que vous obtenez",
-      detail: "Un diaporama rédigé par un modèle installé sur le serveur. Qualité variable : vérifiez les chiffres.",
-    },
-    { term: "Coût", detail: "Gratuit. Plus lent : comptez plusieurs minutes par diaporama." },
-    { term: "Vos données", detail: "Tout reste sur le serveur : rien n'est envoyé à un service externe." },
-  ],
+function saveLabel(choice: WriterChoice): string {
+  return choice === "ollama" ? "Choisir ce modèle" : `Choisir ${cardLabel(choice)}`;
+}
+
+/** Ce que l'action attend pour un choix de la question 1. */
+function writerInput(choice: WriterChoice, ollamaModel: string): Parameters<typeof selectWriter>[0] {
+  if (choice === "free") return { engine: "free" };
+  if (choice === "ollama") return { engine: "ollama", ollamaModel };
+  if (isCloudProvider(choice)) return { engine: choice, keySource: "user" };
+  const team = teamProvider(choice);
+  return team ? { engine: team, keySource: "server" } : { engine: "free" };
+}
+
+const DRAFTED: ChoiceInfoItem = {
+  term: "Ce que vous obtenez",
+  detail: "Un diaporama rédigé diapo par diapo, avec des notes d'orateur, à relire avant l'oral.",
 };
+
+/** Société qui reçoit le texte envoyé pour la rédaction. */
+const RECIPIENT: Readonly<Record<CloudProvider, string>> = {
+  claude: "Anthropic",
+  mistral: "Mistral AI",
+  gemini: "Google",
+  openai: "OpenAI",
+};
+
+/** Coût avec sa propre clé. */
+const OWN_KEY_COST: Readonly<Record<CloudProvider, string>> = {
+  claude:
+    "Quelques centimes par diaporama, facturés à l'usage sur votre compte Anthropic (crédits prépayés, rubrique Billing de la console). Un abonnement Claude.ai (Pro, Max) ne donne pas de crédits API.",
+  mistral: "Gratuit avec le palier « Experiment » de Mistral, au débit limité ; au-delà, facturé à l'usage sur votre compte Mistral.",
+  gemini: "Gratuit avec le palier gratuit de Google AI Studio, au débit limité ; au-delà, facturé à l'usage sur votre compte Google.",
+  openai:
+    "Quelques centimes par diaporama, facturés à l'usage sur votre compte OpenAI (crédits prépayés, rubrique Billing de la console). Un abonnement ChatGPT (Plus, Pro) ne donne pas de crédits API.",
+};
+
+/** Hébergement et entraînement, tirés de la fiche du fournisseur (src/domain/ai-providers.ts). */
+function dataDetail(provider: CloudProvider, ownKey: boolean): string {
+  const { hosting, training } = PROVIDER_INFO[provider].data;
+  const key = ownKey ? " Votre clé est chiffrée et n'est jamais réaffichée." : "";
+  return `La problématique, la trame et les notes du sujet sont envoyées à ${RECIPIENT[provider]} pour la rédaction. ${hosting} ${training}${key}`;
+}
+
+/** Résumé d'une carte à clé personnelle, sous le nom du radio. */
+function ownKeySummary(provider: CloudProvider): string {
+  const { free, data } = PROVIDER_INFO[provider];
+  return `${free ? "Palier gratuit" : "Quelques centimes par diaporama"}${data.euHosted ? ", hébergé dans l'UE" : ""}.`;
+}
+
+const FREE_INFO: readonly ChoiceInfoItem[] = [
+  {
+    term: "Ce que vous obtenez",
+    detail:
+      "Un diaporama construit à partir de votre trame et des notes du sujet. Le texte des diapos et les notes d'orateur restent à écrire.",
+  },
+  { term: "Coût", detail: "Gratuit et instantané." },
+  { term: "Vos données", detail: "Rien n'est envoyé à un service externe." },
+];
+
+const OLLAMA_INFO: readonly ChoiceInfoItem[] = [
+  {
+    term: "Ce que vous obtenez",
+    detail: "Un diaporama rédigé par un modèle installé sur le serveur. Qualité variable : vérifiez les chiffres.",
+  },
+  { term: "Coût", detail: "Gratuit. Plus lent : comptez plusieurs minutes par diaporama." },
+  { term: "Vos données", detail: "Tout reste sur le serveur : rien n'est envoyé à un service externe." },
+];
+
+/** Le détail de chaque choix, écrit dans sa carte : résultat, coût, devenir des données. */
+function engineInfo(choice: WriterChoice): readonly ChoiceInfoItem[] {
+  if (choice === "free") return FREE_INFO;
+  if (choice === "ollama") return OLLAMA_INFO;
+  if (isCloudProvider(choice)) {
+    return [DRAFTED, { term: "Coût", detail: OWN_KEY_COST[choice] }, { term: "Vos données", detail: dataDetail(choice, true) }];
+  }
+  const team = teamProvider(choice);
+  if (team) {
+    return [
+      DRAFTED,
+      {
+        term: "Coût",
+        detail:
+          "Rien à payer de votre côté : l'usage est facturé à l'équipe qui administre Grand Oral Studio, dans la limite d'un quota de générations.",
+      },
+      { term: "Vos données", detail: dataDetail(team, false) },
+    ];
+  }
+  return FREE_INFO;
+}
 
 /**
  * Un choix de la question 1 en carte : le radio (nom court + coût), puis le détail
@@ -90,12 +150,12 @@ function EngineCard({
   onPick,
   children,
 }: {
-  engine: EngineId;
+  engine: WriterChoice;
   label: string;
   checked: boolean;
   disabled?: boolean;
   info: readonly ChoiceInfoItem[];
-  onPick: (engine: EngineId) => void;
+  onPick: (engine: WriterChoice) => void;
   children: ReactNode;
 }) {
   const detailsId = useId();
@@ -145,41 +205,43 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-const SAVE_LABEL: Record<EngineId, string> = {
-  free: "Choisir Sans IA",
-  claude: "Choisir Claude",
-  ollama: "Choisir ce modèle",
-};
-
 /**
- * Configuration IA guidée : la question 1 « Qui rédige le jour J ? » et, si Claude est
- * coché, la question 2 « Connecter Claude ». Un seul bouton d'enregistrement
- * visible à la fois, et aucun quand le choix coché est déjà enregistré.
+ * Rédaction IA guidée : la question 1 « Qui rédige le jour J ? » (Sans IA, clés
+ * de l'équipe, fournisseurs à clé personnelle, modèle local) ; si un
+ * fournisseur à clé personnelle est coché, la question 2 « Connecter … » ; puis
+ * « Mes connexions ». Un seul bouton d'enregistrement visible à la fois, et
+ * aucun quand le choix coché est déjà enregistré.
  */
 export function AiSetup({ status }: { status: AiSetupStatus }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const baseId = useId();
-  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, model: `${baseId}-model` };
-  /** Id du radio d'un moteur : cible du focus quand le bouton « Choisir … » disparaît. */
-  const radioId = (engine: EngineId) => `${baseId}-engine-${engine}`;
-  const { ollama } = status;
+  const ids = { q1: `${baseId}-q1`, q2: `${baseId}-q2`, q3: `${baseId}-q3`, model: `${baseId}-model` };
+  /** Id du radio d'un choix : cible du focus quand le bouton « Choisir … » disparaît. */
+  const radioId = (choice: WriterChoice) => `${baseId}-engine-${choice}`;
+  const { ollama, team, connections } = status;
   const ollamaUsable = ollama !== null && ollama.reachable && ollama.models.length > 0;
+  const connectionOf = (provider: CloudProvider) => connections.find((c) => c.provider === provider) ?? null;
+
+  /** Cartes proposées : Sans IA, les clés d'équipe, les fournisseurs, le modèle local s'il est configuré. */
+  const cards: WriterChoice[] = ["free", ...team.map(teamChoice), ...OWN_KEY_CARDS, ...(ollama !== null ? (["ollama"] as const) : [])];
 
   /** Choix enregistré : mis à jour au succès, avant le rafraîchissement de la page. */
-  const [saved, setSaved] = useState<{ engine: EngineId; model: string | null }>(() => ({
-    engine: savedEngine(status),
+  const [saved, setSaved] = useState<{ choice: WriterChoice; model: string | null }>(() => ({
+    choice: status.saved,
     model: ollama?.selectedModel ?? null,
   }));
-  // Un modèle local enregistré mais plus proposé par le serveur : rien d'invisible ne reste coché.
-  const [choice, setChoice] = useState<EngineId>(() => (saved.engine === "ollama" && ollama === null ? "free" : saved.engine));
+  // Un choix enregistré dont la carte n'est plus proposée (clé d'équipe retirée, Ollama arrêté) : rien d'invisible ne reste coché.
+  const [choice, setChoice] = useState<WriterChoice>(() => (cards.includes(saved.choice) ? saved.choice : "free"));
   const [model, setModel] = useState<string | null>(() =>
     ollama?.selectedModel && ollama.models.includes(ollama.selectedModel) ? ollama.selectedModel : (ollama?.models[0] ?? null),
   );
+  /** « Remplacer » de Mes connexions : rouvre la question 2 de ce fournisseur, champ révélé (nonce : nouvelle demande). */
+  const [replaceRequest, setReplaceRequest] = useState<{ provider: CloudProvider; nonce: number } | null>(null);
 
   /**
    * La question 2 apparaît en douceur (déroulé + fondu, globals.css `.step-reveal`) quand
-   * l'utilisateur coche Claude ; pas d'animation si elle est déjà là au chargement.
+   * l'utilisateur coche un fournisseur ; pas d'animation si elle est déjà là au chargement.
    */
   const [reveal, setReveal] = useState<"idle" | "enter">("idle");
   const q2Ref = useRef<HTMLElement>(null);
@@ -195,44 +257,54 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
     window.scrollBy({ top: top - window.innerHeight * 0.4, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [reveal]);
 
-  const choiceSaved = choice === saved.engine && (choice !== "ollama" || model === saved.model);
-  const choiceUsable = choice === "free" || (choice === "claude" ? status.claude.available : ollamaUsable);
+  /** Fournisseur à clé personnelle coché (question 2), null sinon. */
+  const connecting: CloudProvider | null = isCloudProvider(choice) ? choice : null;
+  const choiceSaved = choice === saved.choice && (choice !== "ollama" || model === saved.model);
+  const choiceUsable =
+    choice === "free" ||
+    teamProvider(choice) !== null ||
+    (choice === "ollama" ? ollamaUsable : connecting !== null && connectionOf(connecting) !== null);
   useUnsavedChanges(!choiceSaved);
 
   const [state, submit, saving] = useActionState<SaveState, FormData>(async (_prev, formData) => {
     // Lu dans le formulaire envoyé, pas dans l'état : la valeur exacte au moment du clic.
-    const raw = formData.get("engine");
-    const engine: EngineId | null = raw === "claude" || raw === "ollama" || raw === "free" ? raw : null;
-    if (!engine) return { status: { kind: "error", message: "Choisissez qui rédige le jour J." }, fieldErrors: {} };
+    const picked = parseChoice(formData.get("engine"));
+    if (!picked) return { status: { kind: "error", message: "Choisissez qui rédige le jour J." }, fieldErrors: {} };
     const ollamaModel = String(formData.get("ollamaModel") ?? "");
-    const input = engine === "ollama" ? { engine, ollamaModel } : { engine };
-    let result: Awaited<ReturnType<typeof setAiEngine>>;
+    let result: Awaited<ReturnType<typeof selectWriter>>;
     try {
-      result = await setAiEngine(input);
+      result = await selectWriter(writerInput(picked, ollamaModel));
     } catch {
       return { status: { kind: "error", message: NETWORK_ERROR }, fieldErrors: {} };
     }
     if (!result.ok) {
       const fieldErrors = result.fieldErrors ?? {};
       if (firstError(fieldErrors, "ollamaModel")) focusFirstInvalid(formRef.current);
-      return { status: { kind: "error", message: result.error }, fieldErrors };
+      return { status: { kind: "error", message: failureMessage(result) }, fieldErrors };
     }
-    setSaved((prev) => ({ engine, model: engine === "ollama" ? ollamaModel : prev.model }));
+    setSaved((prev) => ({ choice: picked, model: picked === "ollama" ? ollamaModel : prev.model }));
     // Le bouton « Choisir … », qui a le focus, disparaît : le focus passe au radio du choix
     // enregistré (coché, juste au-dessus), pas sur la page. La confirmation reste annoncée.
-    focusLater([radioId(engine)]);
+    focusLater([radioId(picked)]);
     router.refresh();
-    return { status: { kind: "success", message: `Choix enregistré : ${choiceLabel(engine, ollamaModel)}.` }, fieldErrors: {} };
+    return { status: { kind: "success", message: `Choix enregistré : ${choiceLabel(picked, ollamaModel)}.` }, fieldErrors: {} };
   }, INITIAL);
 
-  /** Coche un choix (radio ou clic sur sa carte) ; la question 2 apparaît en douceur pour Claude. */
-  function pick(value: EngineId) {
-    if (value === "claude" && choice !== "claude") setReveal("enter");
-    if (value !== "claude") setReveal("idle");
+  /** Coche un choix (radio ou clic sur sa carte) ; la question 2 apparaît en douceur pour un fournisseur. */
+  function pick(value: WriterChoice) {
+    if (isCloudProvider(value) && value !== choice) setReveal("enter");
+    if (!isCloudProvider(value)) setReveal("idle");
+    if (replaceRequest && replaceRequest.provider !== value) setReplaceRequest(null);
     setChoice(value);
   }
 
-  const engineError = firstError(state.fieldErrors, "engine");
+  /** « Remplacer » de Mes connexions : coche le fournisseur et ouvre sa question 2, champ révélé. */
+  function replaceKey(provider: CloudProvider) {
+    pick(provider);
+    setReplaceRequest((prev) => ({ provider, nonce: (prev?.nonce ?? 0) + 1 }));
+  }
+
+  const engineError = firstError(state.fieldErrors, "engine") ?? firstError(state.fieldErrors, "keySource");
   const modelError = firstError(state.fieldErrors, "ollamaModel");
   const ollamaNote =
     ollama === null || ollamaUsable
@@ -240,6 +312,23 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
       : !ollama.reachable
         ? "Le modèle local ne répond pas pour le moment."
         : "Aucun modèle n'est installé sur ce serveur.";
+
+  function cardDescription(card: WriterChoice): ReactNode {
+    if (card === "free") return "Gratuit et instantané.";
+    if (card === "ollama") {
+      return (
+        <>
+          Gratuit, sur ce serveur.
+          {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
+        </>
+      );
+    }
+    if (isCloudProvider(card)) return ownKeySummary(card);
+    return "Clé fournie par votre équipe.";
+  }
+
+  const activeOwnKey = isCloudProvider(saved.choice) ? saved.choice : null;
+  const replacing = connecting !== null && replaceRequest?.provider === connecting ? replaceRequest : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -263,39 +352,28 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
             value={choice}
             className="engine-cards"
             onValueChange={(value) => {
-              if (value === "claude" || value === "ollama" || value === "free") pick(value);
+              const picked = parseChoice(value);
+              if (picked && cards.includes(picked)) pick(picked);
             }}
             error={engineError}
           >
-            <EngineCard engine="free" label="Sans IA" checked={choice === "free"} info={ENGINE_INFO.free} onPick={pick}>
-              <Radio id={radioId("free")} value="free" label="Sans IA" description="Gratuit et instantané." />
-            </EngineCard>
-            <EngineCard engine="claude" label="Claude" checked={choice === "claude"} info={ENGINE_INFO.claude} onPick={pick}>
-              <Radio id={radioId("claude")} value="claude" label="Claude" description="Quelques centimes par diaporama." />
-            </EngineCard>
-            {ollama !== null ? (
-              <EngineCard
-                engine="ollama"
-                label="Modèle local (Ollama)"
-                checked={choice === "ollama"}
-                disabled={!ollamaUsable}
-                info={ENGINE_INFO.ollama}
-                onPick={pick}
-              >
-                <Radio
-                  id={radioId("ollama")}
-                  value="ollama"
-                  label="Modèle local (Ollama)"
-                  disabled={!ollamaUsable}
-                  description={
-                    <>
-                      Gratuit, sur ce serveur.
-                      {ollamaNote ? <span className="mt-1 block font-semibold text-text">{ollamaNote}</span> : null}
-                    </>
-                  }
-                />
-              </EngineCard>
-            ) : null}
+            {cards.map((card) => {
+              const label = cardLabel(card);
+              const disabled = card === "ollama" && !ollamaUsable;
+              return (
+                <EngineCard
+                  key={card}
+                  engine={card}
+                  label={label}
+                  checked={choice === card}
+                  disabled={disabled}
+                  info={engineInfo(card)}
+                  onPick={pick}
+                >
+                  <Radio id={radioId(card)} value={card} label={label} disabled={disabled} description={cardDescription(card)} />
+                </EngineCard>
+              );
+            })}
           </RadioGroup>
 
           {choice === "ollama" && ollamaUsable ? (
@@ -325,7 +403,7 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
           {!choiceSaved && choiceUsable ? (
             <div>
               <Button type="submit" aria-disabled={saving || undefined}>
-                <ButtonLabel idle={SAVE_LABEL[choice]} busy="Enregistrement…" isBusy={saving} />
+                <ButtonLabel idle={saveLabel(choice)} busy="Enregistrement…" isBusy={saving} />
               </Button>
             </div>
           ) : null}
@@ -333,9 +411,9 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
       </section>
 
       <LiveRegion className="sr-only">
-        {reveal === "enter" && choice === "claude" ? "Étape 2 affichée plus bas : connectez Claude." : null}
+        {reveal === "enter" && connecting ? `Étape 2 affichée plus bas : connectez ${PROVIDER_INFO[connecting].label}.` : null}
       </LiveRegion>
-      {choice === "claude" ? (
+      {connecting ? (
         <div
           className="step-reveal"
           data-reveal={reveal === "enter" ? "enter" : undefined}
@@ -346,14 +424,37 @@ export function AiSetup({ status }: { status: AiSetupStatus }) {
         >
           <section ref={q2Ref} aria-labelledby={ids.q2} className="opale-card opale-card--e1 block p-5 sm:p-6">
             <h2 id={ids.q2} className="text-2xl">
-              2. Connecter Claude
+              2. Connecter {PROVIDER_INFO[connecting].label}
             </h2>
             <div className="mt-5">
-              <ClaudeConnect claude={status.claude} onActivated={() => setSaved((s) => ({ ...s, engine: "claude" }))} />
+              <ProviderConnect
+                // Un fournisseur, un formulaire : changer de carte (ou redemander « Remplacer ») repart à neuf.
+                key={`${connecting}-${replacing?.nonce ?? 0}`}
+                provider={connecting}
+                connection={connectionOf(connecting)}
+                startReplacing={replacing !== null}
+                onActivated={() => setSaved((s) => ({ ...s, choice: connecting }))}
+              />
             </div>
           </section>
         </div>
       ) : null}
+
+      <section aria-labelledby={ids.q3} className="opale-card opale-card--e1 block p-5 sm:p-6">
+        <h2 id={ids.q3} tabIndex={-1} className="text-2xl">
+          Mes connexions
+        </h2>
+        <ConnectionList
+          connections={connections}
+          active={activeOwnKey}
+          headingId={ids.q3}
+          onUsed={(provider) => {
+            setSaved((s) => ({ ...s, choice: provider }));
+            pick(provider);
+          }}
+          onReplace={replaceKey}
+        />
+      </section>
     </div>
   );
 }

@@ -232,10 +232,10 @@ test.describe("12. Réglages — pas de flash", () => {
 });
 
 test.describe("12. Réglages — ancienne adresse", () => {
-  test("devrait mener /parametres à la page Configuration IA", async ({ page, account }) => {
+  test("devrait mener /parametres à la page Rédaction IA", async ({ page, account }) => {
     void account;
     await page.goto("/parametres");
     await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
-    await expect(page.getByRole("main").getByRole("heading", { name: "Configuration IA", level: 1 })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("heading", { name: "Rédaction IA", level: 1 })).toBeVisible();
   });
 });

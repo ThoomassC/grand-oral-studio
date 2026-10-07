@@ -6,7 +6,7 @@ import { useGuardedNavigation } from "./useGuardedNavigation";
 
 const ITEMS: readonly { href: string; label: string; signedInOnly: boolean }[] = [
   { href: "/projets", label: "Projets", signedInOnly: true },
-  { href: "/configuration-ia", label: "Configuration IA", signedInOnly: true },
+  { href: "/configuration-ia", label: "Rédaction IA", signedInOnly: true },
   // Page publique : visible aussi sans compte (seul onglet alors).
   { href: "/notes-de-version", label: "Notes de version", signedInOnly: false },
 ];
@@ -20,7 +20,7 @@ export const TAB_LINK_CLASS = "app-tab";
 
 /**
  * Navigation principale de l'en-tête : des liens en onglets (Projets et
- * Configuration IA pour un compte connecté, Notes de version pour tous), `aria-current="page"` sur la section courante (« Projets » couvre
+ * Rédaction IA pour un compte connecté, Notes de version pour tous), `aria-current="page"` sur la section courante (« Projets » couvre
  * aussi chaque projet, sous /projets/…). Le style ne repose pas que sur la
  * couleur : lavis et graisse. Opale n'a pas d'onglets-liens
  * horizontaux (`Tabs` est un tablist ARIA, `Navbar` une colonne).

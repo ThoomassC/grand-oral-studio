@@ -7,6 +7,8 @@ test.afterAll(async () => {
 });
 
 const OLLAMA_MODEL = "qwen2.5:14b";
+/** En démo (AI_PROVIDER=mock), la clé d'équipe de Claude est remplacée par le moteur démo. */
+const CLAUDE_TEAM = "Claude, clé de l'équipe";
 
 function engineGroup(page: Page) {
   return page.getByRole("main").getByRole("radiogroup", { name: "1. Qui rédige le jour J ?" });
@@ -16,18 +18,18 @@ function radio(page: Page, name: string) {
   return engineGroup(page).getByRole("radio", { name, exact: true });
 }
 
-test.describe("3. Configuration IA — page guidée", () => {
-  test("devrait s'intituler Configuration IA, en une colonne et sans sommaire latéral", async ({ page, account }) => {
+test.describe("3. Rédaction IA — page guidée", () => {
+  test("devrait s'intituler Rédaction IA, en une colonne et sans sommaire latéral", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");
-    await expect(page).toHaveTitle(/^Configuration IA · Grand Oral Studio$/);
+    await expect(page).toHaveTitle(/^Rédaction IA · Grand Oral Studio$/);
     const main = page.getByRole("main");
-    await expect(main.getByRole("heading", { name: "Configuration IA", level: 1 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Rédaction IA", level: 1 })).toBeVisible();
     await expect(main.getByRole("heading", { name: "1. Qui rédige le jour J ?", level: 2 })).toBeVisible();
     await expect(main.getByRole("heading", { name: "Apparence" })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: /Sommaire/ })).toHaveCount(0);
     await expect(
-      page.getByRole("banner").getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Configuration IA" }),
+      page.getByRole("banner").getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Rédaction IA" }),
     ).toHaveAttribute("aria-current", "page");
   });
 
@@ -70,14 +72,17 @@ test.describe("3. Configuration IA — page guidée", () => {
     await expect(page.getByText("Étape 2 affichée plus bas : connectez Claude.")).toBeAttached();
   });
 
-  test("devrait cocher Claude en démo, connexion ouverte, sans bandeau ni note de démonstration (AI_PROVIDER=mock)", async ({ page, account }) => {
+  test("devrait cocher la clé d'équipe de Claude en démo, sans connexion à ouvrir ni note de démonstration (AI_PROVIDER=mock)", async ({
+    page,
+    account,
+  }) => {
     void account;
     await page.goto("/configuration-ia");
     const main = page.getByRole("main");
     await expect(main.getByText(/rédigés par/)).toHaveCount(0);
     await expect(radio(page, "Sans IA")).toBeEnabled();
-    await expect(radio(page, "Claude")).toBeChecked();
-    await expect(main.getByRole("heading", { name: "2. Connecter Claude", level: 2 })).toBeVisible();
+    await expect(radio(page, CLAUDE_TEAM)).toBeChecked();
+    await expect(main.getByRole("heading", { name: /^2\. Connecter/, level: 2 })).toHaveCount(0);
     await expect(main.getByText(/Mode démonstration/)).toHaveCount(0);
     // Le choix coché est déjà celui en vigueur : aucun bouton d'enregistrement.
     await expect(main.getByRole("button", { name: /^Choisir / })).toHaveCount(0);
@@ -91,7 +96,7 @@ test.describe("3. Configuration IA — page guidée", () => {
   });
 });
 
-test.describe("3. Configuration IA — qui rédige le jour J", () => {
+test.describe("3. Rédaction IA — qui rédige le jour J", () => {
   test("devrait enregistrer Sans IA, masquer la connexion de Claude et garder le choix après rechargement", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");
@@ -105,18 +110,18 @@ test.describe("3. Configuration IA — qui rédige le jour J", () => {
     await expect(main.getByRole("button", { name: /^Choisir / })).toHaveCount(0);
   });
 
-  test("devrait revenir à Claude (démo) après Sans IA", async ({ page, account }) => {
+  test("devrait revenir à la clé d'équipe de Claude (démo) après Sans IA", async ({ page, account }) => {
     void account;
     await page.goto("/configuration-ia");
     const main = page.getByRole("main");
     await radio(page, "Sans IA").check();
     await main.getByRole("button", { name: "Choisir Sans IA" }).click();
     await expect(main.getByText("Choix enregistré : Sans IA.")).toBeVisible();
-    await radio(page, "Claude").check();
-    await main.getByRole("button", { name: "Choisir Claude" }).click();
-    await expect(main.getByText("Choix enregistré : Claude.")).toBeVisible();
+    await radio(page, CLAUDE_TEAM).check();
+    await main.getByRole("button", { name: `Choisir ${CLAUDE_TEAM}` }).click();
+    await expect(main.getByText(`Choix enregistré : ${CLAUDE_TEAM}.`)).toBeVisible();
     await page.reload();
-    await expect(radio(page, "Claude")).toBeChecked();
+    await expect(radio(page, CLAUDE_TEAM)).toBeChecked();
   });
 
   test(`devrait proposer le modèle ${OLLAMA_MODEL} et enregistrer Ollama`, async ({ page, account }) => {
@@ -136,7 +141,7 @@ test.describe("3. Configuration IA — qui rédige le jour J", () => {
   });
 });
 
-test.describe("3. Configuration IA — connecter Claude", () => {
+test.describe("3. Rédaction IA — connecter Claude", () => {
   for (const [label, value, message] of [
     ["sans préfixe", "abc-pas-une-cle-valide-du-tout", "Une clé API Anthropic commence par « sk-ant- »."],
     ["trop courte", "sk-ant-court", "Cette clé est trop courte : copiez-la en entier."],
@@ -145,6 +150,7 @@ test.describe("3. Configuration IA — connecter Claude", () => {
     test(`devrait refuser une clé ${label} sans appeler le serveur`, async ({ page, account }) => {
       void account;
       await page.goto("/configuration-ia");
+      await radio(page, "Claude").check();
       const actions: string[] = [];
       page.on("request", (r) => {
         if (r.method() === "POST" && r.headers()["next-action"]) actions.push(r.url());
@@ -168,6 +174,7 @@ test.describe("3. Configuration IA — connecter Claude", () => {
     void account;
     await page.goto("/configuration-ia");
     const main = page.getByRole("main");
+    await radio(page, "Claude").check();
     await main.getByRole("button", { name: "En savoir plus : Votre clé API" }).click();
     await expect(page.getByRole("dialog", { name: "Votre clé API" }).getByText(/chiffrée et n'est jamais réaffichée/)).toBeVisible();
     await page.keyboard.press("Escape");
@@ -175,5 +182,35 @@ test.describe("3. Configuration IA — connecter Claude", () => {
       "href",
       "https://console.anthropic.com/settings/keys",
     );
+  });
+});
+
+test.describe("3. Rédaction IA — autres fournisseurs et connexions", () => {
+  test("devrait proposer Mistral, Gemini, Claude et OpenAI, et connecter Mistral avec l'avertissement Privacy", async ({ page, account }) => {
+    void account;
+    await page.goto("/configuration-ia");
+    const main = page.getByRole("main");
+    for (const name of ["Mistral", "Gemini", "Claude", "OpenAI"]) await expect(radio(page, name)).toBeVisible();
+    await radio(page, "Mistral").check();
+    await expect(main.getByRole("heading", { name: "2. Connecter Mistral", level: 2 })).toBeVisible();
+    await expect(main.getByText(/Admin Console › Privacy/)).toBeVisible();
+    await expect(main.getByRole("link", { name: /console Mistral/ })).toHaveAttribute("href", "https://console.mistral.ai/api-keys");
+    await expect(main.getByLabel("Modèle", { exact: true })).toHaveValue("mistral-large-latest");
+
+    const actions: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && r.headers()["next-action"]) actions.push(r.url());
+    });
+    const form = main.getByRole("form", { name: "Connecter Mistral avec votre clé API" });
+    await form.getByRole("button", { name: "Vérifier et activer" }).click();
+    await expect(form.getByText("Saisissez votre clé API Mistral.")).toBeVisible();
+    expect(actions, "aucune Server Action ne doit partir").toEqual([]);
+  });
+
+  test("devrait présenter « Mes connexions », vide pour un compte neuf", async ({ page, account }) => {
+    void account;
+    await page.goto("/configuration-ia");
+    const section = page.getByRole("main").getByRole("region", { name: "Mes connexions" });
+    await expect(section.getByText(/Aucune clé enregistrée/)).toBeVisible();
   });
 });

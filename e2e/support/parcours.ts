@@ -19,7 +19,7 @@ export const SUBJECTS = {
 } as const;
 
 /**
- * Choisit « Sans IA » pour rédiger le jour J (Configuration IA). Sans choix
+ * Choisit « Sans IA » pour rédiger le jour J (page Rédaction IA). Sans choix
  * enregistré, un serveur en AI_PROVIDER=mock rédige en « Démo » : c'est l'état
  * d'un compte neuf, rien à faire pour le moteur démo.
  */

@@ -52,7 +52,7 @@ test.describe("13. Notes de version", () => {
     void account;
     await page.goto("/projets");
     const nav = mainNav(page);
-    await expect(nav.getByRole("link")).toHaveText(["Projets", "Configuration IA", "Notes de version"]);
+    await expect(nav.getByRole("link")).toHaveText(["Projets", "Rédaction IA", "Notes de version"]);
     await nav.getByRole("link", { name: "Notes de version" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(nav.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");
