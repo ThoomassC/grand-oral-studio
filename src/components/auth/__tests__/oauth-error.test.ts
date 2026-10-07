@@ -26,4 +26,14 @@ describe("oauthErrorMessage", () => {
     expect(message).toBe("La connexion avec Google a échoué. Réessayez dans un instant.");
     expect(oauthErrorMessage(["state_mismatch", "x"])).toBe(message);
   });
+
+  it("devrait expliquer le refus d'un domaine d'adresse non autorisé sur l'instance", () => {
+    expect(oauthErrorMessage("EMAIL_DOMAIN_NOT_ALLOWED")).toMatch(/adresse.*n'est pas autorisée sur cette instance/);
+  });
+
+  it("devrait expliquer un lien de confirmation d'adresse expiré ou invalide", () => {
+    const expected = /lien de confirmation.*n'est plus valide.*Connectez-vous/;
+    expect(oauthErrorMessage("TOKEN_EXPIRED")).toMatch(expected);
+    expect(oauthErrorMessage("INVALID_TOKEN")).toMatch(expected);
+  });
 });

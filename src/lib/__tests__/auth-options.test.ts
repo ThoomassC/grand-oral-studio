@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   googleButtonState,
   ACCOUNT_LINKING_OPTIONS,
+  allowedEmailDomains,
   DISABLED_AUTH_PATHS,
+  emailDeliveryConfig,
+  isEmailDeliveryEnabled,
+  isEmailDomainAllowed,
   googleProviderOptions,
   ipAddressOptions,
   isGoogleSignInEnabled,
@@ -79,6 +83,93 @@ describe("DISABLED_AUTH_PATHS", () => {
 
   it("devrait fermer /update-user : Better Auth n'y borne pas le nom, l'app passe par une action validée", () => {
     expect(DISABLED_AUTH_PATHS).toContain("/update-user");
+  });
+
+  it("devrait fermer la suppression de compte en HTTP : seule l'action serveur de /profil (adresse recopiée) l'appelle", () => {
+    expect(DISABLED_AUTH_PATHS).toEqual(expect.arrayContaining(["/delete-user", "/delete-user/callback"]));
+  });
+
+  it("devrait fermer le renvoi libre d'e-mail de vérification (renvoyé à la connexion, mot de passe à l'appui)", () => {
+    expect(DISABLED_AUTH_PATHS).toContain("/send-verification-email");
+  });
+
+  it("devrait laisser ouverts les parcours utilisés par l'interface", () => {
+    for (const path of ["/request-password-reset", "/reset-password", "/verify-email", "/change-password"]) {
+      expect(DISABLED_AUTH_PATHS).not.toContain(path);
+    }
+  });
+});
+
+describe("emailDeliveryConfig", () => {
+  it("devrait laisser les e-mails inactifs sans RESEND_API_KEY ni EMAIL_FROM (variables absentes ou vides)", () => {
+    expect(emailDeliveryConfig({})).toBeUndefined();
+    expect(emailDeliveryConfig({ RESEND_API_KEY: " ", EMAIL_FROM: "" })).toBeUndefined();
+    expect(isEmailDeliveryEnabled({})).toBe(false);
+  });
+
+  it("devrait activer les e-mails avec la clé et l'expéditeur, espaces retirés", () => {
+    const env = { RESEND_API_KEY: " re_123 ", EMAIL_FROM: " Grand Oral Studio <noreply@exemple.fr> " };
+    expect(emailDeliveryConfig(env)).toEqual({ apiKey: "re_123", from: "Grand Oral Studio <noreply@exemple.fr>" });
+    expect(isEmailDeliveryEnabled(env)).toBe(true);
+  });
+
+  it("devrait refuser une configuration partielle au démarrage", () => {
+    expect(() => emailDeliveryConfig({ RESEND_API_KEY: "re_123" })).toThrow(/EMAIL_FROM/);
+    expect(() => emailDeliveryConfig({ EMAIL_FROM: "noreply@exemple.fr" })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it("devrait refuser un expéditeur sans adresse e-mail", () => {
+    expect(() => emailDeliveryConfig({ RESEND_API_KEY: "re_123", EMAIL_FROM: "Grand Oral Studio" })).toThrow(/EMAIL_FROM/);
+  });
+
+  it("ne devrait jamais citer la clé dans un message d'erreur", () => {
+    expect(() => emailDeliveryConfig({ RESEND_API_KEY: "re_secret_value", EMAIL_FROM: "x" })).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining("re_secret_value") }),
+    );
+  });
+});
+
+describe("allowedEmailDomains", () => {
+  it("ne devrait rien restreindre sans ALLOWED_EMAIL_DOMAINS", () => {
+    expect(allowedEmailDomains({})).toBeUndefined();
+    expect(allowedEmailDomains({ ALLOWED_EMAIL_DOMAINS: " , " })).toBeUndefined();
+  });
+
+  it("devrait lire une liste séparée par des virgules, en minuscules, sans @ ni doublon", () => {
+    expect(allowedEmailDomains({ ALLOWED_EMAIL_DOMAINS: " Lycee-Exemple.fr, @ac-paris.fr ,,lycee-exemple.fr" })).toEqual([
+      "lycee-exemple.fr",
+      "ac-paris.fr",
+    ]);
+  });
+
+  it("devrait refuser une entrée qui n'est pas un nom de domaine", () => {
+    expect(() => allowedEmailDomains({ ALLOWED_EMAIL_DOMAINS: "lycee exemple.fr" })).toThrow(/ALLOWED_EMAIL_DOMAINS/);
+    expect(() => allowedEmailDomains({ ALLOWED_EMAIL_DOMAINS: "*.fr" })).toThrow(/ALLOWED_EMAIL_DOMAINS/);
+  });
+});
+
+describe("isEmailDomainAllowed", () => {
+  const domains = ["lycee-exemple.fr", "ac-paris.fr"];
+
+  it("devrait tout accepter sans restriction", () => {
+    expect(isEmailDomainAllowed("eleve@gmail.com", undefined)).toBe(true);
+  });
+
+  it("devrait comparer le domaine en minuscules", () => {
+    expect(isEmailDomainAllowed("Eleve@Lycee-Exemple.FR", domains)).toBe(true);
+    expect(isEmailDomainAllowed("prof@ac-paris.fr", domains)).toBe(true);
+  });
+
+  it("devrait exiger le domaine exact (ni sous-domaine, ni suffixe trompeur)", () => {
+    expect(isEmailDomainAllowed("eleve@gmail.com", domains)).toBe(false);
+    expect(isEmailDomainAllowed("eleve@sub.lycee-exemple.fr", domains)).toBe(false);
+    expect(isEmailDomainAllowed("eleve@lycee-exemple.fr.evil.com", domains)).toBe(false);
+    expect(isEmailDomainAllowed("eleve@evil-lycee-exemple.fr", domains)).toBe(false);
+  });
+
+  it("devrait juger le domaine après le dernier @ et refuser une adresse sans @", () => {
+    expect(isEmailDomainAllowed("lycee-exemple.fr@evil.com", domains)).toBe(false);
+    expect(isEmailDomainAllowed("lycee-exemple.fr", domains)).toBe(false);
   });
 });
 
