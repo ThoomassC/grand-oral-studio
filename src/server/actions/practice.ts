@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { RehearsalInputSchema, type RehearsalInput } from "@/domain/rehearsal";
 import { getEngineForUser, type ResolvedEngine } from "../ai";
-import { AppError, isRefundableAiError, RateLimitedError } from "../errors";
+import { isRefundableAiError, RateLimitedError } from "../errors";
+import type { Logger } from "../logger";
 import { consumeAiQuotaFor, consumeFreeEngineQuota, consumeQuota, refundAiQuotaFor, type QuotaPolicy } from "../rate-limit";
 import * as decksRepo from "../repo/decks";
 import * as questionsRepo from "../repo/questions";
@@ -31,12 +32,17 @@ const REHEARSAL_QUOTA: QuotaPolicy = { limit: 120, windowSeconds: 3600 };
 /** Marquages de questions par utilisateur (un clic = une écriture). */
 const REVIEW_QUOTA: QuotaPolicy = { limit: 1200, windowSeconds: 3600 };
 
-/** Quota d'entraînement atteint (message propre : RateLimitedError parle de générations). */
-class PracticeRateLimitedError extends AppError {
-  readonly code = "RATE_LIMITED" as const;
-  readonly status = 429;
+/**
+ * Quota d'entraînement atteint : message propre (RateLimitedError parle de
+ * générations), même code et même attente annoncée (`retryAfterSeconds`,
+ * renvoyé au client par runAction).
+ */
+class PracticeRateLimitedError extends RateLimitedError {
+  override readonly userMessage: string;
   constructor(retryAfterSeconds: number) {
-    super(`Trop d'enregistrements en peu de temps. Réessayez dans ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} min.`);
+    super(retryAfterSeconds, "user");
+    this.userMessage = `Trop d'enregistrements en peu de temps. Réessayez dans ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} min.`;
+    this.message = this.userMessage;
   }
 }
 
@@ -86,7 +92,7 @@ async function promptContext(userId: string, deckId: string): Promise<JuryPrompt
  * anti-abus du moteur gratuit ; IA, quota de la facturation du rédacteur,
  * restitué si l'échec prouve que rien n'a été calculé.
  */
-function billed(userId: string, resolved: ResolvedEngine, generator: JuryQuestionsGenerator): JuryQuestionsGenerator {
+function billed(userId: string, resolved: ResolvedEngine, generator: JuryQuestionsGenerator, log: Logger): JuryQuestionsGenerator {
   return {
     engine: generator.engine,
     async generate(input) {
@@ -98,7 +104,14 @@ function billed(userId: string, resolved: ResolvedEngine, generator: JuryQuestio
       try {
         return await generator.generate(input);
       } catch (error) {
-        if (isRefundableAiError(error)) await refundAiQuotaFor(resolved.billing, userId, 1);
+        if (isRefundableAiError(error)) {
+          // Un échec du remboursement est journalisé : il ne masque jamais l'erreur d'origine.
+          try {
+            await refundAiQuotaFor(resolved.billing, userId, 1);
+          } catch (refundError) {
+            log.error("ai.quota_refund_failed", { task: "juryQuestions", error: refundError });
+          }
+        }
         throw error;
       }
     },
@@ -118,7 +131,7 @@ export async function generateJuryQuestions(
     const id = parseInput(IdSchema, deckId);
     const resolved = await getEngineForUser(user.id, { log });
     const context = resolved.engine === "free" ? NO_PROMPT_CONTEXT : await promptContext(user.id, id);
-    const generator = billed(user.id, resolved, juryQuestions.juryQuestionsGeneratorFor(resolved, context));
+    const generator = billed(user.id, resolved, juryQuestions.juryQuestionsGeneratorFor(resolved, context), log);
     const { programId, questions, engine } = await juryQuestions.generateJuryQuestions(user.id, id, { generator });
     revalidatePrograms(programId);
     return { questions, engine };

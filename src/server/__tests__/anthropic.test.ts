@@ -3,7 +3,15 @@ import type { PromptPair } from "@/domain/contracts";
 import { DeckSpecSchema } from "@/domain/schemas";
 import { createAnthropicProvider } from "@/server/ai/anthropic";
 import type { DeckHints } from "@/server/ai/types";
-import { AiCreditExhaustedError, AiInvalidOutputError, AiKeyRejectedError, AiRefusalError, AiUnavailableError } from "@/server/errors";
+import {
+  AiCreditExhaustedError,
+  AiInvalidOutputError,
+  AiKeyRejectedError,
+  AiProviderRateLimitedError,
+  AiRefusalError,
+  AiUnavailableError,
+  isRefundableAiError,
+} from "@/server/errors";
 import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
 
 /**
@@ -25,6 +33,8 @@ interface Reply {
   errorBody?: unknown;
   /** Ne répond jamais (jusqu'à l'abandon par le signal). */
   hang?: boolean;
+  /** En-têtes ajoutés à une réponse d'erreur (ex. retry-after). */
+  headers?: Record<string, string>;
 }
 
 interface Captured {
@@ -81,7 +91,7 @@ function fakeFetch(replies: Reply[]) {
     if (reply.status && reply.status >= 400) {
       return new Response(JSON.stringify(reply.errorBody ?? { type: "error", error: { type: "api_error", message: "boom" } }), {
         status: reply.status,
-        headers: { "content-type": "application/json", "x-should-retry": "true", "retry-after-ms": "10" },
+        headers: { "content-type": "application/json", "x-should-retry": "true", "retry-after-ms": "10", ...reply.headers },
       });
     }
     if (body.stream === true) {
@@ -316,5 +326,22 @@ describe("createAnthropicProvider — 1.2 : budget par appel et tâches structur
       notes: "",
     });
     await expect(ai.generateStructured({ task: "juryQuestions", prompt: PROMPT })).rejects.toBeInstanceOf(AiInvalidOutputError);
+  });
+});
+
+describe("createAnthropicProvider — limite de débit (429)", () => {
+  it("devrait lever AiProviderRateLimitedError avec le Retry-After, remboursable, comme les autres fournisseurs", async () => {
+    const { ai, calls } = provider([{ status: 429, headers: { "retry-after": "30", "x-should-retry": "false" } }], { keySource: "user" });
+    const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiProviderRateLimitedError);
+    expect(error).toMatchObject({ code: "AI_RATE_LIMITED", status: 429, retryAfterSeconds: 30, provider: "claude" });
+    expect(isRefundableAiError(error)).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("devrait borner un Retry-After absent (60 s par défaut)", async () => {
+    const { ai } = provider([{ status: 429 }]);
+    const error = await ai.generateStructured({ task: "slide", prompt: PROMPT, hints: {} } as never).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "AI_RATE_LIMITED", retryAfterSeconds: 60 });
   });
 });

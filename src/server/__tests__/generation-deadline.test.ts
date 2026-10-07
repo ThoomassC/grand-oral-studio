@@ -236,3 +236,56 @@ describe("generateFinalDeck — entraînement, départ du chrono et auteur", () 
     expect(ids).toEqual(["deck-exam", "deck-practice"]);
   });
 });
+
+describe("generateFinalDeck — la seconde tentative ne perd jamais la première", () => {
+  it("devrait garder la première version quand le second appel IA lève une erreur inattendue (non typée)", async () => {
+    const ai = provider("mistral", (_options, call) => {
+      if (call === 2) throw new TypeError("réponse illisible du SDK");
+      return makeConformingDeck();
+    });
+    const log = recordingLogger();
+    const result = await gen.generateFinalDeck(
+      "user-1",
+      { programId: "prog-1", themeId: null, problem: PROBLEM },
+      { ai, log, billing: "user", timing: { now: fakeClock().now } },
+    );
+    expect(result).toMatchObject({ deckId: "deck-1", reused: false });
+    expect(repo.createFinalDeck).toHaveBeenCalledTimes(1);
+    expect(result.warnings.join(" ")).toMatch(/premier résultat est conservé/);
+    expect(log.events.some((e) => e.level === "error" && e.event === "deck.final_retry_failed")).toBe(true);
+  });
+
+  it("devrait remonter une panne de base survenue hors de l'appel IA (quota de la seconde tentative)", async () => {
+    const ai = provider("mistral", () => makeConformingDeck());
+    const down = new Error("connexion à la base perdue");
+    quota.consumeAiQuotaFor.mockResolvedValueOnce(undefined).mockRejectedValueOnce(down);
+    const error = await gen
+      .generateFinalDeck(
+        "user-1",
+        { programId: "prog-1", themeId: null, problem: PROBLEM },
+        { ai, log: recordingLogger(), billing: "user", timing: { now: fakeClock().now } },
+      )
+      .catch((e: unknown) => e);
+    expect(error).toBe(down);
+    expect(ai.calls).toHaveLength(1);
+  });
+});
+
+describe("generateFinalDeck — remboursement en échec", () => {
+  it("devrait remonter l'erreur d'origine du fournisseur et journaliser l'échec du remboursement", async () => {
+    const ai = provider("mistral", () => {
+      throw new AiProviderRateLimitedError("mistral", 30);
+    });
+    quota.refundAiQuotaFor.mockRejectedValueOnce(new Error("base indisponible"));
+    const log = recordingLogger();
+    const error = await gen
+      .generateFinalDeck(
+        "user-1",
+        { programId: "prog-1", themeId: null, problem: PROBLEM },
+        { ai, log, billing: "user", timing: { now: fakeClock().now } },
+      )
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiProviderRateLimitedError);
+    expect(log.events.some((e) => e.level === "error" && e.event === "ai.quota_refund_failed")).toBe(true);
+  });
+});

@@ -45,7 +45,7 @@ export function PrepCountdown({ storageKey, minutes }: { storageKey: string; min
   const remaining = timer ? timerRemainingMs(timer, now, minutes) : total;
   const over = timer !== null && remaining === 0;
   const paused = timer !== null && timer.pausedAt !== null;
-  const current = milestones(remaining);
+  const current = milestones(remaining, minutes);
   const milestone = timer && !over ? current.items.find((m) => m.id === current.current)?.label : null;
 
   function update(next: (t: NonNullable<typeof timer>, at: number) => NonNullable<typeof timer>) {

@@ -38,7 +38,7 @@ describe("DeckNotice — avertissements de génération, une seule fois", () => 
 });
 
 describe("ExamChecklist — liste « Avant l'examen »", () => {
-  const base = { writerReady: true, writerLabel: "Mistral (votre clé)", templateSaved: true, exportTried: true, practiceDecks: 2, rehearsals: 2 };
+  const base = { writerReady: true, writerLabel: "Mistral (votre clé)", templateSaved: true, exportTried: true, decks: 2, rehearsals: 2 };
 
   it("devrait lister ce qui reste à faire, avec les indications", () => {
     render(<ExamChecklist items={examChecklist({ ...base, exportTried: false, rehearsals: 1 })} />);

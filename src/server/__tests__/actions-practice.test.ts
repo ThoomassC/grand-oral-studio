@@ -79,7 +79,12 @@ describe("saveRehearsal", () => {
   it("devrait traduire le quota atteint en message d'entraînement", async () => {
     consumeQuota.mockRejectedValue(new RateLimitedError(600));
     const result = await actions.saveRehearsal("d1", { totalSeconds: 20, perSlide: [10, 10] });
-    expect(result).toEqual({ ok: false, error: "Trop d'enregistrements en peu de temps. Réessayez dans 10 min." });
+    expect(result).toEqual({ ok: false, error: "Trop d'enregistrements en peu de temps. Réessayez dans 10 min.", retryAfterSeconds: 600 });
+  });
+
+  it("devrait annoncer l'attente aussi pour le marquage des questions", async () => {
+    consumeQuota.mockRejectedValue(new RateLimitedError(90));
+    expect(await actions.setQuestionReview("q1", "known")).toMatchObject({ ok: false, retryAfterSeconds: 90 });
   });
 });
 
@@ -139,6 +144,21 @@ describe("generateJuryQuestions", () => {
     expect(refundAiQuotaFor).toHaveBeenCalledWith("server", "u1", 1);
     expect(consumeFreeEngineQuota).not.toHaveBeenCalled();
     expect(repo.generatorFor).toHaveBeenCalledTimes(1);
+  });
+
+  it("devrait afficher l'erreur d'origine même si le remboursement du quota échoue", async () => {
+    getEngineForUser.mockResolvedValue({ engine: "claude", provider: { name: "claude" }, billing: "server", keySource: "server", model: "m" });
+    repo.generatorFor.mockReturnValue({
+      engine: "claude",
+      generate: async () => {
+        throw new AiUnavailableError("down", { refundable: true });
+      },
+    });
+    refundAiQuotaFor.mockRejectedValue(new Error("base indisponible"));
+    serviceCallsGenerator({ programId: "p1", engine: "claude", questions });
+
+    expect(await actions.generateJuryQuestions("d1")).toEqual({ ok: false, error: expect.stringContaining("momentanément indisponible") });
+    expect(refundAiQuotaFor).toHaveBeenCalledWith("server", "u1", 1);
   });
 
   it("IA hors contrat : ne devrait pas restituer le quota (le calcul a eu lieu)", async () => {

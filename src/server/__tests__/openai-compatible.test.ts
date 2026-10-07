@@ -226,6 +226,20 @@ describe("createOpenAiCompatibleProvider — erreurs", () => {
     expect(isRefundableAiError(offline)).toBe(true);
   });
 
+  it("ne devrait pas rembourser une coupure pendant la lecture du corps : la réponse a déjà été calculée", async () => {
+    const encoder = new TextEncoder();
+    const cut = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"id":"c1","choices":['));
+        controller.error(new TypeError("terminated"));
+      },
+    });
+    const f = fakeFetch(new Response(cut, { status: 200, headers: { "content-type": "application/json" } }));
+    const error = await provider(f.impl).generateDeck(PROMPT).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiUnavailableError);
+    expect(isRefundableAiError(error)).toBe(false);
+  });
+
   it("devrait rejeter une sortie JSON invalide, tronquée ou refusée", async () => {
     const f = fakeFetch(
       completion("{ pas du json"),

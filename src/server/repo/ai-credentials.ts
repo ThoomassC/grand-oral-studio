@@ -19,9 +19,9 @@ import { parseStored } from "../validation";
  * de la clé maître).
  *
  * Les colonnes historiques anthropicKey* de user_ai_settings ne sont plus ni
- * lues ni écrites, sauf pour être VIDÉES à la suppression de la connexion
- * Claude (suppression effective de la clé, y compris sa copie 1.1). Elles
- * disparaissent en 1.3 (contract).
+ * lues ni écrites, sauf pour être VIDÉES à l'enregistrement d'une nouvelle clé
+ * Claude et à la suppression de la connexion Claude (la copie 1.1 ne survit ni
+ * à un remplacement ni à une suppression). Elles disparaissent en 1.3 (contract).
  *
  * Seul ce module manipule une clé en clair, et uniquement en mémoire.
  */
@@ -106,7 +106,8 @@ export interface SaveCredentialInput {
  * Chiffre et enregistre la clé (INSERT … ON CONFLICT DO UPDATE sur la clé
  * primaire : rejouable, dernier gagnant). Avec `select`, choisit aussi ce
  * rédacteur dans la MÊME transaction (jamais « clé enregistrée mais rédacteur
- * non choisi »). Le modèle Ollama enregistré est conservé.
+ * non choisi »). Pour Claude, vide aussi les colonnes historiques anthropicKey*
+ * dans cette transaction. Le modèle Ollama enregistré est conservé.
  */
 export async function saveCredential(
   userId: string,
@@ -131,18 +132,29 @@ export async function saveCredential(
     update: data,
     select: META_SELECT,
   });
-  if (!options.select) return toMeta(await upsert, userId);
-  const selection = options.select;
-  const [row] = await client.$transaction([
-    upsert,
-    client.userAiSettings.upsert({
-      where: { userId },
-      create: { userId, ...selection },
-      update: selection,
-      select: { userId: true },
-    }),
-  ]);
+  // Nouvelle clé Claude : la copie 1.1 (colonnes historiques) ne doit pas survivre à son remplacement.
+  const legacy = provider === "claude" ? [clearLegacyClaudeKey(client, userId)] : [];
+  const selection = options.select
+    ? [
+        client.userAiSettings.upsert({
+          where: { userId },
+          create: { userId, ...options.select },
+          update: options.select,
+          select: { userId: true },
+        }),
+      ]
+    : [];
+  if (legacy.length === 0 && selection.length === 0) return toMeta(await upsert, userId);
+  const [row] = await client.$transaction([upsert, ...legacy, ...selection]);
   return toMeta(row, userId);
+}
+
+/** Vide les colonnes historiques anthropicKey* de user_ai_settings (no-op si déjà vides). */
+function clearLegacyClaudeKey(client: Pick<ReturnType<typeof db>, "userAiSettings">, userId: string) {
+  return client.userAiSettings.updateMany({
+    where: { userId, anthropicKeyCiphertext: { not: null } },
+    data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
+  });
 }
 
 /** Change le modèle d'une connexion existante ; false si la connexion n'existe pas. */
@@ -169,12 +181,7 @@ export async function deleteCredential(userId: string, provider: CloudProvider):
   return db().$transaction(async (tx) => {
     const { count: removed } = await tx.userAiCredential.deleteMany({ where: { userId, provider } });
     let legacy = 0;
-    if (provider === "claude") {
-      ({ count: legacy } = await tx.userAiSettings.updateMany({
-        where: { userId, anthropicKeyCiphertext: { not: null } },
-        data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
-      }));
-    }
+    if (provider === "claude") ({ count: legacy } = await clearLegacyClaudeKey(tx, userId));
     const existed = removed > 0 || legacy > 0;
     if (existed) {
       await tx.userAiSettings.updateMany({
@@ -194,7 +201,8 @@ export async function deleteCredential(userId: string, provider: CloudProvider):
  *   silencieuse sur une autre clé.
  * - Ancienne clé maître et/ou aadScheme 1 → rechiffrée avec la clé maître
  *   courante en aadScheme 2, par mise à jour CONDITIONNELLE (si la ligne a changé
- *   entre-temps, on ne l'écrase pas).
+ *   entre-temps, on ne l'écrase pas). Un échec du rechiffrement est journalisé
+ *   (`ai_key.rewrap_failed`) : la clé déchiffrée est quand même renvoyée.
  */
 export async function loadCredential(
   userId: string,
@@ -222,19 +230,25 @@ export async function loadCredential(
   }
 
   if (scheme === 1 || box.isStale(row.keyVersion)) {
-    const sealed = box.seal(apiKey, credentialAad(userId, provider));
-    const { count } = await db().userAiCredential.updateMany({
-      where: { userId, provider, ciphertext: row.ciphertext, keyVersion: row.keyVersion, aadScheme: row.aadScheme },
-      data: { ciphertext: sealed.ciphertext, keyVersion: sealed.keyVersion, aadScheme: 2 },
-    });
-    options.log.info("ai_key.rewrapped", {
-      provider,
-      from: row.keyVersion,
-      to: sealed.keyVersion,
-      fromScheme: scheme,
-      toScheme: 2,
-      applied: count > 0,
-    });
+    // Opportuniste : un échec (base, chiffrement) est journalisé et n'empêche pas d'utiliser la clé lue ;
+    // la ligne sera rechiffrée à une prochaine lecture.
+    try {
+      const sealed = box.seal(apiKey, credentialAad(userId, provider));
+      const { count } = await db().userAiCredential.updateMany({
+        where: { userId, provider, ciphertext: row.ciphertext, keyVersion: row.keyVersion, aadScheme: row.aadScheme },
+        data: { ciphertext: sealed.ciphertext, keyVersion: sealed.keyVersion, aadScheme: 2 },
+      });
+      options.log.info("ai_key.rewrapped", {
+        provider,
+        from: row.keyVersion,
+        to: sealed.keyVersion,
+        fromScheme: scheme,
+        toScheme: 2,
+        applied: count > 0,
+      });
+    } catch (error) {
+      options.log.error("ai_key.rewrap_failed", { provider, from: row.keyVersion, fromScheme: scheme, error });
+    }
   }
   return { apiKey, model: row.model };
 }

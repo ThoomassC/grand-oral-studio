@@ -6,6 +6,7 @@ import type { AiProvider, CallOptions, ResolvedEngine } from "../ai";
 import { AiInvalidOutputError } from "../errors";
 import { getQuestionContext, replaceQuestions, type QuestionView } from "../repo/questions";
 import type { DeckEngine } from "../repo/types";
+import { singleFlight } from "../single-flight";
 
 /**
  * Préparation des questions probables du jury d'un diaporama.
@@ -90,15 +91,22 @@ export interface GeneratedJuryQuestions {
   questions: QuestionView[];
 }
 
+/**
+ * Rejouable : deux demandes simultanées du même utilisateur sur le même
+ * diaporama n'en font qu'une (singleFlight, par instance) — un double-clic ne
+ * paie pas deux appels IA.
+ */
 export async function generateJuryQuestions(
   userId: string,
   deckId: string,
   deps: { generator?: JuryQuestionsGenerator } = {},
 ): Promise<GeneratedJuryQuestions> {
   const generator = deps.generator ?? fallbackJuryQuestionsGenerator;
-  const { spec, subject } = await getQuestionContext(userId, deckId);
-  const output = JuryQuestionsSchema.safeParse(await generator.generate({ spec, subject }));
-  if (!output.success) throw new AiInvalidOutputError(`juryQuestions (${generator.engine}) : sortie hors schéma`);
-  const { programId, questions } = await replaceQuestions(userId, deckId, output.data.questions);
-  return { programId, engine: generator.engine, questions };
+  return singleFlight(`jury:${userId}:${deckId}`, async () => {
+    const { spec, subject } = await getQuestionContext(userId, deckId);
+    const output = JuryQuestionsSchema.safeParse(await generator.generate({ spec, subject }));
+    if (!output.success) throw new AiInvalidOutputError(`juryQuestions (${generator.engine}) : sortie hors schéma`);
+    const { programId, questions } = await replaceQuestions(userId, deckId, output.data.questions);
+    return { programId, engine: generator.engine, questions };
+  });
 }

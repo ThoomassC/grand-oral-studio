@@ -15,12 +15,14 @@ import {
   AiCreditExhaustedError,
   AiInvalidOutputError,
   AiKeyRejectedError,
+  AiProviderRateLimitedError,
   AiRefusalError,
   AiUnavailableError,
 } from "../errors";
 import { createLogger } from "../logger";
 import { createAnthropicClient } from "./anthropic-client";
 import { DEFAULT_MODEL } from "./model";
+import { retryAfterSeconds } from "./retry-after";
 import { parseJson, parseStructured, strict } from "./structured";
 import { STRUCTURED_TASKS } from "./tasks";
 import type { AiProvider, CallOptions, DeckHints, StructuredRequest, StructuredResult, StructuredTask } from "./types";
@@ -207,9 +209,10 @@ export function interpret<S extends z.ZodType>(operation: Operation, message: Be
 }
 
 /**
- * Erreurs du SDK → erreurs typées. Indisponibilité (réseau, 429, 5xx, budget de
- * temps, clé SERVEUR invalide) → AiUnavailableError (503) ; clé UTILISATEUR
- * refusée → AiKeyRejectedError. Une autre 4xx est un bug de
+ * Erreurs du SDK → erreurs typées. Indisponibilité (réseau, 5xx, budget de
+ * temps, clé SERVEUR invalide) → AiUnavailableError (503) ; limite de débit
+ * (429) → AiProviderRateLimitedError (Retry-After, remboursable) ; clé
+ * UTILISATEUR refusée → AiKeyRejectedError. Une autre 4xx est un bug de
  * notre requête : relancée telle quelle pour être journalisée comme une panne.
  */
 function mapSdkError(operation: string, error: unknown, signal: AbortSignal, keySource: "user" | "server"): Error {
@@ -230,7 +233,13 @@ function mapSdkError(operation: string, error: unknown, signal: AbortSignal, key
     log.error("ai.config_error", { operation, status: error.status });
     return new AiUnavailableError(`${operation}: authentification refusée (${error.status})`, { cause: error });
   }
-  if (error instanceof Anthropic.RateLimitError || error instanceof Anthropic.InternalServerError) {
+  if (error instanceof Anthropic.RateLimitError) {
+    // Comme les autres fournisseurs : rien n'a été calculé (unité restituée), attente annoncée.
+    const seconds = retryAfterSeconds(error.headers?.get("retry-after") ?? null);
+    log.warn("ai.provider_rate_limited", { operation, provider: "claude", keySource, status: error.status, retryAfterSeconds: seconds });
+    return new AiProviderRateLimitedError("claude", seconds, { cause: error });
+  }
+  if (error instanceof Anthropic.InternalServerError) {
     return new AiUnavailableError(`${operation}: ${error.status}`, { cause: error });
   }
   if (error instanceof Anthropic.BadRequestError && /credit balance/i.test(error.message)) {

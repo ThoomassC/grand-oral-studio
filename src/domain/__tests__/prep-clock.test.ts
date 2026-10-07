@@ -87,6 +87,36 @@ describe("milestones", () => {
     expect(m.current).toBe("over");
     expect(m.items.every((i) => i.state === "past")).toBe(true);
   });
+
+  it("devrait garder les seuils 45 / 10 min pour une préparation de 90 min", () => {
+    const m = milestones(46 * MIN, 90);
+    expect(m.current).toBe("generate");
+    expect(m.items.map((i) => i.fromMinutes)).toEqual([null, 45, 10]);
+  });
+
+  it("devrait proportionner les seuils à une préparation courte : on commence toujours par générer", () => {
+    const m = milestones(20 * MIN, 20);
+    expect(m.current).toBe("generate");
+    expect(m.items.map((i) => i.fromMinutes)).toEqual([null, 10, 2]);
+    expect(m.items[1]!.label).toBe("Reste 10 min : répétez");
+    expect(milestones(10 * MIN, 20).current).toBe("rehearse");
+    expect(milestones(2 * MIN, 20).current).toBe("final");
+  });
+
+  it("devrait borner les seuils d'une préparation longue (45 / 10 min au plus)", () => {
+    const m = milestones(200 * MIN, 240);
+    expect(m.items.map((i) => i.fromMinutes)).toEqual([null, 45, 10]);
+    expect(milestones(45 * MIN, 240).current).toBe("rehearse");
+  });
+
+  it("devrait garder des seuils ordonnés et positifs pour la préparation la plus courte (10 min)", () => {
+    const m = milestones(10 * MIN, 10);
+    expect(m.current).toBe("generate");
+    const [, rehearse, final] = m.items.map((i) => i.fromMinutes!);
+    expect(rehearse).toBeGreaterThan(final!);
+    expect(final).toBeGreaterThan(0);
+    expect(rehearse).toBeLessThan(10);
+  });
 });
 
 describe("storageKey", () => {

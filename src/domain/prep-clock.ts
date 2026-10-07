@@ -65,34 +65,44 @@ export interface Milestones {
   items: Milestone[];
 }
 
-const REHEARSE_FROM_MINUTES = 45;
-const FINAL_FROM_MINUTES = 10;
-
-const MILESTONES: readonly Omit<Milestone, "state">[] = [
-  { id: "generate", label: "Diaporama à générer", fromMinutes: null },
-  { id: "rehearse", label: "Reste 45 min : répétez", fromMinutes: REHEARSE_FROM_MINUTES },
-  { id: "final", label: "Dernières minutes", fromMinutes: FINAL_FROM_MINUTES },
-];
+/** Seuils de référence (préparation de 90 min) : ce sont aussi les plafonds. */
+const REHEARSE_FROM_MINUTES_MAX = 45;
+const FINAL_FROM_MINUTES_MAX = 10;
 
 /**
- * Jalons de la préparation selon le temps restant : générer le diaporama tant
- * qu'il reste plus de 45 min, répéter de 45 à 10 min, dernières minutes sous
- * 10 min, « over » à 0.
+ * Seuils (minutes restantes) d'une préparation de `prepMinutes` : répéter à la
+ * moitié du temps, dernières minutes au neuvième — 45 et 10 min pour 90 min,
+ * bornés à ces valeurs pour une préparation plus longue, jamais sous 1 min.
+ * Une préparation courte commence donc toujours par la génération.
  */
-export function milestones(remaining: number): Milestones {
+function thresholds(prepMinutes: number): { rehearse: number; final: number } {
+  const prep = Number.isFinite(prepMinutes) && prepMinutes > 0 ? prepMinutes : DEFAULT_PREP_MINUTES;
+  return {
+    rehearse: Math.min(REHEARSE_FROM_MINUTES_MAX, Math.max(2, Math.round(prep / 2))),
+    final: Math.min(FINAL_FROM_MINUTES_MAX, Math.max(1, Math.round(prep / 9))),
+  };
+}
+
+/**
+ * Jalons de la préparation selon le temps restant et la durée de la trame :
+ * générer le diaporama tant qu'il reste plus que le seuil de répétition (45 min
+ * pour 90 min), répéter jusqu'au seuil final (10 min pour 90 min), dernières
+ * minutes ensuite, « over » à 0.
+ */
+export function milestones(remaining: number, prepMinutes: number = DEFAULT_PREP_MINUTES): Milestones {
   const ms = Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+  const { rehearse, final } = thresholds(prepMinutes);
+  const items: readonly Omit<Milestone, "state">[] = [
+    { id: "generate", label: "Diaporama à générer", fromMinutes: null },
+    { id: "rehearse", label: `Reste ${rehearse} min : répétez`, fromMinutes: rehearse },
+    { id: "final", label: "Dernières minutes", fromMinutes: final },
+  ];
   const current: Milestones["current"] =
-    ms === 0
-      ? "over"
-      : ms <= FINAL_FROM_MINUTES * MINUTE_MS
-        ? "final"
-        : ms <= REHEARSE_FROM_MINUTES * MINUTE_MS
-          ? "rehearse"
-          : "generate";
-  const currentIndex = current === "over" ? MILESTONES.length : MILESTONES.findIndex((m) => m.id === current);
+    ms === 0 ? "over" : ms <= final * MINUTE_MS ? "final" : ms <= rehearse * MINUTE_MS ? "rehearse" : "generate";
+  const currentIndex = current === "over" ? items.length : items.findIndex((m) => m.id === current);
   return {
     current,
-    items: MILESTONES.map((m, i) => ({
+    items: items.map((m, i) => ({
       ...m,
       state: i < currentIndex ? "past" : i === currentIndex ? "current" : "upcoming",
     })),

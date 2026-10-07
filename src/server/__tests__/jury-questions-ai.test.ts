@@ -95,3 +95,32 @@ describe("juryQuestionsGeneratorFor", () => {
     expect(ai.generateStructured).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("generateJuryQuestions — demandes simultanées", () => {
+  it("devrait fusionner deux demandes simultanées du même utilisateur sur le même diaporama (un seul appel)", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const generate = vi.fn(async () => {
+      await gate;
+      return QUESTIONS;
+    });
+    const generator = { engine: "mistral" as const, generate };
+    const first = service.generateJuryQuestions("u1", "d1", { generator });
+    const second = service.generateJuryQuestions("u1", "d1", { generator });
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    release();
+    expect(await first).toEqual(await second);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(repo.replaceQuestions).toHaveBeenCalledTimes(1);
+  });
+
+  it("ne devrait pas fusionner les demandes de deux utilisateurs", async () => {
+    const generate = vi.fn(async () => QUESTIONS);
+    const generator = { engine: "mistral" as const, generate };
+    await Promise.all([
+      service.generateJuryQuestions("u1", "d1", { generator }),
+      service.generateJuryQuestions("u2", "d1", { generator }),
+    ]);
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+});

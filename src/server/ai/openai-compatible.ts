@@ -15,6 +15,7 @@ import { createLogger } from "../logger";
 import { deckMaxTokens } from "./anthropic";
 import { PROVIDER_CATALOG } from "./catalog";
 import { readBoundedText, ResponseTooLargeError } from "./http";
+import { retryAfterSeconds } from "./retry-after";
 import { checkShape, parseJson, strict } from "./structured";
 import { STRUCTURED_TASKS } from "./tasks";
 import type { AiProvider, CallOptions, DeckHints, StructuredRequest, StructuredResult } from "./types";
@@ -48,8 +49,6 @@ const DEFAULT_STRUCTURED_BUDGET_MS = 120_000;
 const CLASSIFY_MAX_TOKENS = 4_000;
 /** Plafond de sortie d'un deck (les modèles de ces fournisseurs plafonnent bien en dessous de 64 k). */
 const DECK_MAX_TOKENS_CAP = 32_000;
-const DEFAULT_RETRY_AFTER_S = 60;
-const MAX_RETRY_AFTER_S = 3_600;
 
 const log = createLogger({ component: "ai.openai_compatible" });
 
@@ -152,21 +151,6 @@ function errorInfo(text: string): ErrorInfo {
     type: e.type ?? e.status ?? "",
     code: [e.code ?? "", e.param ?? ""].filter(Boolean).join(" "),
   };
-}
-
-/** Retry-After en secondes (entier ou date HTTP), borné ; défaut 60 s. */
-export function retryAfterSeconds(header: string | null, now = Date.now()): number {
-  const raw = header?.trim();
-  let seconds = Number.NaN;
-  if (raw) {
-    if (/^\d+$/.test(raw)) seconds = Number(raw);
-    else {
-      const at = Date.parse(raw);
-      if (Number.isFinite(at)) seconds = Math.ceil((at - now) / 1000);
-    }
-  }
-  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_RETRY_AFTER_S;
-  return Math.min(MAX_RETRY_AFTER_S, Math.max(1, Math.round(seconds)));
 }
 
 function mentionsSchema(info: ErrorInfo): boolean {
@@ -278,8 +262,8 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
     let mode = preferredMode;
 
     for (;;) {
+      const unreachable = `${label} est injoignable pour le moment. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Rédaction IA.`;
       let response: Response;
-      let text: string;
       try {
         response = await doFetch(url, {
           method: "POST",
@@ -288,17 +272,21 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
           redirect: "error",
           signal,
         });
+      } catch (error) {
+        if (signal.aborted) throw timedOut(operation, error);
+        // Aucune réponse obtenue : rien n'a été calculé, l'unité de quota est restituable.
+        throw new AiUnavailableError(`${operation}: connexion à ${provider}`, { cause: error, refundable: true, userMessage: unreachable });
+      }
+      let text: string;
+      try {
         text = await readBoundedText(response);
       } catch (error) {
         if (error instanceof ResponseTooLargeError) {
           throw new AiInvalidOutputError(`${operation}: réponse ${provider} trop volumineuse`, { cause: error });
         }
         if (signal.aborted) throw timedOut(operation, error);
-        throw new AiUnavailableError(`${operation}: connexion à ${provider}`, {
-          cause: error,
-          refundable: true,
-          userMessage: `${label} est injoignable pour le moment. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Rédaction IA.`,
-        });
+        // Réponse déjà obtenue (le fournisseur a calculé), coupée pendant la lecture : pas de remboursement.
+        throw new AiUnavailableError(`${operation}: lecture de la réponse ${provider} interrompue`, { cause: error, userMessage: unreachable });
       }
 
       if (!response.ok) {

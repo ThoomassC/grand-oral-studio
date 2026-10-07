@@ -149,6 +149,28 @@ describe("migration aadScheme 1 → 2 (clés recopiées de la 1.1)", () => {
     expect((await load(a.id, "claude"))!.apiKey).toBe(other);
   });
 
+  it("devrait renvoyer la clé déchiffrée et journaliser l'échec du rechiffrement (sans exposer la clé)", async () => {
+    const a = await createUser("a");
+    await seedLegacyClaude(a.id);
+    const real = box();
+    const failing = {
+      currentVersion: real.currentVersion,
+      open: real.open.bind(real),
+      isStale: real.isStale.bind(real),
+      seal: () => {
+        throw new Error("rechiffrement impossible");
+      },
+    };
+    const log = recordingLogger();
+    expect(await loadCredential(a.id, "claude", { env: ENV, log, box: failing })).toEqual({ apiKey: CLAUDE_KEY, model: null });
+    const failure = log.events.find((e) => e.event === "ai_key.rewrap_failed");
+    expect(failure).toMatchObject({ level: "error", fields: { provider: "claude", fromScheme: 1 } });
+    expect(JSON.stringify(log.events)).not.toContain(CLAUDE_KEY);
+    // Rien n'a été écrit : la ligne reste à rechiffrer à la prochaine lecture.
+    const row = await db().userAiCredential.findUniqueOrThrow({ where: { userId_provider: { userId: a.id, provider: "claude" } } });
+    expect(row.aadScheme).toBe(1);
+  });
+
   it("ne devrait plus lire les colonnes historiques de user_ai_settings", async () => {
     const a = await createUser("a");
     const sealed = box().seal(CLAUDE_KEY, a.id);
@@ -157,6 +179,38 @@ describe("migration aadScheme 1 → 2 (clés recopiées de la 1.1)", () => {
     });
     expect(await load(a.id, "claude")).toBeNull();
     expect(await listCredentials(a.id)).toEqual([]);
+  });
+});
+
+describe("saveCredential — colonnes historiques anthropicKey*", () => {
+  const legacyCleared = { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null };
+
+  it("devrait vider les colonnes historiques en enregistrant une nouvelle clé Claude (la copie 1.1 ne survit pas)", async () => {
+    const a = await createUser("a");
+    await seedLegacyClaude(a.id);
+    const other = `sk-ant-api03-${"n".repeat(60)}NNNN`;
+    await save(a.id, "claude", other);
+    const settings = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(settings).toMatchObject({ ...legacyCleared, engine: "claude" });
+    expect((await load(a.id, "claude"))!.apiKey).toBe(other);
+  });
+
+  it("devrait les vider aussi quand l'enregistrement choisit le rédacteur (même transaction)", async () => {
+    const a = await createUser("a");
+    await seedLegacyClaude(a.id);
+    await saveCredential(a.id, "claude", { apiKey: CLAUDE_KEY, model: null, verifiedAt: new Date() }, box(), {
+      select: { engine: "claude", keySource: "user" },
+    });
+    const settings = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(settings).toMatchObject({ ...legacyCleared, engine: "claude", keySource: "user" });
+  });
+
+  it("ne devrait pas toucher aux colonnes historiques en enregistrant une autre clé", async () => {
+    const a = await createUser("a");
+    const legacy = await seedLegacyClaude(a.id);
+    await save(a.id, "mistral", MISTRAL_KEY);
+    const settings = await db().userAiSettings.findUniqueOrThrow({ where: { userId: a.id } });
+    expect(settings.anthropicKeyCiphertext).toBe(legacy.ciphertext);
   });
 });
 

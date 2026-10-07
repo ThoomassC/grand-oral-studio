@@ -145,8 +145,13 @@ async function billedAiCall<T>(userId: string, deps: AiGenerationDeps, call: () 
     return await call();
   } catch (error) {
     if (isRefundableAiError(error)) {
-      await refundAiQuotaFor(deps.billing ?? "server", userId, 1);
-      deps.log.info("ai.quota_refunded", { code: isAppError(error) ? error.code : null });
+      // Un échec du remboursement est journalisé : il ne masque jamais l'erreur d'origine.
+      try {
+        await refundAiQuotaFor(deps.billing ?? "server", userId, 1);
+        deps.log.info("ai.quota_refunded", { code: isAppError(error) ? error.code : null });
+      } catch (refundError) {
+        deps.log.error("ai.quota_refund_failed", { code: isAppError(error) ? error.code : null, error: refundError });
+      }
     }
     throw error;
   }
@@ -296,7 +301,8 @@ interface DraftedDeck {
  * engagée que s'il reste au moins 120 s avant l'échéance. Chaque appel reçoit
  * le budget min(240 s, restant − 10 s). Le meilleur des deux est gardé ; s'il
  * reste hors seuil, des avertissements le disent. Un échec de la seconde
- * tentative (quota, panne) ne perd jamais la première.
+ * tentative (quota atteint, toute erreur de l'appel IA) ne perd jamais la
+ * première ; seule une panne hors appel IA (base) remonte.
  */
 async function draftFinalDeckWithRetry(
   userId: string,
@@ -353,17 +359,36 @@ async function draftFinalDeckWithRetry(
     warnings.push(...qualityWarnings(first.quality));
     return { ...first, warnings, attempts };
   }
+  const keepFirst = (reason: string) => warnings.push(`Nouvelle tentative impossible (${reason}) : le premier résultat est conservé.`);
+  let quotaOk = true;
   try {
     await consumeAiQuotaFor(billing, userId, 1);
-    attempts = 2;
-    const second = assess(await call(qualityFeedback(first.quality, template)));
-    logQuality(2, second.quality);
-    best = pickBetterDeck(first, second);
   } catch (error) {
-    // Bug ou panne de base : remonte. Erreur attendue (quota, IA indisponible ou hors contrat) : la première tentative reste.
+    // Panne de base hors appel IA : remonte. Quota atteint (erreur attendue) : la première tentative reste.
     if (!isAppError(error)) throw error;
+    quotaOk = false;
     deps.log.warn("deck.final_retry_failed", { themeId: subject?.id ?? null, code: error.code });
-    warnings.push(`Nouvelle tentative impossible (${error.userMessage}) : le premier résultat est conservé.`);
+    keepFirst(error.userMessage);
+  }
+  if (quotaOk) {
+    attempts = 2;
+    let second: ReturnType<typeof assess> | null = null;
+    try {
+      second = assess(await call(qualityFeedback(first.quality, template)));
+    } catch (error) {
+      // Toute erreur de l'appel IA (attendue ou non) garde la première version, déjà payée.
+      if (isAppError(error)) {
+        deps.log.warn("deck.final_retry_failed", { themeId: subject?.id ?? null, code: error.code });
+        keepFirst(error.userMessage);
+      } else {
+        deps.log.error("deck.final_retry_failed", { themeId: subject?.id ?? null, error });
+        keepFirst("réponse inattendue du rédacteur");
+      }
+    }
+    if (second) {
+      logQuality(2, second.quality);
+      best = pickBetterDeck(first, second);
+    }
   }
   if (!best.quality.ok) warnings.push(...qualityWarnings(best.quality));
   return { ...best, warnings, attempts };

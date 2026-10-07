@@ -154,6 +154,52 @@ describe("regenerateSlide", () => {
     expect(refundAiQuotaFor).not.toHaveBeenCalled();
   });
 
+  it("devrait réappliquer la problématique à la couverture réécrite (sous-titre conservé)", async () => {
+    generateStructured.mockResolvedValue({ ...AI_SLIDE, layout: "content", title: "Une couverture réécrite", subtitle: "Un sous-titre inventé" });
+    expect((await actions.regenerateSlide("d1", 0, VERSION)).ok).toBe(true);
+    const written = repo.updateDeckSlide.mock.calls[0]![3] as Slide;
+    expect(written).toMatchObject({ layout: "title", sectionId: "cover", subtitle: "Comment concilier mobilité et sobriété ?" });
+  });
+
+  it("devrait réécrire la problématique sur la diapo de la ligne « problématique »", async () => {
+    generateStructured.mockResolvedValue({ ...AI_SLIDE, title: "Une autre question ?", bullets: ["Une question inventée ?"] });
+    expect((await actions.regenerateSlide("d1", 2, VERSION)).ok).toBe(true);
+    const written = repo.updateDeckSlide.mock.calls[0]![3] as Slide;
+    expect(written.bullets[0]).toBe("Comment concilier mobilité et sobriété ?");
+    expect(written.bullets).not.toContain("Une question inventée ?");
+  });
+
+  it("ne devrait rien imposer sans problématique (ancien squelette)", async () => {
+    repo.getSlideEditContext.mockResolvedValue({ programId: "p1", spec: SPEC, updatedAt: VERSION, problem: "", template: makeTemplate(), subject: null });
+    generateStructured.mockResolvedValue({ ...AI_SLIDE, subtitle: "Libre" });
+    expect((await actions.regenerateSlide("d1", 0, VERSION)).ok).toBe(true);
+    expect((repo.updateDeckSlide.mock.calls[0]![3] as Slide).subtitle).toBe("Libre");
+  });
+
+  it("devrait remonter l'erreur d'origine du fournisseur même si le remboursement échoue", async () => {
+    generateStructured.mockRejectedValue(new AiProviderRateLimitedError("mistral", 30));
+    refundAiQuotaFor.mockRejectedValue(new Error("base indisponible"));
+    expect(await actions.regenerateSlide("d1", 3, VERSION)).toMatchObject({ ok: false, code: "AI_RATE_LIMITED", retryAfterSeconds: 30 });
+  });
+
+  it("devrait fusionner deux demandes simultanées sur la même diapo et la même version (un seul appel IA)", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    generateStructured.mockImplementation(async () => {
+      await gate;
+      return AI_SLIDE;
+    });
+    const first = actions.regenerateSlide("d1", 3, VERSION);
+    const second = actions.regenerateSlide("d1", 3, VERSION);
+    await vi.waitFor(() => expect(generateStructured).toHaveBeenCalledTimes(1));
+    release();
+    expect((await first).ok).toBe(true);
+    expect((await second).ok).toBe(true);
+    expect(generateStructured).toHaveBeenCalledTimes(1);
+    expect(consumeAiQuotaFor).toHaveBeenCalledTimes(1);
+    expect(repo.updateDeckSlide).toHaveBeenCalledTimes(1);
+  });
+
   it("devrait refuser un index ou une version illisibles avant tout appel", async () => {
     expect((await actions.regenerateSlide("d1", -1, VERSION)).ok).toBe(false);
     expect((await actions.regenerateSlide("d1", 1, "hier")).ok).toBe(false);
