@@ -57,7 +57,15 @@ export function attachmentHeader(filename: string, unicodeName?: string): string
   return unicodeName && unicodeName !== filename ? `${plain}; filename*=UTF-8''${encodeRfc5987(unicodeName)}` : plain;
 }
 
-const ENGINE_LABEL: Record<DeckEngine, string> = { free: "Gratuit", ollama: "Ollama", claude: "Claude", mock: "Démo" };
+const ENGINE_LABEL: Record<DeckEngine, string> = {
+  free: "Gratuit",
+  ollama: "Ollama",
+  claude: "Claude",
+  mistral: "Mistral",
+  gemini: "Gemini",
+  openai: "OpenAI",
+  mock: "Démo",
+};
 
 export interface DeckFileInfo {
   /** null : deck final sans sujet (la partie est alors omise). */

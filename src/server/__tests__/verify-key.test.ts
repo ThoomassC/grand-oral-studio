@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { verifyAnthropicKey } from "@/server/ai/verify-key";
+import { verifyAnthropicKey, verifyOpenAiCompatibleKey, verifyProviderKey } from "@/server/ai/verify-key";
 
 /** `fetch` factice : aucune requête réseau réelle. */
 function fakeFetch(respond: (url: string, init?: RequestInit) => Response | Promise<Response>) {
@@ -73,5 +73,50 @@ describe("verifyAnthropicKey", () => {
       ok: false,
       reason: "unavailable",
     });
+  });
+});
+
+describe("verifyOpenAiCompatibleKey (1.2)", () => {
+  function statusFetch(...statuses: (number | Error)[]) {
+    const calls: { url: string; auth: string | null; method?: string; redirect?: RequestRedirect }[] = [];
+    const impl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      calls.push({ url: String(input), auth: new Headers(init?.headers).get("authorization"), method: init?.method, redirect: init?.redirect });
+      const next = statuses.shift() ?? 500;
+      if (next instanceof Error) throw next;
+      const body = next === 400 ? { error: { message: "API key not valid. Please pass a valid API key." } } : { data: [] };
+      return new Response(JSON.stringify(body), { status: next });
+    };
+    return { impl, calls };
+  }
+
+  it("devrait vérifier par GET {base}/models avec la clé en Bearer, sans suivre de redirection", async () => {
+    const f = statusFetch(200);
+    expect(await verifyOpenAiCompatibleKey("mistral", "m-key", { fetch: f.impl })).toEqual({ ok: true });
+    expect(f.calls).toEqual([{ url: "https://api.mistral.ai/v1/models", auth: "Bearer m-key", method: "GET", redirect: "error" }]);
+  });
+
+  it.each([401, 403])("devrait refuser la clé sur %i sans nouvelle tentative", async (status) => {
+    const f = statusFetch(status);
+    expect(await verifyOpenAiCompatibleKey("openai", "k", { fetch: f.impl, retryDelayMs: 1 })).toEqual({ ok: false, reason: "rejected" });
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it("devrait reconnaître le 400 « API key not valid » de Gemini", async () => {
+    const f = statusFetch(400);
+    expect(await verifyOpenAiCompatibleKey("gemini", "k", { fetch: f.impl })).toEqual({ ok: false, reason: "rejected" });
+    expect(f.calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/models");
+  });
+
+  it("devrait retenter une fois sur panne transitoire (429, 5xx, réseau)", async () => {
+    expect(await verifyOpenAiCompatibleKey("openai", "k", { fetch: statusFetch(503, 200).impl, retryDelayMs: 1 })).toEqual({ ok: true });
+    expect(await verifyOpenAiCompatibleKey("openai", "k", { fetch: statusFetch(new TypeError("fetch failed"), 200).impl, retryDelayMs: 1 })).toEqual({ ok: true });
+    const f = statusFetch(429, 429);
+    expect(await verifyOpenAiCompatibleKey("openai", "k", { fetch: f.impl, retryDelayMs: 1 })).toEqual({ ok: false, reason: "unavailable" });
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("devrait router un fournisseur OpenAI-compatible depuis verifyProviderKey", async () => {
+    const f = statusFetch(401);
+    expect(await verifyProviderKey("mistral", "k", { fetch: f.impl })).toEqual({ ok: false, reason: "rejected" });
   });
 });

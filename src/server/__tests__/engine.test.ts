@@ -1,17 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { billingFor, claudeAvailable, effectiveEngine, ollamaBaseUrl, planEngine } from "@/server/ai/engine";
+import type { CloudProvider, EngineId, KeySource } from "@/domain/ai-providers";
+import {
+  billingFor,
+  claudeAvailable,
+  effectiveEngine,
+  ollamaBaseUrl,
+  planEngine,
+  safePlanEngine,
+  type EngineInputs,
+  type EngineOverride,
+} from "@/server/ai/engine";
 import { AiKeyRequiredError, EngineUnavailableError } from "@/server/errors";
 
 const prod = { NODE_ENV: "production" } as const;
 const SERVER = { ANTHROPIC_API_KEY: "sk-ant-server" } as const;
 const OLLAMA = { OLLAMA_BASE_URL: "http://localhost:11434/" } as const;
 
-const input = (over: Partial<Parameters<typeof planEngine>[0]> = {}) => ({
-  selected: null,
-  hasUserKey: false,
-  ollamaModel: null,
-  env: prod,
-  ...over,
+interface Over {
+  selected?: EngineId | null;
+  keySource?: KeySource | null;
+  /** Raccourci 1.1 : une clé Claude personnelle est enregistrée. */
+  hasUserKey?: boolean;
+  connections?: CloudProvider[];
+  ollamaModel?: string | null;
+  env?: Record<string, string | undefined>;
+  override?: EngineOverride | null;
+}
+
+const input = (over: Over = {}): EngineInputs => ({
+  selection: { engine: over.selected ?? null, keySource: over.keySource ?? null },
+  connections: over.connections ?? (over.hasUserKey ? ["claude"] : []),
+  ollamaModel: over.ollamaModel ?? null,
+  env: over.env ?? prod,
+  override: over.override ?? null,
 });
 
 describe("planEngine — sans préférence", () => {
@@ -117,5 +138,101 @@ describe("AI_PROVIDER invalide", () => {
   it("ne devrait pas lever dans les fonctions d'affichage", () => {
     expect(() => effectiveEngine(input({ env: bad }))).not.toThrow();
     expect(claudeAvailable({ hasUserKey: false, env: bad })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 : fournisseurs cloud, origine de la clé, surcharge ponctuelle
+// ---------------------------------------------------------------------------
+
+const MISTRAL_TEAM = { MISTRAL_API_KEY: "mistral-team-key" } as const;
+
+describe("planEngine — sélection héritée de la 1.1 (keySource NULL)", () => {
+  it("devrait garder la règle 1.1 pour Claude choisi : clé personnelle, sinon clé du serveur", () => {
+    expect(planEngine(input({ selected: "claude", hasUserKey: true, env: { ...prod, ...SERVER } }))).toEqual({ engine: "claude", keySource: "user" });
+    expect(planEngine(input({ selected: "claude", env: { ...prod, ...SERVER } }))).toEqual({ engine: "claude", keySource: "server" });
+  });
+
+  it("ne devrait jamais choisir implicitement un autre fournisseur que Claude sans préférence", () => {
+    expect(planEngine(input({ connections: ["mistral"], env: { ...prod, ...MISTRAL_TEAM } }))).toEqual({ engine: "free" });
+  });
+
+  it("devrait appliquer la même règle à un autre fournisseur choisi sans origine de clé", () => {
+    expect(planEngine(input({ selected: "mistral", connections: ["mistral"] }))).toEqual({ engine: "mistral", keySource: "user" });
+    expect(planEngine(input({ selected: "mistral", env: { ...prod, ...MISTRAL_TEAM } }))).toEqual({ engine: "mistral", keySource: "server" });
+    expect(() => planEngine(input({ selected: "mistral" }))).toThrow(AiKeyRequiredError);
+  });
+});
+
+describe("planEngine — origine de clé explicite", () => {
+  it("devrait utiliser la clé personnelle choisie, sans repli sur la clé d'équipe", () => {
+    expect(planEngine(input({ selected: "gemini", keySource: "user", connections: ["gemini"] }))).toEqual({ engine: "gemini", keySource: "user" });
+    const error = (() => {
+      try {
+        planEngine(input({ selected: "gemini", keySource: "user", env: { ...prod, GEMINI_API_KEY: "g" } }));
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(AiKeyRequiredError);
+    expect((error as AiKeyRequiredError).userMessage).toMatch(/Gemini/);
+  });
+
+  it("devrait utiliser la clé d'équipe choisie même quand une clé personnelle existe", () => {
+    expect(planEngine(input({ selected: "openai", keySource: "server", connections: ["openai"], env: { ...prod, OPENAI_API_KEY: "o" } }))).toEqual({
+      engine: "openai",
+      keySource: "server",
+    });
+  });
+
+  it("devrait refuser la clé d'équipe absente du serveur, sans repli sur la clé personnelle", () => {
+    expect(() => planEngine(input({ selected: "mistral", keySource: "server", connections: ["mistral"] }))).toThrow(EngineUnavailableError);
+  });
+
+  it("devrait remplacer la clé d'équipe Claude par le mock avec AI_PROVIDER=mock (dev/tests)", () => {
+    expect(planEngine(input({ selected: "claude", keySource: "server", env: { AI_PROVIDER: "mock" } }))).toEqual({ engine: "mock" });
+    expect(planEngine(input({ selected: "claude", keySource: "user", connections: ["claude"], env: { AI_PROVIDER: "mock" } }))).toEqual({
+      engine: "claude",
+      keySource: "user",
+    });
+    expect(() => planEngine(input({ selected: "mistral", keySource: "server", env: { AI_PROVIDER: "mock" } }))).toThrow(EngineUnavailableError);
+  });
+});
+
+describe("planEngine — surcharge ponctuelle (repli en un clic)", () => {
+  it("devrait primer sur la sélection enregistrée", () => {
+    expect(planEngine(input({ selected: "claude", hasUserKey: true, override: { engine: "free" } }))).toEqual({ engine: "free" });
+    expect(planEngine(input({ selected: "claude", hasUserKey: true, connections: ["claude", "mistral"], override: { engine: "mistral", keySource: "user" } }))).toEqual({
+      engine: "mistral",
+      keySource: "user",
+    });
+    expect(planEngine(input({ selected: "free", override: { engine: "mistral", keySource: "server" }, env: { ...prod, ...MISTRAL_TEAM } }))).toEqual({
+      engine: "mistral",
+      keySource: "server",
+    });
+  });
+
+  it("ne devrait jamais basculer quand la surcharge est inutilisable", () => {
+    expect(() => planEngine(input({ hasUserKey: true, override: { engine: "mistral", keySource: "user" } }))).toThrow(AiKeyRequiredError);
+    expect(() => planEngine(input({ connections: ["openai"], override: { engine: "openai", keySource: "server" } }))).toThrow(EngineUnavailableError);
+  });
+});
+
+describe("safePlanEngine / effectiveEngine / billingFor (1.2)", () => {
+  it("devrait renvoyer l'erreur au lieu de lever", () => {
+    const r = safePlanEngine(input({ selected: "mistral", keySource: "user" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBeInstanceOf(AiKeyRequiredError);
+    expect(safePlanEngine(input())).toEqual({ ok: true, plan: { engine: "free" } });
+  });
+
+  it("devrait annoncer le fournisseur choisi même indisponible", () => {
+    expect(effectiveEngine(input({ selected: "mistral", keySource: "user" }))).toBe("mistral");
+    expect(effectiveEngine(input({ selected: "claude", keySource: "user", connections: ["claude"], env: { AI_PROVIDER: "mock" } }))).toBe("claude");
+  });
+
+  it("devrait facturer la clé personnelle à l'utilisateur et la clé d'équipe au serveur", () => {
+    expect(billingFor({ engine: "mistral", keySource: "user" })).toBe("user");
+    expect(billingFor({ engine: "gemini", keySource: "server" })).toBe("server");
   });
 });

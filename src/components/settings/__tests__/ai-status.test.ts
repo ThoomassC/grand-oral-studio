@@ -4,7 +4,14 @@ import type { AiSettingsView } from "@/server/repo/types";
 
 describe("toAiSetupStatus", () => {
   function view(overrides: Partial<AiSettingsView> = {}, ollamaConfigured = false): AiSettingsView {
+    const ollama = { configured: ollamaConfigured, reachable: ollamaConfigured, models: ollamaConfigured ? ["mistral"] : [], selectedModel: null };
     return {
+      connections: [],
+      team: [],
+      selection: { engine: null, keySource: null },
+      effective: { engine: "free", keySource: null, model: null, ready: true, problem: null },
+      mock: false,
+      ollama,
       userKey: { configured: false, last4: null, updatedAt: null },
       effectiveSource: "none",
       model: "claude-opus-5-5",

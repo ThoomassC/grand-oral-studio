@@ -1,10 +1,18 @@
 import { getDeck as repoGetDeck, listFinalDecks as repoListFinalDecks } from "./repo/decks";
 import { getProgram as repoGetProgram, listPrograms as repoListPrograms } from "./repo/programs";
 import { getProfile as repoGetProfile } from "./repo/profile";
-import type { AiSettingsView, DeckWithProgram, FinalDeckSummary, ProfileView, ProgramDetail, ProgramSummary } from "./repo/types";
+import type {
+  AiSettingsView,
+  DeckWithProgram,
+  FinalDeckSummary,
+  ProfileView,
+  ProgramDetail,
+  ProgramSummary,
+  WriterView,
+} from "./repo/types";
 import { listOllamaModels } from "./ai/ollama";
 import { createLogger } from "./logger";
-import { getAiSettingsView } from "./services/ai-settings";
+import { getAiSettingsView, getWriterView } from "./services/ai-settings";
 
 /**
  * Lectures pour les Server Components. `userId` est explicite (obtenu par
@@ -15,7 +23,18 @@ import { getAiSettingsView } from "./services/ai-settings";
  */
 
 export type { DeckWithProgram, FinalDeckSummary, ProgramDetail, ProgramSummary } from "./repo/types";
-export type { AiSettingsView, DeckView, ProfileView, ProgramRole, SignInMethod, ThemeView, ThemeWithSkeleton } from "./repo/types";
+export type {
+  AiConnectionView,
+  AiSettingsView,
+  AiWriterState,
+  DeckView,
+  ProfileView,
+  ProgramRole,
+  SignInMethod,
+  ThemeView,
+  ThemeWithSkeleton,
+  WriterView,
+} from "./repo/types";
 export { ForbiddenError, NotFoundError } from "./errors";
 
 /** Profil de l'utilisateur connecté (page /profil) ; null si le compte n'existe plus. */
@@ -48,4 +67,12 @@ export function getAiSettings(userId: string): Promise<AiSettingsView> {
     log: createLogger({ query: "getAiSettings" }),
     listOllamaModels: (baseUrl) => listOllamaModels(baseUrl),
   });
+}
+
+/**
+ * Rédacteur actuel de l'utilisateur, pour les bandeaux (« Rédaction : X ») : une
+ * lecture en base, sans sonde Ollama ni déchiffrement. Ne contient jamais de clé.
+ */
+export function getWriter(userId: string): Promise<WriterView> {
+  return getWriterView(userId, { env: process.env });
 }

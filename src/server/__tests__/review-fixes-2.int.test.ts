@@ -38,7 +38,7 @@ async function setup() {
 
 function failingDeck(error: Error): AiProvider {
   const mock = createMockProvider();
-  return { name: "ollama:test", engine: "ollama", classify: mock.classify, generateDeck: async () => Promise.reject(error) };
+  return { name: "ollama:test", engine: "ollama", classify: mock.classify, generateDeck: async () => Promise.reject(error), generateStructured: mock.generateStructured };
 }
 
 describe("S3 — plafond global Ollama", () => {
@@ -155,7 +155,7 @@ describe("B8 — remboursement du quota", () => {
     const { a, programId } = await setup();
     const mock = createMockProvider();
     const bug = new TypeError("bug");
-    const ai: AiProvider = { name: "x", generateDeck: mock.generateDeck, classify: async () => Promise.reject(bug) };
+    const ai: AiProvider = { name: "x", generateDeck: mock.generateDeck, classify: async () => Promise.reject(bug), generateStructured: mock.generateStructured };
     await expect(gen.classifyProblem(a.id, programId, { problem: PROBLEM, hintedThemeId: null }, { ai, log: recordingLogger() })).rejects.toBe(bug);
   });
 });

@@ -21,8 +21,9 @@ import {
 import { createLogger } from "../logger";
 import { createAnthropicClient } from "./anthropic-client";
 import { DEFAULT_MODEL } from "./model";
-import { parseStructured, strict } from "./structured";
-import type { AiProvider, DeckHints } from "./types";
+import { parseJson, parseStructured, strict } from "./structured";
+import { STRUCTURED_TASKS } from "./tasks";
+import type { AiProvider, CallOptions, DeckHints, StructuredRequest, StructuredResult, StructuredTask } from "./types";
 
 /**
  * Fournisseur Anthropic.
@@ -41,6 +42,8 @@ import type { AiProvider, DeckHints } from "./types";
  * trame, AUCUNE nouvelle tentative (un deck coûte cher et le budget de temps
  * doit rester borné), budget total par AbortSignal.
  * Classification : requête simple, une nouvelle tentative au plus.
+ * Tâches structurées (questions du jury, une diapo) : requête simple, aucune
+ * nouvelle tentative. `CallOptions.budgetMs` remplace le budget par défaut.
  *
  * Repli serveur en cas de refus : betas "server-side-fallback-2026-07-01" +
  * fallbacks "default". Pas de temperature, pas de budget_tokens, pas de prefill.
@@ -50,6 +53,7 @@ export { DEFAULT_MODEL };
 
 const DEFAULT_DECK_BUDGET_MS = Number(process.env.AI_DECK_TIMEOUT_MS ?? 240_000);
 const DEFAULT_CLASSIFY_BUDGET_MS = 90_000;
+const DEFAULT_STRUCTURED_BUDGET_MS = 120_000;
 const CLASSIFY_ATTEMPT_TIMEOUT_MS = 45_000;
 const CLASSIFY_MAX_TOKENS = 4_000;
 
@@ -73,6 +77,10 @@ function jsonFormat(schema: z.ZodType) {
 
 const DECK_FORMAT = jsonFormat(RawDeckSpecSchema);
 const CLASSIFY_FORMAT = jsonFormat(RawClassificationSchema);
+const TASK_FORMATS = {
+  juryQuestions: jsonFormat(STRUCTURED_TASKS.juryQuestions.raw),
+  slide: jsonFormat(STRUCTURED_TASKS.slide.raw),
+} as const;
 
 export interface AnthropicProviderOptions {
   apiKey: string;
@@ -81,6 +89,7 @@ export interface AnthropicProviderOptions {
   fetch?: typeof fetch;
   deckBudgetMs?: number;
   classifyBudgetMs?: number;
+  structuredBudgetMs?: number;
   /**
    * Propriétaire de la clé. "user" : une 401/403 est une erreur ATTENDUE
    * (AiKeyRejectedError, à corriger dans la Configuration IA) ; "server" (défaut) : c'est
@@ -89,12 +98,16 @@ export interface AnthropicProviderOptions {
   keySource?: "user" | "server";
 }
 
-type Operation = "generateDeck" | "classify";
+type Operation = "generateDeck" | "classify" | StructuredTask;
+
+const budget = (options: CallOptions | undefined, fallback: number) =>
+  options?.budgetMs !== undefined && options.budgetMs > 0 ? options.budgetMs : fallback;
 
 export function createAnthropicProvider(options: AnthropicProviderOptions): AiProvider {
   const model = options.model || DEFAULT_MODEL;
   const deckBudgetMs = options.deckBudgetMs ?? DEFAULT_DECK_BUDGET_MS;
   const classifyBudgetMs = options.classifyBudgetMs ?? DEFAULT_CLASSIFY_BUDGET_MS;
+  const structuredBudgetMs = options.structuredBudgetMs ?? DEFAULT_STRUCTURED_BUDGET_MS;
   const keySource = options.keySource ?? "server";
   const client = createAnthropicClient({ apiKey: options.apiKey, fetch: options.fetch, maxRetries: 0 });
 
@@ -135,22 +148,33 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
     name: `anthropic:${model}`,
     engine: "claude",
 
-    async generateDeck(prompt: PromptPair, hints?: DeckHints): Promise<DeckSpec> {
+    async generateDeck(prompt: PromptPair, hints?: DeckHints, options?: CallOptions): Promise<DeckSpec> {
       const params = baseParams(prompt, deckMaxTokens(hints?.template), "medium", DECK_FORMAT);
-      const message = await run("generateDeck", deckBudgetMs, (signal) =>
-        client.beta.messages.stream(params, { signal, maxRetries: 0, timeout: deckBudgetMs }).finalMessage(),
+      const budgetMs = budget(options, deckBudgetMs);
+      const message = await run("generateDeck", budgetMs, (signal) =>
+        client.beta.messages.stream(params, { signal, maxRetries: 0, timeout: budgetMs }).finalMessage(),
       );
       const raw = interpret("generateDeck", message, RawDeckSpecSchema);
       return strict("generateDeck", DeckSpecSchema, normalizeDeckSpec(raw));
     },
 
-    async classify(prompt: PromptPair): Promise<Classification> {
+    async classify(prompt: PromptPair, _hints?: unknown, options?: CallOptions): Promise<Classification> {
       const params = baseParams(prompt, CLASSIFY_MAX_TOKENS, "low", CLASSIFY_FORMAT);
-      const message = await run("classify", classifyBudgetMs, (signal) =>
+      const message = await run("classify", budget(options, classifyBudgetMs), (signal) =>
         client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 1, timeout: CLASSIFY_ATTEMPT_TIMEOUT_MS }),
       );
       const raw = interpret("classify", message, RawClassificationSchema);
       return strict("classify", ClassificationSchema, normalizeRawClassification(raw));
+    },
+
+    async generateStructured<R extends StructuredRequest>(req: R, options?: CallOptions): Promise<StructuredResult<R>> {
+      const spec = STRUCTURED_TASKS[req.task];
+      const params = baseParams(req.prompt, spec.maxTokens, "medium", TASK_FORMATS[req.task]);
+      const budgetMs = budget(options, structuredBudgetMs);
+      const message = await run(req.task, budgetMs, (signal) =>
+        client.beta.messages.create({ ...params, stream: false }, { signal, maxRetries: 0, timeout: budgetMs }),
+      );
+      return spec.finish(parseJson(req.task, messageText(req.task, message))) as StructuredResult<R>;
     },
   };
 }
@@ -159,8 +183,8 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): AiPr
 // Interprétation de la réponse (fonctions pures, exportées pour les tests)
 // ---------------------------------------------------------------------------
 
-/** stop_reason d'abord, puis JSON, puis schéma permissif. */
-export function interpret<S extends z.ZodType>(operation: Operation, message: BetaMessage, schema: S): z.output<S> {
+/** stop_reason d'abord, puis le texte (lève si vide). */
+function messageText(operation: Operation, message: BetaMessage): string {
   if (message.stop_reason === "refusal") {
     throw new AiRefusalError(message.stop_details?.category ?? null);
   }
@@ -174,9 +198,13 @@ export function interpret<S extends z.ZodType>(operation: Operation, message: Be
   if (!text) {
     throw new AiInvalidOutputError(`${operation}: réponse sans texte (stop_reason=${message.stop_reason})`);
   }
-  return parseStructured(operation, text, schema);
+  return text;
 }
 
+/** stop_reason d'abord, puis JSON, puis schéma permissif. */
+export function interpret<S extends z.ZodType>(operation: Operation, message: BetaMessage, schema: S): z.output<S> {
+  return parseStructured(operation, messageText(operation, message), schema);
+}
 
 /**
  * Erreurs du SDK → erreurs typées. Indisponibilité (réseau, 429, 5xx, budget de

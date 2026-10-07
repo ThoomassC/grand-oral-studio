@@ -1,3 +1,4 @@
+import type { CloudProvider, EngineId, KeySource } from "@/domain/ai-providers";
 import type { ThemeRef } from "@/domain/contracts";
 import type { Brand, DeckSpec, PromptTemplate } from "@/domain/schemas";
 import type { ProjectProgress, ProjectProgressSummary } from "@/domain/progress";
@@ -27,8 +28,8 @@ export interface ProgramSummary {
   ownerName: string | null;
 }
 
-/** Moteur qui a produit un deck ("free" : généré sans IA, à compléter). */
-export type DeckEngine = "claude" | "ollama" | "free" | "mock";
+/** Moteur qui a produit un deck ("free" : généré sans IA, à compléter ; "mock" : démo). */
+export type DeckEngine = EngineId | "mock";
 
 export interface DeckView {
   id: string;
@@ -105,37 +106,82 @@ export interface FinalDeckSummary {
   createdAt: Date;
 }
 
+/** Une clé personnelle enregistrée (jamais la clé : ses 4 derniers caractères). */
+export interface AiConnectionView {
+  provider: CloudProvider;
+  last4: string;
+  /** Modèle effectivement utilisé avec cette clé (celui choisi, sinon le défaut du catalogue). */
+  model: string;
+  /** Le modèle n'a pas été choisi : défaut du catalogue (AI_MODEL pour Claude). */
+  defaultModel: boolean;
+  /** ISO ; null = jamais vérifiée depuis la 1.2 (clé reprise de la 1.1). */
+  verifiedAt: string | null;
+  /** ISO. */
+  updatedAt: string;
+}
+
+/** Rédacteur qui sera tenté à la prochaine génération (calculé sans réseau ni déchiffrement). */
+export interface AiWriterState {
+  engine: EngineId | "mock";
+  /** Origine de la clé d'un fournisseur cloud ; null hors cloud (et pour un choix inutilisable sans origine). */
+  keySource: KeySource | null;
+  /** Modèle (cloud ou Ollama) ; "mock" en démo ; null pour Sans IA ou un choix inutilisable. */
+  model: string | null;
+  /** false : la génération échouera avec `problem` (jamais de bascule silencieuse). */
+  ready: boolean;
+  problem: string | null;
+}
+
+/** Vue légère pour les bandeaux (« Rédaction : X ») : sans sonde Ollama. */
+export interface WriterView extends AiWriterState {
+  /** Libellé prêt à afficher : « Mistral (votre clé) », « Claude (clé d'équipe) », « Ollama · qwen2.5 », « Sans IA ». */
+  label: string;
+}
+
 /**
  * Réglages IA d'un utilisateur, tels que montrés dans la Configuration IA. Ne contient
- * JAMAIS la clé (ni chiffrée ni en clair) : seulement ses 4 derniers caractères.
- * `model` vaut "mock" quand les générations sont simulées.
+ * JAMAIS une clé (ni chiffrée ni en clair) : seulement ses 4 derniers caractères.
  */
 export interface AiSettingsView {
+  /** Clés personnelles enregistrées, triées par fournisseur. */
+  connections: AiConnectionView[];
+  /** Fournisseurs pour lesquels le serveur fournit une clé d'équipe. */
+  team: CloudProvider[];
+  /** Choix enregistré ; engine null = choix par défaut (règle 1.1). */
+  selection: { engine: EngineId | null; keySource: KeySource | null };
+  effective: AiWriterState;
+  /** AI_PROVIDER=mock : la clé d'équipe Claude est remplacée par le mode démo. */
+  mock: boolean;
+  ollama: {
+    /** OLLAMA_BASE_URL renseignée côté serveur. */
+    configured: boolean;
+    /** Sonde GET /api/tags réussie (délai ~1,5 s). */
+    reachable: boolean;
+    /** Modèles installés, triés. */
+    models: string[];
+    /** Modèle enregistré par l'utilisateur (peut ne plus être installé). */
+    selectedModel: string | null;
+  };
+
+  // --- Vue 1.1, conservée pour l'écran actuel jusqu'au lot UI -----------------
+
+  /** @deprecated Connexion Claude ; utiliser `connections`. */
   userKey: { configured: boolean; last4: string | null; updatedAt: string | null };
-  /** Clé que le moteur Claude utiliserait ("none" : aucune). */
+  /** @deprecated Clé que Claude utiliserait ("none" : aucune). */
   effectiveSource: "user" | "server" | "mock" | "none";
-  /** Modèle Claude configuré ("mock" quand AI_PROVIDER=mock remplace la clé serveur). */
+  /** @deprecated Modèle Claude ("mock" quand AI_PROVIDER=mock remplace la clé serveur). */
   model: string;
+  /**
+   * @deprecated Utiliser `selection` et `effective`. Moteurs de la 1.1 seulement :
+   * un fournisseur ajouté en 1.2 y apparaît comme `selected: null`,
+   * `effective: "claude"` (moteur cloud).
+   */
   engine: {
-    /** Préférence enregistrée ; null = choix par défaut (Claude si une clé existe, sinon gratuit). */
     selected: "claude" | "ollama" | "free" | null;
-    /**
-     * Moteur qui sera tenté à la prochaine génération. S'il n'est pas disponible
-     * (cf. `available`), la génération échoue avec un message qui renvoie vers la Configuration IA.
-     */
     effective: "claude" | "ollama" | "free" | "mock";
     available: {
       claude: boolean;
-      ollama: {
-        /** OLLAMA_BASE_URL renseignée côté serveur. */
-        configured: boolean;
-        /** Sonde GET /api/tags réussie (délai ~1,5 s). */
-        reachable: boolean;
-        /** Modèles installés, triés. */
-        models: string[];
-        /** Modèle enregistré par l'utilisateur (peut ne plus être installé). */
-        selectedModel: string | null;
-      };
+      ollama: { configured: boolean; reachable: boolean; models: string[]; selectedModel: string | null };
       free: true;
     };
   };

@@ -278,6 +278,43 @@ describe("createAnthropicProvider — crédit épuisé (400 credit balance)", ()
 describe("createAnthropicProvider — surface", () => {
   it("ne devrait plus exposer que la rédaction du deck et la reconnaissance (imports sans IA)", () => {
     const { ai } = provider([]);
-    expect(Object.keys(ai).sort()).toEqual(["classify", "engine", "generateDeck", "name"]);
+    expect(Object.keys(ai).sort()).toEqual(["classify", "engine", "generateDeck", "generateStructured", "name"]);
+  });
+});
+
+describe("createAnthropicProvider — 1.2 : budget par appel et tâches structurées", () => {
+  it("devrait respecter CallOptions.budgetMs plutôt que le budget par défaut", async () => {
+    const { ai } = provider([{ hang: true }], { deckBudgetMs: 60_000 });
+    const started = Date.now();
+    const error = await ai.generateDeck(PROMPT, HINTS, { budgetMs: 40 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiUnavailableError);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it("devrait produire les questions du jury avec un format JSON dédié, normalisées et validées", async () => {
+    const { ai, calls } = provider([{ text: JSON.stringify({ questions: [{ question: " Pourquoi ? ", answer: "Parce que." }] }) }]);
+    expect(await ai.generateStructured({ task: "juryQuestions", prompt: PROMPT })).toEqual({
+      questions: [{ question: "Pourquoi ?", answer: "Parce que." }],
+    });
+    const format = (calls[0]!.body.output_config as { format: { type: string; schema: { properties: Record<string, unknown> } } }).format;
+    expect(format.type).toBe("json_schema");
+    expect(Object.keys(format.schema.properties)).toEqual(["questions"]);
+    expect(calls[0]!.body.stream).toBeFalsy();
+  });
+
+  it("devrait produire une diapo, et refuser une sortie vide de questions", async () => {
+    const { ai } = provider([
+      { text: JSON.stringify({ layout: "content", sectionId: "p1", title: "Titre", bullets: ["A"] }) },
+      { text: JSON.stringify({ questions: [] }) },
+    ]);
+    expect(await ai.generateStructured({ task: "slide", prompt: PROMPT })).toEqual({
+      layout: "content",
+      sectionId: "p1",
+      title: "Titre",
+      subtitle: "",
+      bullets: ["A"],
+      notes: "",
+    });
+    await expect(ai.generateStructured({ task: "juryQuestions", prompt: PROMPT })).rejects.toBeInstanceOf(AiInvalidOutputError);
   });
 });

@@ -16,14 +16,33 @@ vi.mock("@/server/session", () => ({
 
 // Transport seulement : les sondes réseau (Ollama, vérification de clé) ne sont jamais appelées ici.
 vi.mock("@/server/ai/ollama", () => ({ listOllamaModels: vi.fn() }));
-vi.mock("@/server/ai/verify-key", () => ({ verifyAnthropicKey: vi.fn() }));
+const verifyProviderKey = vi.fn();
+vi.mock("@/server/ai/verify-key", () => ({
+  verifyAnthropicKey: vi.fn(),
+  verifyProviderKey: (...args: unknown[]) => verifyProviderKey(...args),
+}));
 
-const service = { activateClaudeWithKey: vi.fn(), deleteApiKey: vi.fn(), testEffectiveKey: vi.fn(), setEngine: vi.fn() };
+const service = {
+  activateClaudeWithKey: vi.fn(),
+  deleteApiKey: vi.fn(),
+  testEffectiveKey: vi.fn(),
+  setEngine: vi.fn(),
+  connectProvider: vi.fn(),
+  selectWriter: vi.fn(),
+  testConnection: vi.fn(),
+  deleteConnection: vi.fn(),
+  setConnectionModel: vi.fn(),
+};
 vi.mock("@/server/services/ai-settings", () => ({
   activateClaudeWithKey: (...args: unknown[]) => service.activateClaudeWithKey(...args),
   deleteApiKey: (...args: unknown[]) => service.deleteApiKey(...args),
   testEffectiveKey: (...args: unknown[]) => service.testEffectiveKey(...args),
   setEngine: (...args: unknown[]) => service.setEngine(...args),
+  connectProvider: (...args: unknown[]) => service.connectProvider(...args),
+  selectWriter: (...args: unknown[]) => service.selectWriter(...args),
+  testConnection: (...args: unknown[]) => service.testConnection(...args),
+  deleteConnection: (...args: unknown[]) => service.deleteConnection(...args),
+  setConnectionModel: (...args: unknown[]) => service.setConnectionModel(...args),
 }));
 
 const actions = await import("@/server/actions/settings");
@@ -32,6 +51,7 @@ beforeEach(() => {
   signedIn = true;
   revalidatePath.mockReset();
   for (const fn of Object.values(service)) fn.mockReset();
+  verifyProviderKey.mockReset();
 });
 
 const SECRET = "sk-ant-api03-secret-value-0000";
@@ -115,5 +135,51 @@ describe("setAiEngine", () => {
       error: "absent",
       fieldErrors: { ollamaModel: ["absent"] },
     });
+  });
+});
+
+describe("connexions par fournisseur (1.2)", () => {
+  it("devrait connecter un fournisseur pour l'utilisateur connecté, vérifier via le bon fournisseur et revalider", async () => {
+    service.connectProvider.mockResolvedValue({ provider: "mistral", last4: "MMMM", model: "mistral-large-latest" });
+    verifyProviderKey.mockResolvedValue({ ok: true });
+    const input = { provider: "mistral" as const, apiKey: "k", activate: true };
+    expect(await actions.connectProvider(input)).toEqual({ ok: true, data: { provider: "mistral", last4: "MMMM", model: "mistral-large-latest" } });
+    const [userId, passed, deps] = service.connectProvider.mock.calls[0]! as [string, unknown, { env: unknown; verifyKey: (p: string, k: string) => Promise<unknown> }];
+    expect(userId).toBe("user-1");
+    expect(passed).toEqual(input);
+    expect(deps.env).toBe(process.env);
+    await deps.verifyKey("mistral", "k");
+    expect(verifyProviderKey).toHaveBeenCalledWith("mistral", "k");
+    expect(revalidatePath).toHaveBeenCalledWith("/configuration-ia");
+  });
+
+  it("devrait transmettre l'erreur de champ apiKey sans jamais renvoyer la clé", async () => {
+    service.connectProvider.mockRejectedValue(new ValidationError("Cette clé est refusée par Mistral.", { apiKey: ["Cette clé est refusée par Mistral."] }));
+    const result = await actions.connectProvider({ provider: "mistral", apiKey: SECRET });
+    expect(result).toEqual({ ok: false, error: "Cette clé est refusée par Mistral.", fieldErrors: { apiKey: ["Cette clé est refusée par Mistral."] } });
+    expect(JSON.stringify(result)).not.toContain("secret-value");
+  });
+
+  it("devrait choisir le rédacteur, tester, changer de modèle et supprimer pour l'utilisateur connecté", async () => {
+    service.selectWriter.mockResolvedValue(undefined);
+    service.testConnection.mockResolvedValue({ provider: "gemini", model: "gemini-2.5-flash", verifiedAt: "2026-10-07T00:00:00.000Z" });
+    service.setConnectionModel.mockResolvedValue(undefined);
+    service.deleteConnection.mockResolvedValue(undefined);
+    expect(await actions.selectWriter({ engine: "gemini", keySource: "server" })).toEqual({ ok: true, data: null });
+    expect(await actions.testConnection({ provider: "gemini" })).toMatchObject({ ok: true, data: { provider: "gemini" } });
+    expect(await actions.setConnectionModel({ provider: "gemini", model: "gemini-2.5-pro" })).toEqual({ ok: true, data: null });
+    expect(await actions.deleteConnection({ provider: "gemini" })).toEqual({ ok: true, data: null });
+    for (const fn of [service.selectWriter, service.testConnection, service.setConnectionModel, service.deleteConnection]) {
+      expect(fn.mock.calls[0]![0]).toBe("user-1");
+    }
+    expect(revalidatePath).toHaveBeenCalledTimes(4);
+  });
+
+  it("devrait refuser sans session, sans appeler le service", async () => {
+    signedIn = false;
+    expect((await actions.selectWriter({ engine: "free" })).ok).toBe(false);
+    expect((await actions.deleteConnection({ provider: "openai" })).ok).toBe(false);
+    expect(service.selectWriter).not.toHaveBeenCalled();
+    expect(service.deleteConnection).not.toHaveBeenCalled();
   });
 });

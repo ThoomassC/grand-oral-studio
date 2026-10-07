@@ -37,6 +37,7 @@ function providerWith(overrides: {
       provider.calls += 1;
       return (overrides.classify ?? mock.classify)(prompt, hints);
     },
+    generateStructured: mock.generateStructured,
   };
   return provider;
 }

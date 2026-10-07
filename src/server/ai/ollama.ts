@@ -12,8 +12,10 @@ import { AiInvalidOutputError, AiUnavailableError } from "../errors";
 import { createSemaphore, SemaphoreTimeoutError, type Semaphore } from "../concurrency";
 import { createLogger } from "../logger";
 import { deckMaxTokens } from "./anthropic";
-import { parseStructured, strict } from "./structured";
-import type { AiProvider, DeckHints } from "./types";
+import { MAX_RESPONSE_BYTES, readBoundedText, ResponseTooLargeError } from "./http";
+import { parseJson, parseStructured, strict } from "./structured";
+import { STRUCTURED_TASKS } from "./tasks";
+import type { AiProvider, DeckHints, StructuredRequest, StructuredResult } from "./types";
 
 /**
  * Fournisseur Ollama (modèle local) — API HTTP d'Ollama :
@@ -38,8 +40,7 @@ const DEFAULT_CLASSIFY_TIMEOUT_MS = 45_000;
 const DEFAULT_MAX_CONCURRENCY = 2;
 /** Attente maximale d'une place (au-delà : « le modèle local est occupé »). */
 const DEFAULT_QUEUE_WAIT_MS = 20_000;
-/** Taille maximale lue d'une réponse Ollama (un deck JSON fait quelques dizaines de Ko). */
-export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+export { MAX_RESPONSE_BYTES, readBoundedText, ResponseTooLargeError };
 const TEMPERATURE = 0.4;
 const CLASSIFY_MAX_TOKENS = 2_000;
 /** Contexte : prompt (trame + sujet et ses notes) + sortie d'un deck complet. */
@@ -109,6 +110,10 @@ function fitDeckPrompt(prompt: PromptPair, hints: DeckHints | undefined, max: nu
 
 const DECK_SCHEMA = z.toJSONSchema(RawDeckSpecSchema, { io: "input", unrepresentable: "any" });
 const CLASSIFY_SCHEMA = z.toJSONSchema(RawClassificationSchema, { io: "input", unrepresentable: "any" });
+const TASK_SCHEMAS = {
+  juryQuestions: z.toJSONSchema(STRUCTURED_TASKS.juryQuestions.raw, { io: "input", unrepresentable: "any" }),
+  slide: z.toJSONSchema(STRUCTURED_TASKS.slide.raw, { io: "input", unrepresentable: "any" }),
+} as const;
 
 const ChatResponseSchema = z.object({
   message: z.object({ content: z.string() }),
@@ -221,38 +226,6 @@ function envMs(value: string | undefined, fallback: number): number {
 
 /** Concurrence globale (par processus) des appels Ollama : AI_OLLAMA_MAX_CONCURRENCY, défaut 2. */
 const sharedSemaphore = createSemaphore(envMs(process.env.AI_OLLAMA_MAX_CONCURRENCY, DEFAULT_MAX_CONCURRENCY));
-
-export class ResponseTooLargeError extends Error {
-  constructor() {
-    super("réponse trop volumineuse");
-    this.name = "ResponseTooLargeError";
-  }
-}
-
-/** Lit le corps en flux et s'arrête au-delà de `maxBytes` (contrôle préalable de content-length). */
-export async function readBoundedText(response: Response, maxBytes = MAX_RESPONSE_BYTES): Promise<string> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await response.body?.cancel().catch(() => undefined);
-    throw new ResponseTooLargeError();
-  }
-  if (!response.body) return "";
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let total = 0;
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined);
-      throw new ResponseTooLargeError();
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-  return text + decoder.decode();
-}
 
 export interface OllamaProviderOptions {
   baseUrl: string;
@@ -452,6 +425,13 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
       const text = await chat("classify", prompt, CLASSIFY_SCHEMA, CLASSIFY_MAX_TOKENS, classifyTimeoutMs);
       const raw = parseStructured("classify", text, RawClassificationSchema);
       return strict("classify", ClassificationSchema, normalizeRawClassification(raw));
+    },
+
+    /** Questions du jury, une diapo : en flux (même raison que le deck), budget du deck ; `CallOptions` ignoré (pas d'échéance pour Ollama). */
+    async generateStructured<R extends StructuredRequest>(req: R): Promise<StructuredResult<R>> {
+      const spec = STRUCTURED_TASKS[req.task];
+      const text = await chat(req.task, req.prompt, TASK_SCHEMAS[req.task], spec.maxTokens, deckTimeoutMs, fixedNumCtx ?? DEFAULT_NUM_CTX, true);
+      return spec.finish(parseJson(req.task, text)) as StructuredResult<R>;
     },
   };
 }

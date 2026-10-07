@@ -273,6 +273,7 @@ function failingAi(error: Error): AiProvider & { calls: number } {
     engine: "claude" as const,
     calls: 0,
     generateDeck: mock.generateDeck,
+    generateStructured: mock.generateStructured,
     async classify() {
       p.calls += 1;
       throw error;

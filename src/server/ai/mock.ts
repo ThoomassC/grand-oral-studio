@@ -8,8 +8,10 @@ import {
   type Slide,
   type SlideLayout,
 } from "@/domain/schemas";
+import { fallbackJuryQuestions, JuryQuestionsSchema } from "@/domain/jury-questions";
+import { SlideSchema } from "@/domain/schemas";
 import { AiInvalidOutputError } from "../errors";
-import type { AiProvider, ClassifyHints, DeckHints } from "./types";
+import type { AiProvider, ClassifyHints, DeckHints, StructuredRequest, StructuredResult, StructuredResults } from "./types";
 
 /**
  * Fournisseur déterministe, sans réseau : même entrée → même sortie. Sert au dev
@@ -142,6 +144,25 @@ function buildClassification(h: ClassifyHints): Classification {
   return parsed.data;
 }
 
+/**
+ * Tâches structurées, déterministes : les questions du jury reprennent le repli
+ * sans IA du domaine ; une diapo est la diapo actuelle, titre marqué « (révisé) »
+ * pour qu'un test voie qu'elle a été remplacée.
+ */
+function buildStructured(req: StructuredRequest): StructuredResults[StructuredRequest["task"]] {
+  if (req.task === "juryQuestions") {
+    if (!req.hints) throw new AiInvalidOutputError("mock: hints requis pour juryQuestions");
+    const parsed = JuryQuestionsSchema.safeParse({ questions: fallbackJuryQuestions(req.hints.spec, req.hints.subject) });
+    if (!parsed.success) throw new AiInvalidOutputError("mock: questions hors schéma", { cause: parsed.error });
+    return parsed.data;
+  }
+  if (!req.hints) throw new AiInvalidOutputError("mock: hints requis pour slide");
+  const current = req.hints.current;
+  const parsed = SlideSchema.safeParse({ ...current, title: clip(`${current.title.replace(/ \(révisé\)$/, "")} (révisé)`, LIMITS.slideTitle) });
+  if (!parsed.success) throw new AiInvalidOutputError("mock: diapo hors schéma", { cause: parsed.error });
+  return parsed.data;
+}
+
 export function createMockProvider(): AiProvider {
   return {
     name: "mock",
@@ -153,6 +174,9 @@ export function createMockProvider(): AiProvider {
     async classify(_prompt: PromptPair, hints?: ClassifyHints): Promise<Classification> {
       if (!hints) throw new AiInvalidOutputError("mock: hints requis pour classify");
       return buildClassification(hints);
+    },
+    async generateStructured<R extends StructuredRequest>(req: R): Promise<StructuredResult<R>> {
+      return buildStructured(req) as StructuredResult<R>;
     },
   };
 }

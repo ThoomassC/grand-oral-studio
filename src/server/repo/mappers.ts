@@ -1,3 +1,4 @@
+import { ENGINE_IDS } from "@/domain/ai-providers";
 import { BrandSchema, DeckSpecSchema, PromptTemplateSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import type { Prisma } from "../db/generated/prisma/client";
 import type { DeckKind } from "../db/generated/prisma/enums";
@@ -20,7 +21,7 @@ interface DeckRow {
   updatedAt: Date;
 }
 
-const DeckEngineSchema = z.enum(["claude", "ollama", "free", "mock"]).nullable() satisfies z.ZodType<DeckEngine | null>;
+const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]).nullable() satisfies z.ZodType<DeckEngine | null>;
 
 export function toDeckView(row: DeckRow): DeckView {
   return {

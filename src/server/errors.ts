@@ -8,6 +8,8 @@
  *   renvoyée brute au client.
  */
 
+import { PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+
 export type AppErrorCode =
   | "NOT_FOUND"
   | "FORBIDDEN"
@@ -22,6 +24,7 @@ export type AppErrorCode =
   | "AI_KEY_REJECTED"
   | "AI_KEY_UNREADABLE"
   | "AI_CREDIT_EXHAUSTED"
+  | "AI_RATE_LIMITED"
   | "ENGINE_UNAVAILABLE"
   | "CONFIGURATION"
   | "UNAUTHENTICATED";
@@ -169,34 +172,78 @@ export class AiUnavailableError extends AppError {
   }
 }
 
-/** Aucune clé API utilisable (ni celle de l'utilisateur, ni celle du serveur) hors mode simulé. */
+/** Hôte de la console d'un fournisseur (« console.anthropic.com »), pour les messages. */
+function consoleHost(provider: CloudProvider): string {
+  return new URL(PROVIDER_INFO[provider].consoleUrl).host;
+}
+
+/** Aucune clé API utilisable pour le fournisseur choisi (ni personnelle, ni d'équipe selon le choix) hors mode simulé. */
 export class AiKeyRequiredError extends AppError {
   readonly code = "AI_KEY_REQUIRED" as const;
   readonly status = 422;
-  constructor() {
-    super("Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.");
+  readonly provider: CloudProvider;
+  constructor(provider: CloudProvider = "claude") {
+    super(`Ajoutez votre clé API ${PROVIDER_INFO[provider].apiName} dans la Configuration IA pour lancer une génération.`);
+    this.provider = provider;
   }
 }
 
-/** La clé API de l'UTILISATEUR est refusée par Anthropic (401/403). */
+/** La clé API de l'UTILISATEUR est refusée par le fournisseur (401/403). */
 export class AiKeyRejectedError extends AppError {
   readonly code = "AI_KEY_REJECTED" as const;
   readonly status = 422;
-  constructor(options?: { cause?: unknown }) {
-    super("Votre clé API Anthropic est refusée. Mettez-la à jour dans la Configuration IA.", options);
+  readonly provider: CloudProvider;
+  constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
+    const provider = options?.provider ?? "claude";
+    super(`Votre clé API ${PROVIDER_INFO[provider].apiName} est refusée. Mettez-la à jour dans la Configuration IA.`, options);
+    this.provider = provider;
   }
 }
 
-/** Le compte Anthropic de l'UTILISATEUR n'a plus de crédit (400 « credit balance too low »). */
+/** Le compte de l'UTILISATEUR chez le fournisseur n'a plus de crédit (Anthropic « credit balance », 402, insufficient_quota). */
 export class AiCreditExhaustedError extends AppError {
   readonly code = "AI_CREDIT_EXHAUSTED" as const;
   readonly status = 422;
-  constructor(options?: { cause?: unknown }) {
+  readonly provider: CloudProvider;
+  constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
+    const provider = options?.provider ?? "claude";
     super(
-      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans la Configuration IA.",
+      `Votre compte ${PROVIDER_INFO[provider].apiName} n'a plus de crédit. Rechargez-le sur ${consoleHost(provider)} ou choisissez le moteur gratuit dans la Configuration IA.`,
+      options,
+    );
+    this.provider = provider;
+  }
+}
+
+/** Durée lisible : « 30 s », « 2 min ». */
+function waitLabel(seconds: number): string {
+  return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;
+}
+
+/**
+ * Le FOURNISSEUR limite le débit (HTTP 429) : rien n'a été produit, l'unité de
+ * quota interne consommée est restituée (cf. isRefundableAiError). Aucune
+ * nouvelle tentative automatique ni bascule vers un autre fournisseur.
+ */
+export class AiProviderRateLimitedError extends AppError {
+  readonly code = "AI_RATE_LIMITED" as const;
+  readonly status = 429;
+  readonly refundable = true;
+  constructor(
+    readonly provider: CloudProvider,
+    readonly retryAfterSeconds: number,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `${PROVIDER_INFO[provider].label} limite le nombre de requêtes en ce moment. Réessayez dans ${waitLabel(retryAfterSeconds)}, ou choisissez un autre rédacteur.`,
       options,
     );
   }
+}
+
+/** L'échec d'un appel IA n'a rien coûté : l'unité de quota interne peut être restituée. */
+export function isRefundableAiError(error: unknown): boolean {
+  return (error instanceof AiUnavailableError && error.refundable) || error instanceof AiProviderRateLimitedError;
 }
 
 /**
