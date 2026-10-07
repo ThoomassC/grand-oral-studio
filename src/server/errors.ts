@@ -8,7 +8,9 @@
  *   renvoyée brute au client.
  */
 
-import { PROVIDER_INFO, type CloudProvider } from "@/domain/ai-providers";
+// Chemin relatif : next.config.ts importe ce fichier (via ai/resolve.ts) et le
+// transpileur de la config ne résout pas l'alias « @/ ».
+import { PROVIDER_INFO, type CloudProvider } from "../domain/ai-providers";
 
 export type AppErrorCode =
   | "NOT_FOUND"
