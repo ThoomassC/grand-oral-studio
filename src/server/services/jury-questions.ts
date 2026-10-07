@@ -1,6 +1,8 @@
 import type { ThemeRef } from "@/domain/contracts";
 import { fallbackJuryQuestions, JuryQuestionsSchema, type JuryQuestions } from "@/domain/jury-questions";
-import type { DeckSpec } from "@/domain/schemas";
+import type { DeckSpec, PromptTemplate } from "@/domain/schemas";
+import { buildJuryQuestionsPrompt } from "@/domain/task-prompts";
+import type { AiProvider, CallOptions, ResolvedEngine } from "../ai";
 import { AiInvalidOutputError } from "../errors";
 import { getQuestionContext, replaceQuestions, type QuestionView } from "../repo/questions";
 import type { DeckEngine } from "../repo/types";
@@ -14,14 +16,13 @@ import type { DeckEngine } from "../repo/types";
  *  3. validation de la sortie (JuryQuestionsSchema), puis remplacement des
  *     questions sous verrou, droit revérifié.
  *
- * Pour l'instant seul le repli sans IA (`fallbackJuryQuestionsGenerator`) existe.
- *
- * POINT D'EXTENSION IA : écrire un `JuryQuestionsGenerator` qui appelle
- * `provider.generateStructured({ task: "juryQuestions", … }, { budgetMs })` et
- * renvoie l'objet `{ questions }` (racine objet exigée par les sorties
- * structurées), puis le passer en `deps.generator` depuis l'action. L'action reste
- * responsable du quota (IA : consumeAiQuotaFor selon la facturation ; sans IA :
- * consumeFreeEngineQuota) et la page porte déjà `maxDuration = 300`.
+ * Deux générateurs : l'IA du rédacteur de l'utilisateur (`aiJuryQuestionsGenerator`,
+ * tâche structurée « juryQuestions ») et le repli sans IA
+ * (`fallbackJuryQuestionsGenerator`), retenu SEULEMENT pour un utilisateur en
+ * Sans IA (`juryQuestionsGeneratorFor`) : une erreur IA remonte telle quelle,
+ * jamais de bascule silencieuse. L'action est responsable du quota (IA :
+ * consumeAiQuotaFor selon la facturation ; sans IA : consumeFreeEngineQuota) et
+ * la page porte `maxDuration = 300`.
  */
 
 export interface JuryQuestionsInput {
@@ -41,6 +42,47 @@ export const fallbackJuryQuestionsGenerator: JuryQuestionsGenerator = {
   engine: "free",
   generate: async ({ spec, subject }) => ({ questions: fallbackJuryQuestions(spec, subject) }),
 };
+
+/** Ce que le prompt IA demande en plus du diaporama et du sujet. */
+export interface JuryPromptContext {
+  /** Problématique du diaporama ("" si inconnue). */
+  problem: string;
+  language: PromptTemplate["language"];
+}
+
+/**
+ * Questions rédigées par une IA (tâche structurée « juryQuestions »). Le
+ * fournisseur valide déjà sa sortie ; le service la revalide quand même.
+ */
+export function aiJuryQuestionsGenerator(
+  ai: AiProvider,
+  engine: Exclude<DeckEngine, "free">,
+  context: JuryPromptContext,
+  options?: CallOptions,
+): JuryQuestionsGenerator {
+  return {
+    engine,
+    generate: ({ spec, subject }) =>
+      ai.generateStructured(
+        {
+          task: "juryQuestions",
+          prompt: buildJuryQuestionsPrompt({ spec, subject, problem: context.problem, language: context.language }),
+          hints: { spec, subject },
+        },
+        options,
+      ),
+  };
+}
+
+/** Générateur du rédacteur de l'utilisateur : sans IA seulement s'il a choisi Sans IA. */
+export function juryQuestionsGeneratorFor(
+  resolved: ResolvedEngine,
+  context: JuryPromptContext,
+  options?: CallOptions,
+): JuryQuestionsGenerator {
+  if (resolved.engine === "free") return fallbackJuryQuestionsGenerator;
+  return aiJuryQuestionsGenerator(resolved.provider, resolved.engine, context, options);
+}
 
 export interface GeneratedJuryQuestions {
   programId: string;

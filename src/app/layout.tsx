@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { opaleThemeScript } from "@thomascaron/opale-ui";
+import { opaleThemeScript, ToastProvider } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
@@ -49,14 +49,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           >
             Aller au contenu
           </a>
-          {/* La garde « modifications non enregistrées » englobe l'en-tête : logo, onglets et menu du compte. */}
-          <UnsavedChangesProvider>
-            <SiteHeader />
-            <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
-              {children}
-            </main>
-            <UnsavedChangesBanner />
-          </UnsavedChangesProvider>
+          {/* Notifications d'Opale (ex. « Diaporama supprimé. [Annuler] ») : au-dessus des pages, elles survivent à une navigation. */}
+          <ToastProvider>
+            {/* La garde « modifications non enregistrées » englobe l'en-tête : logo, onglets et menu du compte. */}
+            <UnsavedChangesProvider>
+              <SiteHeader />
+              <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
+                {children}
+              </main>
+              <UnsavedChangesBanner />
+            </UnsavedChangesProvider>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

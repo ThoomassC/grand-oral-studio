@@ -28,6 +28,8 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
   const [user, program] = await Promise.all([requireUser(), loadProgram(id)]);
   const decks = await listFinalDecks(user.id, program.id);
   const base = decksHref(program.id);
+  // Un lecteur relit et exporte ; la suppression est réservée aux éditeurs.
+  const canEdit = program.role !== "viewer";
   // Les squelettes ne sont plus générés : ceux d'avant la 1.1.0 restent lisibles, exportables et supprimables ici.
   const skeletons: LegacySkeleton[] = program.themes.flatMap((t) =>
     t.skeleton ? [{ id: t.skeleton.id, title: t.skeleton.spec.title, subjectName: t.name, createdAt: t.skeleton.createdAt }] : [],
@@ -76,11 +78,13 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
                     <ButtonLink href={`${base}/${d.id}`} variant="ghost" size="small">
                       Ouvrir<span className="sr-only"> le deck {d.title}</span>
                     </ButtonLink>
-                    <DeleteDeckButton
-                      deckId={d.id}
-                      label={d.title}
-                      focusAfterDelete={[neighbour ? `deck-${neighbour.id}` : "", "decks-title"].filter(Boolean)}
-                    />
+                    {canEdit ? (
+                      <DeleteDeckButton
+                        deckId={d.id}
+                        label={d.title}
+                        focusAfterDelete={[neighbour ? `deck-${neighbour.id}` : "", "decks-title"].filter(Boolean)}
+                      />
+                    ) : null}
                   </div>
                 </li>
               );
@@ -119,11 +123,14 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
                     <ButtonLink href={`${base}/${s.id}`} variant="ghost" size="small">
                       Ouvrir<span className="sr-only"> le squelette {s.title}</span>
                     </ButtonLink>
-                    <DeleteDeckButton
-                      deckId={s.id}
-                      label={s.title}
-                      focusAfterDelete={[neighbour ? `squelette-${neighbour.id}` : "", "decks-title"].filter(Boolean)}
-                    />
+                    {canEdit ? (
+                      <DeleteDeckButton
+                        deckId={s.id}
+                        label={s.title}
+                        undoable={false}
+                        focusAfterDelete={[neighbour ? `squelette-${neighbour.id}` : "", "decks-title"].filter(Boolean)}
+                      />
+                    ) : null}
                   </div>
                 </li>
               );

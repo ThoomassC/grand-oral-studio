@@ -51,10 +51,21 @@ export async function updateProgram(programId: string, input: ProgramMetaInput):
   });
 }
 
-export async function deleteProgram(programId: string): Promise<ActionResult<null>> {
+/** Met le projet à la corbeille (propriétaire) ; `undoUntil` (ISO) : échéance de l'annulation. */
+export async function deleteProgram(programId: string): Promise<ActionResult<{ undoUntil: string }>> {
   return runAction("deleteProgram", async ({ user }) => {
     const id = parseInput(IdSchema, programId);
-    await repo.deleteProgram(user.id, id);
+    const { undoUntil } = await repo.deleteProgram(user.id, id);
+    revalidatePrograms(id);
+    return { undoUntil };
+  });
+}
+
+/** Annule la suppression d'un projet (propriétaire), dans le délai de la corbeille. */
+export async function restoreProgram(programId: string): Promise<ActionResult<null>> {
+  return runAction("restoreProgram", async ({ user }) => {
+    const id = parseInput(IdSchema, programId);
+    await repo.restoreProgram(user.id, id);
     revalidatePrograms(id);
     return null;
   });

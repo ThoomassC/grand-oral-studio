@@ -77,15 +77,21 @@ test.describe("8. Decks — liste, ouverture, suppression", () => {
     await expect(page.getByRole("main").getByText("Deck final · Sans sujet")).toBeVisible();
   });
 
-  test("devrait supprimer un deck depuis la liste par la modale", async ({ page, account }) => {
+  test("devrait supprimer un deck depuis la liste par la modale, puis annuler la suppression", async ({ page, account }) => {
     void account;
     const { programId } = await setupDeck(page, "Suppression liste");
     await page.goto(`/projets/${programId}/decks`);
     await page.getByRole("main").getByRole("button", { name: /^Supprimer le deck / }).click();
     const modal = dialog(page, "Supprimer le deck ?");
-    await expect(modal).toContainText("Cette action est définitive.");
+    await expect(modal).toContainText("Vous pourrez annuler pendant quelques secondes.");
     await modal.getByRole("button", { name: "Supprimer le deck" }).click();
     await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+
+    // Notification d'Opale (hors <main>) : « Annuler » pendant 10 s.
+    await expect(page.getByText("Diaporama supprimé.")).toBeVisible();
+    await page.getByRole("button", { name: /^Annuler la suppression du diaporama / }).click();
+    await expect(page.getByText("Diaporama restauré.")).toBeVisible();
+    await expect(deckItem(page, PROBLEM)).toBeVisible();
   });
 
   test("devrait supprimer un deck depuis sa page et revenir à la liste", async ({ page, account }) => {
@@ -122,6 +128,8 @@ test.describe("8. Decks — anciens squelettes (version 1.0)", () => {
     await expect(breadcrumb(page).getByRole("link", { name: "Decks", exact: true })).toBeVisible();
 
     await main.getByRole("region", { name: "Supprimer ce squelette" }).getByRole("button", { name: `Supprimer le deck ${SKELETON}` }).click();
+    // Un ancien squelette ne passe pas par la corbeille : suppression définitive, sans annulation.
+    await expect(dialog(page, "Supprimer le deck ?")).toContainText("Cette action est définitive.");
     await dialog(page, "Supprimer le deck ?").getByRole("button", { name: "Supprimer le deck" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
     await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)" })).toHaveCount(0);
@@ -191,6 +199,76 @@ test.describe("8. Decks — édition et conflit", () => {
     await reload.click();
     await expect(other.getByRole("main").getByRole("heading", { level: 3, name: "Diapo 2 — Version de l'onglet A" })).toBeVisible();
     await other.close();
+  });
+});
+
+test.describe("8. Decks — structure du diaporama", () => {
+  test("devrait insérer, déplacer et supprimer des diapos, et les garder après rechargement", async ({ page, account }) => {
+    void account;
+    await setupDeck(page, "Structure du deck");
+    const main = page.getByRole("main");
+    const initial = await slideCount(page);
+    const third = (await main.locator("#diapo-3 h3").textContent())?.replace(/^\s*\d+\s*/, "").replace(/^Diapo 3 — /, "").trim() ?? "";
+
+    // Insérer après la diapo 3 : la nouvelle diapo 4 s'ouvre en édition.
+    await main.getByRole("button", { name: "Insérer une diapo après la diapo 3" }).click();
+    await expect(main.getByRole("heading", { level: 2, name: `${initial + 1} diapos` })).toBeVisible();
+    const title = main.getByRole("textbox", { name: "Titre", exact: true });
+    await expect(title).toHaveValue("Nouvelle diapo");
+    await title.fill("Diapo ajoutée");
+    await main.getByRole("button", { name: "Enregistrer la diapo" }).click();
+    await expect(main.getByRole("heading", { level: 3, name: "Diapo 4 — Diapo ajoutée" })).toBeVisible();
+
+    // Descendre la diapo 3 : elle prend la place 4.
+    await main.getByRole("button", { name: "Descendre la diapo 3" }).click();
+    await expect(main.getByRole("heading", { level: 3, name: "Diapo 3 — Diapo ajoutée" })).toBeVisible();
+    await expect(main.locator("#diapo-4")).toContainText(third);
+
+    // La couverture ne se déplace ni ne se supprime.
+    await expect(main.locator("#diapo-1").getByRole("button", { name: /^(Monter|Descendre|Supprimer)/ })).toHaveCount(0);
+
+    // Supprimer la diapo ajoutée.
+    await main.getByRole("button", { name: "Supprimer la diapo 3" }).click();
+    await dialog(page, "Supprimer la diapo ?").getByRole("button", { name: "Supprimer la diapo" }).click();
+    await expect(main.getByRole("heading", { level: 2, name: `${initial} diapos` })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("main").getByRole("heading", { level: 2, name: `${initial} diapos` })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Diapo ajoutée")).toHaveCount(0);
+  });
+
+  test("devrait régénérer une diapo avec l'IA du rédacteur (démo)", async ({ page, account }) => {
+    void account;
+    await setupDeck(page, "Régénérer une diapo");
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Régénérer la diapo 3 avec l'IA" }).click();
+    await dialog(page, "Régénérer la diapo ?").getByRole("button", { name: "Régénérer la diapo" }).click();
+    await expect(dialog(page, "Régénérer la diapo ?")).toHaveCount(0);
+    // Le moteur démo réécrit le titre en « … (révisé) ».
+    await expect(main.locator("#diapo-3 h3")).toContainText("(révisé)");
+    await page.reload();
+    await expect(page.getByRole("main").locator("#diapo-3 h3")).toContainText("(révisé)");
+  });
+
+  test("Sans IA : la régénération est masquée", async ({ page, account }) => {
+    void account;
+    await chooseFreeWriter(page);
+    const programId = await createProject(page, "Régénération sans IA");
+    await generateDeck(page, programId, PROBLEM, null);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("button", { name: /Régénérer/ })).toHaveCount(0);
+    await expect(main.getByText("Régénérer une diapo : disponible avec une rédaction IA (Configuration IA).")).toBeVisible();
+  });
+
+  test("devrait dupliquer le diaporama et ouvrir la copie", async ({ page, account }) => {
+    void account;
+    const { programId, deckId } = await setupDeck(page, "Duplication du deck");
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Dupliquer le diaporama" }).click();
+    await expect(page).toHaveURL(new RegExp(`/projets/${programId}/decks/(?!${deckId})[^/?]+\\?copie=1$`));
+    await expect(main.getByText("Copie créée.")).toBeVisible();
+    await page.goto(`/projets/${programId}/decks`);
+    await expect(deckItem(page, PROBLEM)).toHaveCount(2);
   });
 });
 

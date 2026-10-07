@@ -1,13 +1,21 @@
 import { ENGINE_IDS } from "@/domain/ai-providers";
 import type { ProgramContext, ThemeRef } from "@/domain/contracts";
-import { replaceSlide } from "@/domain/deck";
-import { DeckSpecSchema, type Brand, type DeckSpec, type Slide } from "@/domain/schemas";
+import {
+  COVER_SECTION_ID,
+  DeckEditError,
+  duplicateDeckSpec,
+  insertSlide as insertSlideIn,
+  moveSlide as moveSlideIn,
+  removeSlide as removeSlideIn,
+  replaceSlide,
+} from "@/domain/deck";
+import { DeckSpecSchema, type Brand, type DeckSpec, type PromptTemplate, type Slide } from "@/domain/schemas";
 import { z } from "zod";
 import { db } from "../db/client";
-import { ConflictError, NotFoundError, ValidationError } from "../errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { createLogger, type Logger } from "../logger";
 import { parseStored } from "../validation";
-import { denyAccess, liveDeck, lockDeckFor, lockProgramFor, programAccess } from "./access";
+import { denyAccess, hasRole, liveDeck, lockDeckFor, lockProgramFor, memberRoleOf, programAccess, roleOf } from "./access";
 import { readBrand, readTemplate, specJson, toDeckView } from "./mappers";
 import { prismaErrorCode } from "./ownership";
 import { purgeTrash, undoDeadline } from "./trash";
@@ -214,6 +222,186 @@ export async function updateDeckSlide(
       select: { updatedAt: true },
     });
     return { programId, spec: next, updatedAt: updated.updatedAt.toISOString() };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Édition structurelle (v1.2) : insérer, supprimer, déplacer, dupliquer
+// ---------------------------------------------------------------------------
+
+export interface DeckEditResult {
+  programId: string;
+  spec: DeckSpec;
+  /** Nouvelle version (ISO), à renvoyer avec la modification suivante. */
+  updatedAt: string;
+}
+
+/** Refus du domaine (bornes, couverture) → message montrable, sans détail technique. */
+function toValidationError(error: DeckEditError): ValidationError {
+  return new ValidationError(
+    error.code === "INDEX_OUT_OF_RANGE" ? "Cette diapo n'existe plus : rechargez le diaporama." : error.message,
+  );
+}
+
+/**
+ * read → modify → write d'une spec sous verrou de ligne (éditeur), avec le même
+ * contrôle de version que `updateDeckSlide`. `edit` est une fonction pure du
+ * domaine ; ses refus (DeckEditError) deviennent des ValidationError.
+ */
+async function editDeckSpec(
+  userId: string,
+  deckId: string,
+  expectedUpdatedAt: string | undefined,
+  edit: (current: DeckSpec) => DeckSpec,
+): Promise<DeckEditResult> {
+  return db().$transaction(async (tx) => {
+    const { programId } = await lockDeckFor(tx, userId, deckId, "editor");
+    const row = await tx.deck.findUniqueOrThrow({ where: { id: deckId }, select: { spec: true, updatedAt: true } });
+    if (expectedUpdatedAt !== undefined && row.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()) {
+      throw new ConflictError(DECK_CHANGED_MESSAGE);
+    }
+    const current = parseStored(DeckSpecSchema, row.spec, "Deck.spec", deckId);
+    let next: DeckSpec;
+    try {
+      next = edit(current);
+    } catch (error) {
+      if (error instanceof DeckEditError) throw toValidationError(error);
+      throw error;
+    }
+    const updated = await tx.deck.update({
+      where: { id: deckId },
+      data: { spec: specJson(next) },
+      select: { updatedAt: true },
+    });
+    return { programId, spec: next, updatedAt: updated.updatedAt.toISOString() };
+  });
+}
+
+export interface SlideEditContext {
+  programId: string;
+  spec: DeckSpec;
+  /** Version (ISO) lue : comparée à celle du client avant tout appel IA. */
+  updatedAt: string;
+  /** Problématique ("" pour un ancien squelette). */
+  problem: string;
+  template: PromptTemplate;
+  subject: ThemeRef | null;
+}
+
+/**
+ * Ce qu'il faut pour réécrire une diapo par IA : le deck, sa version, la trame,
+ * le sujet. Droit d'ÉDITEUR, vérifié en une lecture (inconnu → 404, lecteur →
+ * 403). Lecture hors transaction : l'appel IA suit, puis l'écriture
+ * (`updateDeckSlide`) revérifie droit et version sous verrou.
+ */
+export async function getSlideEditContext(userId: string, deckId: string): Promise<SlideEditContext> {
+  const row = await db().deck.findFirst({
+    where: { id: deckId, ...liveDeck, program: programAccess(userId, "viewer") },
+    select: {
+      programId: true,
+      spec: true,
+      problem: true,
+      updatedAt: true,
+      theme: { select: { id: true, name: true, description: true, keywords: true, notes: true } },
+      program: { select: { template: true, ownerId: true, members: memberRoleOf(userId) } },
+    },
+  });
+  const role = row ? roleOf(userId, row.program.ownerId, row.program.members[0]?.role) : null;
+  if (!row || !role) throw new NotFoundError("deck");
+  if (!hasRole(role, "editor")) throw new ForbiddenError();
+  return {
+    programId: row.programId,
+    spec: parseStored(DeckSpecSchema, row.spec, "Deck.spec", deckId),
+    updatedAt: row.updatedAt.toISOString(),
+    problem: row.problem ?? "",
+    template: readTemplate(row.program.template, row.programId),
+    subject: row.theme ? toThemeRef(row.theme) : null,
+  };
+}
+
+/** Titre d'une diapo insérée vierge (à modifier aussitôt). */
+export const NEW_SLIDE_TITLE = "Nouvelle diapo";
+
+/**
+ * Diapo vierge à insérer en position `index` : une diapo de contenu de la même
+ * section que la diapo qui la précède — ou, juste après la couverture, que celle
+ * qui la suit —, pour rester dans la trame.
+ */
+function blankSlide(deck: DeckSpec, index: number): Slide {
+  const previous = deck.slides[index - 1];
+  const sectionId =
+    previous && previous.sectionId !== COVER_SECTION_ID
+      ? previous.sectionId
+      : (deck.slides[index]?.sectionId ?? previous?.sectionId ?? COVER_SECTION_ID);
+  return { layout: "content", sectionId, title: NEW_SLIDE_TITLE, subtitle: "", bullets: [], notes: "" };
+}
+
+/**
+ * Insère une diapo en position `index` (0..longueur). `slide` null : diapo
+ * vierge de la section voisine. Au plus 60 diapos ; rien avant la couverture.
+ */
+export async function insertSlide(
+  userId: string,
+  deckId: string,
+  index: number,
+  slide: Slide | null,
+  expectedUpdatedAt?: string,
+): Promise<DeckEditResult> {
+  return editDeckSpec(userId, deckId, expectedUpdatedAt, (current) =>
+    insertSlideIn(current, index, slide ?? blankSlide(current, index)),
+  );
+}
+
+/** Retire la diapo `index`. Au moins 2 diapos ; la couverture reste. */
+export async function removeSlide(
+  userId: string,
+  deckId: string,
+  index: number,
+  expectedUpdatedAt?: string,
+): Promise<DeckEditResult> {
+  return editDeckSpec(userId, deckId, expectedUpdatedAt, (current) => removeSlideIn(current, index));
+}
+
+/** Déplace la diapo `from` en position `to`. La couverture reste en tête. */
+export async function moveSlide(
+  userId: string,
+  deckId: string,
+  from: number,
+  to: number,
+  expectedUpdatedAt?: string,
+): Promise<DeckEditResult> {
+  return editDeckSpec(userId, deckId, expectedUpdatedAt, (current) => moveSlideIn(current, from, to));
+}
+
+/**
+ * Copie d'un deck FINAL dans le même projet (éditeur) : même sujet,
+ * problématique, moteur et nature (entraînement ou jour J) ; ni questions, ni
+ * répétitions, ni chrono. Le deck source est verrouillé (il ne part pas à la
+ * corbeille pendant la copie) ; un ancien squelette ne se duplique pas.
+ */
+export async function duplicateDeck(userId: string, deckId: string): Promise<{ programId: string; deckId: string }> {
+  return db().$transaction(async (tx) => {
+    const { programId, kind } = await lockDeckFor(tx, userId, deckId, "editor");
+    if (kind !== "FINAL") throw new ValidationError("Un ancien squelette ne se duplique pas.");
+    const row = await tx.deck.findUniqueOrThrow({
+      where: { id: deckId },
+      select: { themeId: true, problem: true, spec: true, engine: true, practice: true },
+    });
+    const spec = duplicateDeckSpec(parseStored(DeckSpecSchema, row.spec, "Deck.spec", deckId));
+    const created = await tx.deck.create({
+      data: {
+        programId,
+        themeId: row.themeId,
+        kind: "FINAL",
+        problem: row.problem,
+        spec: specJson(spec),
+        engine: row.engine,
+        practice: row.practice,
+        createdById: userId,
+      },
+      select: { id: true },
+    });
+    return { programId, deckId: created.id };
   });
 }
 
