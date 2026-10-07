@@ -16,6 +16,22 @@ vi.mock("@/server/actions/themes", () => ({
 }));
 
 const { ThemeManager } = await import("@/components/themes/ThemeManager");
+
+/** Versions (updatedAt) d'un sujet : chargée avec la page, puis renvoyées par les enregistrements. */
+const V0 = "2026-10-01T08:00:00.000Z";
+const V1 = "2026-10-01T08:05:00.000Z";
+const V2 = "2026-10-01T08:06:00.000Z";
+const savedTheme = (updatedAt: string) => ({
+  id: "e",
+  programId: "p1",
+  position: 0,
+  name: "Énergie",
+  description: "",
+  keywords: ["climat"],
+  notes: "Chiffre ADEME 2024",
+  problems: [],
+  updatedAt,
+});
 const { UnsavedChangesBanner, UnsavedChangesProvider } = await import("@/components/layout/UnsavedChanges");
 
 afterEach(async () => {
@@ -39,7 +55,7 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     expect(screen.getByRole("heading", { name: "Vos sujets", level: 3 })).toBeInTheDocument();
@@ -108,12 +124,12 @@ describe("Gestionnaire de sujets — notes", () => {
   });
 
   it("devrait montrer les notes d'un sujet et les renvoyer modifiées à l'enregistrement", async () => {
-    updateTheme.mockResolvedValue({ ok: true, data: null });
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V1) });
     const user = userEvent.setup();
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", finalDeckCount: 2 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     const item = screen.getByRole("heading", { name: /Énergie/ }).closest("li") as HTMLElement;
@@ -129,7 +145,42 @@ describe("Gestionnaire de sujets — notes", () => {
       description: "",
       keywords: ["climat"],
       notes: "Chiffre ADEME 2024",
-    });
+    }, V0);
+  });
+
+  it("devrait renvoyer à chaque enregistrement la version reçue, puis celle du dernier enregistrement", async () => {
+    updateTheme.mockResolvedValueOnce({ ok: true, data: savedTheme(V1) }).mockResolvedValueOnce({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    expect(updateTheme.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
+  });
+
+  it("devrait afficher le conflit dans le formulaire, ouvert et saisie conservée, quand le sujet a changé entre-temps", async () => {
+    const conflict = "Ce sujet a été modifié entre-temps (autre onglet ou autre membre du projet). Rechargez la page.";
+    updateTheme.mockResolvedValue({ ok: false, error: conflict, code: "CONFLICT" });
+    const user = userEvent.setup();
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.type(screen.getByLabelText(/^Notes/), "Ma saisie");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    expect(await screen.findByText(conflict)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Notes/)).toHaveValue("Ma saisie");
   });
 
   it("devrait annoncer poliment l'approche puis l'atteinte de la limite des notes", async () => {
@@ -137,7 +188,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -165,7 +216,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -181,7 +232,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 2 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Supprimer Énergie" }));
@@ -198,6 +249,7 @@ const THEMES = ["Alpha", "Bravo", "Charlie"].map((name) => ({
   keywords: [],
   notes: "",
   finalDeckCount: 0,
+  updatedAt: V0,
 }));
 
 /** Une requête d'enregistrement d'ordre que le test termine quand il veut. */

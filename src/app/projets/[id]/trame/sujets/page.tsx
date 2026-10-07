@@ -19,6 +19,7 @@ export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/
     keywords: t.keywords,
     notes: t.notes,
     finalDeckCount: t.finalDeckCount,
+    updatedAt: t.updatedAt,
   }));
 
   return (

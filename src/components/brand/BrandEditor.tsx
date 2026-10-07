@@ -75,10 +75,17 @@ function contrastWarnings(colors: Brand["colors"]): string[] {
 export function BrandEditor({
   programId,
   initialBrand,
+  savedAt,
   format,
 }: {
   programId: string;
   initialBrand: Brand;
+  /**
+   * Version enregistrée reçue du serveur (brandSavedAt, ISO ; null = jamais enregistrée),
+   * renvoyée à chaque enregistrement pour détecter une apparence modifiée entre-temps
+   * (autre onglet, autre membre). Absente : pas de contrôle.
+   */
+  savedAt?: string | null;
   format: PromptTemplate["format"];
 }) {
   const [saved, setSaved] = useState<Brand>(initialBrand);
@@ -90,8 +97,13 @@ export function BrandEditor({
   // enregistré (import appliqué au-dessus), on la reprend ; après notre propre enregistrement,
   // le rafraîchissement renvoie la même apparence : rien ne bouge et le message reste affiché.
   const [serverBrand, setServerBrand] = useState<Brand>(initialBrand);
+  // Jeton de concurrence optimiste : la version reçue au chargement, puis celle que renvoie
+  // chaque enregistrement. Une version venue du serveur est reprise avec son apparence
+  // (reprise ci-dessous, ou identique à celle tenue pour enregistrée) : jamais à l'aveugle.
+  const [version, setVersion] = useState(savedAt);
   if (initialBrand !== serverBrand) {
     setServerBrand(initialBrand);
+    setVersion(savedAt);
     if (JSON.stringify(initialBrand) !== JSON.stringify(saved)) {
       setSaved(initialBrand);
       setBrand(initialBrand);
@@ -152,7 +164,7 @@ export function BrandEditor({
     setFieldErrors({});
     startTransition(async () => {
       try {
-        const result = await updateBrand(programId, checked.data);
+        const result = await updateBrand(programId, checked.data, version);
         if (!result.ok) {
           const errors = result.fieldErrors ?? {};
           setFieldErrors(errors);
@@ -160,6 +172,7 @@ export function BrandEditor({
           if (countFieldErrors(errors) > 0) focusFirstInvalid(formRef.current);
           return;
         }
+        setVersion(result.data.brandSavedAt);
         setSaved(checked.data);
         setBrand(checked.data);
         setStatus({ kind: "success", message: "Apparence enregistrée." });

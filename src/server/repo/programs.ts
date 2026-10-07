@@ -1,8 +1,10 @@
+import { defaultBrand, defaultTemplate } from "@/domain/defaults";
 import { computeProjectProgress } from "@/domain/progress";
 import type { Brand, PromptTemplate } from "@/domain/schemas";
 import { totalSlides } from "@/domain/slides";
 import { db, type Db } from "../db/client";
-import { NotFoundError } from "../errors";
+import { ConflictError, DataIntegrityError, NotFoundError } from "../errors";
+import { createLogger, type Logger } from "../logger";
 import type { ProgramMeta } from "../validation";
 import {
   accessibleProgramIds,
@@ -90,8 +92,40 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
   });
 }
 
-/** Programme avec ses sujets ordonnés et l'ancien squelette (version 1.0) de chacun, listé dans Decks (une seule requête). */
-export async function getProgram(userId: string, programId: string): Promise<ProgramDetail> {
+/** Partie du projet illisible en base, remplacée par sa valeur par défaut à la lecture. */
+export type DegradedPart = "brand" | "template";
+
+/** ProgramDetail lu de façon tolérante : `degraded` liste les parties remplacées par défaut. */
+export type ProgramDetailRead = ProgramDetail & { degraded: DegradedPart[] };
+
+/**
+ * Lit une colonne JSON ; si elle a dérivé (DataIntegrityError), renvoie la valeur
+ * par défaut et journalise. Toute autre erreur remonte.
+ */
+function readOrDefault<T>(read: () => T, fallback: () => T, onInvalid: (error: DataIntegrityError) => void): T {
+  try {
+    return read();
+  } catch (error) {
+    if (!(error instanceof DataIntegrityError)) throw error;
+    onInvalid(error);
+    return fallback();
+  }
+}
+
+/**
+ * Programme avec ses sujets ordonnés et l'ancien squelette (version 1.0) de chacun,
+ * listé dans Decks (une seule requête).
+ *
+ * Lecture tolérante : une apparence ou une trame invalide en base est remplacée
+ * par la valeur par défaut (signalée dans `degraded`), un squelette invalide par
+ * null ; chaque cas est journalisé. La page s'affiche toujours ; l'enregistrement
+ * suivant réécrit une valeur valide.
+ */
+export async function getProgram(
+  userId: string,
+  programId: string,
+  log: Logger = createLogger({ scope: "repo.programs" }),
+): Promise<ProgramDetailRead> {
   const row = await db().program.findFirst({
     where: { id: programId, ...programAccess(userId, "viewer") },
     include: {
@@ -109,11 +143,24 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
   });
   const role = row ? roleOf(userId, row.ownerId, row.members[0]?.role) : null;
   if (!row || !role) throw new NotFoundError("programme");
+  const degraded: DegradedPart[] = [];
+  const degrade = (part: DegradedPart) => (error: DataIntegrityError) => {
+    degraded.push(part);
+    log.warn("program.read.degraded", { programId: row.id, part, issues: error.issues });
+  };
+  const brand = readOrDefault(() => readBrand(row.brand, row.id), defaultBrand, degrade("brand"));
+  const template = readOrDefault(() => readTemplate(row.template, row.id), defaultTemplate, degrade("template"));
   const finalDeckCount = row._count.decks;
-  const template = readTemplate(row.template, row.id);
   const themes = row.themes.map((t) => {
-    const skeleton = t.decks[0];
-    return { ...toThemeView(t), skeleton: skeleton ? toDeckView(skeleton) : null, finalDeckCount: t._count.decks };
+    const deck = t.decks[0];
+    const skeleton = deck
+      ? readOrDefault(
+          () => toDeckView(deck),
+          () => null,
+          (error) => log.warn("program.read.invalid_skeleton", { programId: row.id, deckId: deck.id, issues: error.issues }),
+        )
+      : null;
+    return { ...toThemeView(t), skeleton, finalDeckCount: t._count.decks };
   });
   const brandSavedAt = row.brandSavedAt?.toISOString() ?? null;
   const templateSavedAt = row.templateSavedAt?.toISOString() ?? null;
@@ -121,7 +168,7 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
     id: row.id,
     name: row.name,
     description: row.description,
-    brand: readBrand(row.brand, row.id),
+    brand,
     template,
     brandSavedAt,
     templateSavedAt,
@@ -137,6 +184,7 @@ export async function getProgram(userId: string, programId: string): Promise<Pro
       template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),
     role,
+    degraded,
   };
 }
 
@@ -209,25 +257,77 @@ export async function updateProgramMeta(userId: string, programId: string, meta:
   );
 }
 
-export async function updateBrand(userId: string, programId: string, brand: Brand): Promise<void> {
-  await updateWithAccess(userId, programId, "editor", () =>
-    db().program.update({
-      where: { id: programId, AND: [programAccess(userId, "editor")] },
-      // Même horloge que updatedAt (@updatedAt est posé par le client Prisma).
-      data: { brand: brandJson(brand), brandSavedAt: new Date() },
-      select: { id: true },
-    }),
-  );
+export const BRAND_CHANGED_MESSAGE =
+  "L'apparence a été modifiée entre-temps (autre onglet ou autre membre du projet). Rechargez la page pour voir la dernière version : vos réglages non enregistrés seront perdus.";
+export const TEMPLATE_CHANGED_MESSAGE =
+  "La trame a été modifiée entre-temps (autre onglet ou autre membre du projet). Rechargez la page pour voir la dernière version : vos réglages non enregistrés seront perdus.";
+
+/** Même instant à la milliseconde (précision des colonnes timestamptz(3)) ; null = jamais enregistré. */
+function sameVersion(current: Date | null, expected: string | null): boolean {
+  if (current === null || expected === null) return current === expected;
+  return current.getTime() === new Date(expected).getTime();
 }
 
-export async function updateTemplate(userId: string, programId: string, template: PromptTemplate): Promise<void> {
-  await updateWithAccess(userId, programId, "editor", () =>
-    db().program.update({
-      where: { id: programId, AND: [programAccess(userId, "editor")] },
-      data: { template: templateJson(template), templateSavedAt: new Date() },
+/**
+ * Enregistre l'apparence (éditeur) et renvoie sa nouvelle version (`brandSavedAt`, ISO).
+ *
+ * Concurrence optimiste : `expectedSavedAt` est le `brandSavedAt` reçu au chargement
+ * (null : jamais enregistrée). S'il ne correspond plus, l'apparence a été enregistrée
+ * entre-temps : ConflictError au lieu d'écraser l'autre version. `undefined` : pas de
+ * contrôle (import appliqué, modèle partagé, appelants antérieurs). Le jeton est
+ * brandSavedAt et jamais Program.updatedAt, qui avance aussi pour un sujet ou la trame.
+ * Lecture et écriture sous verrou de ligne (FOR UPDATE) : deux enregistrements
+ * simultanés partis de la même version ne passent pas tous les deux.
+ */
+export async function updateBrand(
+  userId: string,
+  programId: string,
+  brand: Brand,
+  expectedSavedAt?: string | null,
+): Promise<{ brandSavedAt: string }> {
+  const json = brandJson(brand);
+  return db().$transaction(async (tx) => {
+    await lockProgramFor(tx, userId, programId, "editor");
+    if (expectedSavedAt !== undefined) {
+      const current = await tx.program.findUniqueOrThrow({ where: { id: programId }, select: { brandSavedAt: true } });
+      if (!sameVersion(current.brandSavedAt, expectedSavedAt)) throw new ConflictError(BRAND_CHANGED_MESSAGE);
+    }
+    // Horloge du serveur d'application, comme updatedAt (@updatedAt est posé par le client Prisma) ;
+    // milliseconde exacte : la colonne est un timestamptz(3).
+    const savedAt = new Date();
+    await tx.program.update({
+      where: { id: programId },
+      data: { brand: json, brandSavedAt: savedAt },
       select: { id: true },
-    }),
-  );
+    });
+    return { brandSavedAt: savedAt.toISOString() };
+  });
+}
+
+/** Enregistre la trame (éditeur) ; même contrat que updateBrand, avec `templateSavedAt` pour jeton. */
+export async function updateTemplate(
+  userId: string,
+  programId: string,
+  template: PromptTemplate,
+  expectedSavedAt?: string | null,
+): Promise<{ templateSavedAt: string }> {
+  const json = templateJson(template);
+  return db().$transaction(async (tx) => {
+    await lockProgramFor(tx, userId, programId, "editor");
+    if (expectedSavedAt !== undefined) {
+      const current = await tx.program.findUniqueOrThrow({ where: { id: programId }, select: { templateSavedAt: true } });
+      if (!sameVersion(current.templateSavedAt, expectedSavedAt)) throw new ConflictError(TEMPLATE_CHANGED_MESSAGE);
+    }
+    // Horloge du serveur d'application, comme updatedAt (@updatedAt est posé par le client Prisma) ;
+    // milliseconde exacte : la colonne est un timestamptz(3).
+    const savedAt = new Date();
+    await tx.program.update({
+      where: { id: programId },
+      data: { template: json, templateSavedAt: savedAt },
+      select: { id: true },
+    });
+    return { templateSavedAt: savedAt.toISOString() };
+  });
 }
 
 /**

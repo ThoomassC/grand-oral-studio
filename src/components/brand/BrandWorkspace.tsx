@@ -9,11 +9,14 @@ import { BrandEditor } from "./BrandEditor";
 export function BrandWorkspace({
   programId,
   initialBrand,
+  savedAt,
   format,
 }: {
   programId: string;
   initialBrand: Brand;
+  /** brandSavedAt (ISO ; null = jamais enregistrée) : jeton de concurrence de l'éditeur. */
+  savedAt?: string | null;
   format: PromptTemplate["format"];
 }) {
-  return <BrandEditor programId={programId} initialBrand={initialBrand} format={format} />;
+  return <BrandEditor programId={programId} initialBrand={initialBrand} savedAt={savedAt} format={format} />;
 }

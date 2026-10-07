@@ -29,6 +29,7 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
       <BrandWorkspace
         programId={program.id}
         initialBrand={program.brand}
+        savedAt={program.brandSavedAt}
         format={program.template.format}
       />
     </div>

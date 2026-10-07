@@ -19,7 +19,7 @@ export default async function TemplatePage({ params }: PageProps<"/projets/[id]/
           problématique tirée au sort.
         </p>
       </div>
-      <TemplateWorkspace programId={program.id} initialTemplate={program.template} />
+      <TemplateWorkspace programId={program.id} initialTemplate={program.template} savedAt={program.templateSavedAt} />
     </div>
   );
 }

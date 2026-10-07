@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BRAND_FILE_TOO_LARGE_MESSAGE } from "@/domain/import/limits";
 
 /**
  * Couche de transport des imports : session et service isolés ; on vérifie
@@ -64,10 +65,10 @@ describe("action analyzeBrandFile", () => {
     expect(service.analyzeBrandFile).not.toHaveBeenCalled();
   });
 
-  it("devrait refuser un fichier de plus de 20 Mo", async () => {
-    const big = new File([new Uint8Array(20 * 1024 * 1024 + 1)], "gros.pptx");
+  it("devrait refuser un fichier de plus de 4 Mo", async () => {
+    const big = new File([new Uint8Array(4 * 1024 * 1024 + 1)], "gros.pptx");
     const result = await actions.analyzeBrandFile("prog-1", form(big));
-    expect(result).toMatchObject({ ok: false });
+    expect(result).toMatchObject({ ok: false, fieldErrors: { file: [BRAND_FILE_TOO_LARGE_MESSAGE] } });
     expect(service.analyzeBrandFile).not.toHaveBeenCalled();
   });
 

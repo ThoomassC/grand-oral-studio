@@ -88,16 +88,36 @@ async function visibleThemeProgram(tx: Tx, userId: string, themeId: string): Pro
   return theme.programId;
 }
 
+export const THEME_CHANGED_MESSAGE =
+  "Ce sujet a été modifié entre-temps (autre onglet ou autre membre du projet). Rechargez la page pour voir la dernière version : votre saisie non enregistrée sera perdue.";
+
 /**
  * Met à jour un sujet (éditeur). `input.problems` absent : problématiques inchangées
  * (formulaires antérieurs à la 1.2) ; présent : remplacées.
+ *
+ * Concurrence optimiste : `expectedUpdatedAt` est le `updatedAt` (ISO) du sujet reçu
+ * au chargement. S'il ne correspond plus (sujet enregistré entre-temps), ConflictError
+ * au lieu d'écraser l'autre version ; `undefined` : pas de contrôle. Le contrôle se fait
+ * sous le verrou du programme, que prend toute écriture de sujet : pas de course entre
+ * la lecture du jeton et l'écriture. Réordonner ou modifier un AUTRE sujet ne périme
+ * pas le jeton (positions réécrites en SQL brut, sans toucher updatedAt).
  */
-export async function updateTheme(userId: string, themeId: string, input: ThemeInput): Promise<ThemeView> {
+export async function updateTheme(
+  userId: string,
+  themeId: string,
+  input: ThemeInput,
+  expectedUpdatedAt?: string,
+): Promise<ThemeView> {
   return db().$transaction(async (tx) => {
     const programId = await visibleThemeProgram(tx, userId, themeId);
     await lockProgramFor(tx, userId, programId, "editor");
-    const { count } = await tx.theme.updateMany({
-      where: { id: themeId, programId },
+    const current = await tx.theme.findFirst({ where: { id: themeId, programId }, select: { updatedAt: true } });
+    if (!current) throw new NotFoundError("thème"); // supprimé par un appel concurrent
+    if (expectedUpdatedAt !== undefined && current.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()) {
+      throw new ConflictError(THEME_CHANGED_MESSAGE);
+    }
+    const row = await tx.theme.update({
+      where: { id: themeId },
       data: {
         name: input.name,
         description: input.description,
@@ -106,8 +126,6 @@ export async function updateTheme(userId: string, themeId: string, input: ThemeI
         ...(input.problems !== undefined ? { problems: input.problems } : {}),
       },
     });
-    if (count === 0) throw new NotFoundError("thème"); // supprimé par un appel concurrent
-    const row = await tx.theme.findUniqueOrThrow({ where: { id: themeId } });
     await touchProgram(tx, programId);
     return toThemeView(row);
   });

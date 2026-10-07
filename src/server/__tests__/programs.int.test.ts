@@ -212,10 +212,11 @@ describe("repo programmes — validation zod des JSON", () => {
     expect((await programs.getProgram(a.id, programId)).template.durationMinutes).toBe(20);
   });
 
-  it("devrait lever DataIntegrityError à la lecture quand le JSON stocké est corrompu", async () => {
+  it("JSON stocké corrompu : getProgram se replie sur le défaut (cf. tolerant-reads), la lecture stricte lève DataIntegrityError", async () => {
     const a = await createUser("a");
     const programId = await seedProgram(a.id);
     await db().program.update({ where: { id: programId }, data: { brand: { name: 42 } } });
-    await expect(programs.getProgram(a.id, programId)).rejects.toBeInstanceOf(DataIntegrityError);
+    await expect(programs.getProgram(a.id, programId)).resolves.toMatchObject({ degraded: ["brand"] });
+    await expect(programs.getProgramBrand(a.id, programId, "editor")).rejects.toBeInstanceOf(DataIntegrityError);
   });
 });

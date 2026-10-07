@@ -2,6 +2,7 @@ import { z } from "zod";
 import { brandFromTheme } from "@/domain/import/brand-from-theme";
 import { ImportFileError } from "@/domain/import/errors";
 import { detectImportFile, type ImportFileKind } from "@/domain/import/file-kind";
+import { BRAND_FILE_MAX_BYTES, BRAND_FILE_TOO_LARGE_MESSAGE } from "@/domain/import/limits";
 import { extractOfficeTheme } from "@/domain/import/office-theme";
 import { parseTemplateText, type RecognizedField } from "@/domain/import/template-from-text";
 import { parseThemePromptText, type ThemePromptImport } from "@/domain/import/themes-from-text";
@@ -32,9 +33,8 @@ import { assertProgramAccess, getProgramBrand, getProgramTemplate } from "../rep
 // Contrats d'entrée (validés au bord, types dérivés)
 // ---------------------------------------------------------------------------
 
-const MB = 1024 * 1024;
-/** Taille maximale d'un fichier importé (.pptx, .potx, .thmx). */
-export const BRAND_FILE_MAX_BYTES = 20 * MB;
+/** Taille maximale d'un fichier importé (.pptx, .potx, .thmx) : 4 Mo, partagée avec le client et next.config.ts. */
+export { BRAND_FILE_MAX_BYTES, BRAND_FILE_TOO_LARGE_MESSAGE };
 export const TEMPLATE_PROMPT_MAX_CHARS = 20_000;
 
 /** Fichier reçu du client (FormData, champ `file`). */
@@ -42,7 +42,7 @@ export const BrandFileSchema = z.object({
   file: z
     .instanceof(File, { message: "Choisissez un fichier à importer." })
     .refine((f) => f.size > 0, { message: "Le fichier est vide." })
-    .refine((f) => f.size <= BRAND_FILE_MAX_BYTES, { message: `Le fichier dépasse ${BRAND_FILE_MAX_BYTES / MB} Mo.` })
+    .refine((f) => f.size <= BRAND_FILE_MAX_BYTES, { message: BRAND_FILE_TOO_LARGE_MESSAGE })
     .refine((f) => f.name.length > 0 && f.name.length <= 255, { message: "Nom de fichier invalide." }),
 });
 
@@ -145,7 +145,7 @@ export async function analyzeBrandFile(
 
   // Défense en profondeur : le bord l'a vérifié, mais on ne lit jamais un fichier trop gros.
   if (file.size > BRAND_FILE_MAX_BYTES) {
-    throw new ValidationError(`Le fichier dépasse ${BRAND_FILE_MAX_BYTES / MB} Mo.`, { file: ["Fichier trop volumineux."] });
+    throw new ValidationError(BRAND_FILE_TOO_LARGE_MESSAGE, { file: [BRAND_FILE_TOO_LARGE_MESSAGE] });
   }
   const bytes = await file.bytes();
   let kind: ImportFileKind;

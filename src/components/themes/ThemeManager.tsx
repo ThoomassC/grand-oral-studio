@@ -23,6 +23,14 @@ export interface ThemeItem {
   notes: string;
   /** Nombre de diaporamas du jour J rattachés au sujet (supprimés avec lui). */
   finalDeckCount: number;
+  /** Version enregistrée (ISO) : jeton de concurrence renvoyé à l'enregistrement du sujet. */
+  updatedAt: string;
+}
+
+/** La plus récente de deux versions ISO (la page rafraîchie peut être en retard ou en avance sur notre dernier enregistrement). */
+function latestVersion(fromPage: string, fromSave: string | undefined): string {
+  if (fromSave === undefined) return fromPage;
+  return new Date(fromSave).getTime() > new Date(fromPage).getTime() ? fromSave : fromPage;
 }
 
 const IDS = {
@@ -77,6 +85,8 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
   const [savingOrder, setSavingOrder] = useState(false);
   const [orderSaved, setOrderSaved] = useState(false);
   const [, startTransition] = useTransition();
+  /** Version renvoyée par notre dernier enregistrement de chaque sujet (concurrence optimiste). */
+  const [savedVersions, setSavedVersions] = useState<Record<string, string>>({});
   /**
    * Enregistrement de l'ordre, sérialisé côté client : une seule requête à la
    * fois, et des déplacements rapides n'envoient ensuite que le DERNIER ordre.
@@ -268,7 +278,13 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                       initial={{ name: theme.name, description: theme.description, keywords: theme.keywords, notes: theme.notes }}
                       submitLabel="Enregistrer le sujet"
                       pendingLabel="Enregistrement…"
-                      onSubmit={(value) => updateTheme(theme.id, value)}
+                      onSubmit={async (value) => {
+                        // Sujet enregistré entre-temps (autre onglet, autre membre) : échec CONFLICT,
+                        // affiché par le formulaire, qui invite à recharger la page.
+                        const result = await updateTheme(theme.id, value, latestVersion(theme.updatedAt, savedVersions[theme.id]));
+                        if (result.ok) setSavedVersions((prev) => ({ ...prev, [theme.id]: result.data.updatedAt }));
+                        return result;
+                      }}
                       onSaved={(name) => {
                         setAnnounce(`Sujet « ${name} » enregistré.`);
                         closeEditor(theme.id);

@@ -1,8 +1,11 @@
+import { ENGINE_IDS } from "@/domain/ai-providers";
 import type { ProgramContext, ThemeRef } from "@/domain/contracts";
 import { replaceSlide } from "@/domain/deck";
 import { DeckSpecSchema, type Brand, type DeckSpec, type Slide } from "@/domain/schemas";
+import { z } from "zod";
 import { db } from "../db/client";
 import { ConflictError, NotFoundError, ValidationError } from "../errors";
+import { createLogger, type Logger } from "../logger";
 import { parseStored } from "../validation";
 import { denyAccess, liveDeck, lockDeckFor, lockProgramFor, programAccess } from "./access";
 import { readBrand, readTemplate, specJson, toDeckView } from "./mappers";
@@ -282,30 +285,84 @@ export async function getDeck(userId: string, deckId: string): Promise<DeckWithP
   };
 }
 
-/** Decks finaux actifs du projet (entraînement compris) : droit de lecteur. */
-export async function listFinalDecks(userId: string, programId: string): Promise<FinalDeckSummary[]> {
+interface FinalDeckRow {
+  id: string;
+  engine: string | null;
+  themeId: string | null;
+  themeName: string | null;
+  problem: string | null;
+  title: string | null;
+  practice: boolean;
+  createdAt: Date;
+}
+
+/** Moteurs connus d'un deck (même liste que mappers.toDeckView) ; un moteur inconnu est affiché comme absent. */
+const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]) satisfies z.ZodType<DeckEngine>;
+
+/** Ligne de la liste : le titre suit la règle de DeckSpec (non vide après nettoyage, 160 car. au plus). */
+const FinalDeckRowSchema = z.object({
+  id: z.string(),
+  engine: z.string().nullable(),
+  themeId: z.string().nullable(),
+  themeName: z.string().nullable(),
+  problem: z.string().nullable(),
+  title: DeckSpecSchema.shape.title,
+  practice: z.boolean(),
+  createdAt: z.date(),
+});
+
+/**
+ * Decks finaux actifs du projet (entraînement compris) : droit de lecteur.
+ *
+ * Lecture légère : seul le titre est extrait de la spec, en SQL (`spec->'title'`,
+ * et seulement si c'est une chaîne JSON), au lieu de charger et valider la spec
+ * complète de 100 decks. Une ligne dont le titre est invalide est ignorée et
+ * journalisée : la liste s'affiche quand même. Un deck à la spec abîmée mais au
+ * titre lisible reste listé ; c'est son ouverture (getDeck) qui échoue.
+ */
+export async function listFinalDecks(
+  userId: string,
+  programId: string,
+  log: Logger = createLogger({ scope: "repo.decks" }),
+): Promise<FinalDeckSummary[]> {
   const program = await db().program.findFirst({
     where: { id: programId, ...programAccess(userId, "viewer") },
     select: { id: true },
   });
   if (!program) throw new NotFoundError("programme");
-  const rows = await db().deck.findMany({
-    where: { programId, kind: "FINAL", ...liveDeck },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: FINAL_DECKS_LIMIT,
-    include: { theme: { select: { name: true } } },
-  });
-  return rows.map((r) => {
-    const view = toDeckView(r);
-    return {
-      id: r.id,
-      engine: view.engine,
-      themeId: r.themeId,
-      themeName: r.theme?.name ?? null,
-      problem: r.problem ?? "",
-      title: view.spec.title,
-      practice: view.practice,
-      createdAt: r.createdAt,
-    };
+  // Index (programId, kind, createdAt DESC) ; le sujet par clé primaire.
+  const rows = await db().$queryRaw<FinalDeckRow[]>`
+    SELECT d."id", d."engine", d."themeId", t."name" AS "themeName", d."problem",
+           CASE WHEN jsonb_typeof(d."spec" -> 'title') = 'string' THEN d."spec" ->> 'title' END AS "title",
+           d."practice", d."createdAt"
+    FROM "Deck" d
+    LEFT JOIN "Theme" t ON t."id" = d."themeId"
+    WHERE d."programId" = ${programId} AND d."kind" = 'FINAL' AND d."deletedAt" IS NULL
+    ORDER BY d."createdAt" DESC, d."id" DESC
+    LIMIT ${FINAL_DECKS_LIMIT}`;
+
+  return rows.flatMap((raw) => {
+    const parsed = FinalDeckRowSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("deck.list.invalid_row", { programId, deckId: raw.id, issues: z.prettifyError(parsed.error) });
+      return [];
+    }
+    const r = parsed.data;
+    const engine = r.engine === null ? null : DeckEngineSchema.safeParse(r.engine);
+    if (engine && !engine.success) {
+      log.warn("deck.list.unknown_engine", { programId, deckId: r.id, engine: r.engine });
+    }
+    return [
+      {
+        id: r.id,
+        engine: engine?.success ? engine.data : null,
+        themeId: r.themeId,
+        themeName: r.themeName,
+        problem: r.problem ?? "",
+        title: r.title,
+        practice: r.practice,
+        createdAt: r.createdAt,
+      },
+    ];
   });
 }

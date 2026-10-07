@@ -9,7 +9,15 @@ vi.mock("@/server/actions/programs", () => ({ updateBrand: (...args: unknown[]) 
 
 const { BrandWorkspace } = await import("@/components/brand/BrandWorkspace");
 
-afterEach(cleanup);
+/** Versions (brandSavedAt) de l'apparence : chargée avec la page, puis renvoyées par les enregistrements. */
+const V0 = "2026-10-01T08:00:00.000Z";
+const V1 = "2026-10-01T08:05:00.000Z";
+const V2 = "2026-10-01T08:06:00.000Z";
+
+afterEach(() => {
+  cleanup();
+  updateBrand.mockReset();
+});
 
 describe("Éditeur de la page Apparence", () => {
   it("ne devrait plus renvoyer vers une autre page pour importer (thèmes, sujets)", () => {
@@ -27,7 +35,7 @@ describe("Éditeur de la page Apparence", () => {
   });
 
   it("devrait garder « Apparence enregistrée. » quand la page se rafraîchit avec l'apparence enregistrée", async () => {
-    updateBrand.mockResolvedValue({ ok: true, data: null });
+    updateBrand.mockResolvedValue({ ok: true, data: { brandSavedAt: V1 } });
     const initial = defaultBrand();
     const { rerender } = render(<BrandWorkspace programId="p1" initialBrand={initial} format="16:9" />);
     const name = screen.getByRole("textbox", { name: "Nom de l'apparence" });
@@ -67,5 +75,44 @@ describe("Éditeur de la page Apparence", () => {
 
     fireEvent.change(screen.getByLabelText("Titres"), { target: { value: "Georgia" } });
     await waitFor(() => expect(screen.queryByText(warning)).not.toBeInTheDocument());
+  });
+});
+
+describe("Éditeur de la page Apparence — concurrence optimiste", () => {
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'apparence" }));
+
+  it("devrait renvoyer la version reçue au chargement, puis celle du dernier enregistrement", async () => {
+    updateBrand
+      .mockResolvedValueOnce({ ok: true, data: { brandSavedAt: V1 } })
+      .mockResolvedValueOnce({ ok: true, data: { brandSavedAt: V2 } });
+    render(<BrandWorkspace programId="p1" initialBrand={defaultBrand()} savedAt={V0} format="16:9" />);
+    save();
+    await screen.findByText("Apparence enregistrée.");
+    save();
+    await waitFor(() => expect(updateBrand).toHaveBeenCalledTimes(2));
+    expect(updateBrand.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
+  });
+
+  it("devrait reprendre la version du serveur avec l'apparence importée", async () => {
+    updateBrand.mockResolvedValue({ ok: true, data: { brandSavedAt: V2 } });
+    const initial = defaultBrand();
+    const { rerender } = render(<BrandWorkspace programId="p1" initialBrand={initial} savedAt={V0} format="16:9" />);
+    rerender(<BrandWorkspace programId="p1" initialBrand={{ ...initial, name: "Importée" }} savedAt={V1} format="16:9" />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Nom de l'apparence" })).toHaveValue("Importée"));
+    save();
+    await waitFor(() => expect(updateBrand).toHaveBeenCalledTimes(1));
+    expect(updateBrand.mock.calls[0]?.[2]).toBe(V1);
+  });
+
+  it("devrait afficher le conflit et garder la saisie quand l'apparence a changé entre-temps", async () => {
+    const conflict = "L'apparence a été modifiée entre-temps (autre onglet ou autre membre du projet). Rechargez la page.";
+    updateBrand.mockResolvedValue({ ok: false, error: conflict, code: "CONFLICT" });
+    render(<BrandWorkspace programId="p1" initialBrand={defaultBrand()} savedAt={null} format="16:9" />);
+    const name = screen.getByRole("textbox", { name: "Nom de l'apparence" });
+    fireEvent.change(name, { target: { value: "Ma charte" } });
+    save();
+    expect(await screen.findByText(conflict)).toBeInTheDocument();
+    expect(updateBrand.mock.calls[0]?.[2]).toBeNull();
+    expect(name).toHaveValue("Ma charte");
   });
 });

@@ -54,13 +54,30 @@ function lineName(index: number, section: Section): string {
 export function TemplateEditor({
   programId,
   initialTemplate,
+  savedAt,
   ref,
 }: {
   programId: string;
   initialTemplate: PromptTemplate;
+  /**
+   * Version enregistrée reçue du serveur (templateSavedAt, ISO ; null = jamais enregistrée),
+   * renvoyée à chaque enregistrement pour détecter une trame modifiée entre-temps
+   * (autre onglet, autre membre). Absente : pas de contrôle.
+   */
+  savedAt?: string | null;
   ref?: Ref<TemplateEditorHandle>;
 }) {
   const [saved, setSaved] = useState<PromptTemplate>(initialTemplate);
+  // Jeton de concurrence optimiste : la version reçue au chargement, puis celle que renvoie
+  // chaque enregistrement. Une nouvelle version venue du serveur n'est reprise que si son
+  // contenu est celui que l'éditeur tient pour enregistré ; sinon l'enregistrement suivant
+  // est refusé (conflit) au lieu d'écraser l'autre version.
+  const [version, setVersion] = useState(savedAt);
+  const [serverVersion, setServerVersion] = useState(savedAt);
+  if (savedAt !== serverVersion) {
+    setServerVersion(savedAt);
+    if (JSON.stringify(initialTemplate) === JSON.stringify(saved)) setVersion(savedAt);
+  }
   const [template, setTemplate] = useState<PromptTemplate>(initialTemplate);
   /** Saisie des champs « Durée », convertie en secondes à l'enregistrement seulement. */
   const [durations, setDurations] = useState<DurationTexts>(() => durationTexts(initialTemplate));
@@ -203,7 +220,7 @@ export function TemplateEditor({
     setFieldErrors({});
     startTransition(async () => {
       try {
-        const result = await updateTemplate(programId, checked.data);
+        const result = await updateTemplate(programId, checked.data, version);
         if (!result.ok) {
           const serverErrors = result.fieldErrors ?? {};
           setStatus({ kind: "error", message: result.error });
@@ -211,6 +228,7 @@ export function TemplateEditor({
           else setFieldErrors(serverErrors);
           return;
         }
+        setVersion(result.data.templateSavedAt);
         setSaved(checked.data);
         setTemplate(checked.data);
         // « 3 min » devient « 3:00 » : l'écriture enregistrée, sans changer la valeur.
