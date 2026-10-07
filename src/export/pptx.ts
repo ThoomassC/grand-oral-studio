@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { posix } from "node:path";
 import JSZip from "jszip";
 import PptxGenJS from "pptxgenjs";
 import { isSafeFont, type SafeFont } from "@/domain/fonts";
@@ -22,7 +24,8 @@ import {
 
 /**
  * Export PowerPoint d'un deck, charte appliquée (fond, couleurs, polices, logo
- * en haut à droite). Un rendu par layout ; notes d'orateur.
+ * en haut à droite, un seul fichier image pour toutes les diapos : cf.
+ * dedupeMedia). Un rendu par layout ; notes d'orateur.
  *
  * Tailles et zones : src/domain/typography.ts (partagé avec l'aperçu écran),
  * qui garantit par calcul que le pire cas du schéma tient à 12 pt au moins.
@@ -95,12 +98,62 @@ export function applyBrandColorScheme(themeXml: string, brand: Brand): string {
   return themeXml.replace(CLR_SCHEME, () => brandColorScheme(brand));
 }
 
-/** pptxgenjs n'expose que les polices du thème : les couleurs sont écrites après coup dans l'archive. */
-async function withBrandTheme(pptx: Buffer, brand: Brand): Promise<Buffer> {
+const MEDIA_DIR = "ppt/media/";
+const RELATIONSHIP = /<Relationship\b[^>]*>/g;
+const TARGET_ATTR = /\bTarget="([^"]*)"/;
+
+/**
+ * Fusionne les médias identiques de l'archive : pptxgenjs ne dédoublonne les
+ * images que par chemin, si bien qu'un logo passé en data URL est recopié une
+ * fois par diapo (20 diapos → 20 copies). On garde le premier fichier de
+ * chaque contenu (octets + extension, qui fixe le type MIME via les `Default`
+ * de [Content_Types].xml), on redirige vers lui la cible des relations
+ * internes de tous les .rels, puis on retire les copies. Le XML des diapos
+ * n'est pas touché (mêmes rId, même position, même ordre de superposition).
+ */
+export async function dedupeMedia(zip: JSZip): Promise<void> {
+  const media = Object.keys(zip.files)
+    .filter((name) => name.startsWith(MEDIA_DIR) && !zip.files[name]!.dir)
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+  const kept = new Map<string, string>(); // empreinte → chemin conservé
+  const replaced = new Map<string, string>(); // copie → chemin conservé
+  for (const name of media) {
+    const bytes = await zip.file(name)!.async("uint8array");
+    const key = `${posix.extname(name).toLowerCase()}:${createHash("sha256").update(bytes).digest("hex")}`;
+    const first = kept.get(key);
+    if (first) replaced.set(name, first);
+    else kept.set(key, name);
+  }
+  if (replaced.size === 0) return;
+
+  for (const relsPath of Object.keys(zip.files).filter((name) => name.endsWith(".rels"))) {
+    // Les cibles d'un ppt/slides/_rels/slide1.xml.rels sont relatives à ppt/slides/.
+    const partDir = posix.dirname(posix.dirname(relsPath));
+    const xml = await zip.file(relsPath)!.async("string");
+    let changed = false;
+    const next = xml.replace(RELATIONSHIP, (rel) => {
+      if (/\bTargetMode="External"/.test(rel)) return rel;
+      const target = TARGET_ATTR.exec(rel)?.[1];
+      if (target === undefined) return rel;
+      const canonical = replaced.get(posix.normalize(posix.join(partDir, target)));
+      if (!canonical) return rel;
+      changed = true;
+      return rel.replace(TARGET_ATTR, () => `Target="${posix.relative(partDir, canonical)}"`);
+    });
+    if (changed) zip.file(relsPath, next);
+  }
+  for (const copy of replaced.keys()) zip.remove(copy);
+}
+
+/**
+ * Post-traitement de l'archive produite par pptxgenjs : couleurs de la charte
+ * dans le thème (pptxgenjs n'en expose que les polices) et médias dédoublonnés.
+ */
+async function finalizeArchive(pptx: Buffer, brand: Brand): Promise<Buffer> {
   const zip = await JSZip.loadAsync(pptx);
   const theme = zip.file(THEME_PATH);
-  if (!theme) return pptx;
-  zip.file(THEME_PATH, applyBrandColorScheme(await theme.async("string"), brand));
+  if (theme) zip.file(THEME_PATH, applyBrandColorScheme(await theme.async("string"), brand));
+  await dedupeMedia(zip);
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 const safeFont = (value: string): SafeFont => (isSafeFont(value) ? value : "Arial");
@@ -397,5 +450,5 @@ export async function deckToPptx(deck: DeckSpec, brand: Brand, template: PromptT
   else if (out instanceof Uint8Array) buffer = Buffer.from(out);
   else if (out instanceof ArrayBuffer) buffer = Buffer.from(new Uint8Array(out));
   else throw new Error("pptxgenjs n'a pas produit de tampon binaire.");
-  return withBrandTheme(buffer, brand);
+  return finalizeArchive(buffer, brand);
 }

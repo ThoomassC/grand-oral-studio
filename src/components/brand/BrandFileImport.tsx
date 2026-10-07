@@ -3,6 +3,7 @@
 import { Button, Dropzone, FileCard } from "@thomascaron/opale-ui";
 import { useId, useRef, useState, useTransition } from "react";
 import { fileExtension, RETIRED_EXTENSIONS, RETIRED_FORMAT_MESSAGE } from "@/domain/import/file-kind";
+import { BRAND_FILE_MAX_BYTES, BRAND_FILE_SIZE_HINT, BRAND_FILE_TOO_LARGE_MESSAGE } from "@/domain/import/limits";
 import type { PromptTemplate } from "@/domain/schemas";
 import { analyzeBrandFile } from "@/server/actions/imports";
 import { updateBrand } from "@/server/actions/programs";
@@ -25,7 +26,6 @@ type Phase =
   | { kind: "preview"; file: FileInfo; result: BrandImportData; saveError: string | null }
   | { kind: "applied"; file: FileInfo };
 
-const MB = 1024 * 1024;
 /**
  * Les extensions à macros et celles des formats retirés (PDF, images) sont
  * acceptées par la zone de dépôt pour être refusées ici, avec leur raison :
@@ -138,7 +138,7 @@ export function BrandFileImport({
           .thmx d&apos;Office : couleurs, polices et logo sont lus dans le fichier.
         </li>
         <li className="text-muted">
-          20 Mo au plus. Les fichiers avec macros (.pptm, .potm), les PDF et les images ne sont pas acceptés.
+          {BRAND_FILE_SIZE_HINT}. Les fichiers avec macros (.pptm, .potm), les PDF et les images ne sont pas acceptés.
         </li>
       </ul>
 
@@ -149,7 +149,9 @@ export function BrandFileImport({
             ref={zoneRef}
             accept={ACCEPT}
             multiple={false}
-            maxSizeBytes={20 * MB}
+            // Contrôle avant envoi (le serveur refait le sien) : un corps trop lourd serait
+            // coupé par l'hébergeur sans message utile.
+            maxSizeBytes={BRAND_FILE_MAX_BYTES}
             className="min-h-32"
             onFiles={analyze}
             onError={() => {
@@ -159,7 +161,7 @@ export function BrandFileImport({
             labels={{
               select: "ou choisissez un fichier",
               tooManyFiles: () => "Déposez un seul fichier à la fois.",
-              fileTooLarge: () => "Le fichier dépasse 20 Mo.",
+              fileTooLarge: () => BRAND_FILE_TOO_LARGE_MESSAGE,
               typeRejected: "Type de fichier non pris en charge : utilisez un .pptx, .potx ou .thmx.",
             }}
           >

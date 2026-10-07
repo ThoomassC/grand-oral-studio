@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultBrand } from "@/domain/defaults";
+import type { Brand } from "@/domain/schemas";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/apparence", useRouter: () => ({ push: vi.fn() }) }));
 const updateBrand = vi.fn();
@@ -47,5 +48,24 @@ describe("Éditeur de la page Apparence", () => {
       expect(screen.getByLabelText(/^Principale/, { selector: "input:not([type=color])" })).toHaveValue("#AA3300"),
     );
     expect(screen.getByRole("textbox", { name: "Nom de l'apparence" })).toHaveValue("Apparence importée");
+  });
+
+  it("devrait prévenir, sous le choix de police, qu'une police non système n'est pas incluse dans le .pptx", async () => {
+    const initial: Brand = { ...defaultBrand(), fonts: { heading: "Arial", body: "Arial" } };
+    render(<BrandWorkspace programId="p1" initialBrand={initial} format="16:9" />);
+    const warning = /Cette police n'est pas incluse dans le fichier PowerPoint/;
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Titres"), { target: { value: "Montserrat" } });
+    const shown = await screen.findAllByText(warning);
+    expect(shown).toHaveLength(1);
+    // Sous le champ « Titres », pas sous « Texte ».
+    const field = (label: string) =>
+      document.querySelector(`label[for="${screen.getByLabelText(label).id}"]`)!.parentElement!;
+    expect(field("Titres")).toContainElement(shown[0]!);
+    expect(field("Texte")).not.toContainElement(shown[0]!);
+
+    fireEvent.change(screen.getByLabelText("Titres"), { target: { value: "Georgia" } });
+    await waitFor(() => expect(screen.queryByText(warning)).not.toBeInTheDocument());
   });
 });

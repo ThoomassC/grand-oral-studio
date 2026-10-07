@@ -9,12 +9,14 @@ import { errorProps, firstError, validateWith, type FieldErrors } from "@/compon
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { SlidePreview } from "@/components/slides/SlidePreview";
 import { SAFE_FONTS } from "@/components/slides/fonts";
+import { fontWarning } from "@/domain/fonts";
 import { SAMPLE_SLIDES } from "@/components/slides/sample-slides";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { FieldError } from "@/components/ui/FieldError";
 import { countFieldErrors, focusFirstInvalid, invalidCountMessage } from "@/components/ui/focus";
 import { FormStatus, IDLE, type FormStatusState } from "@/components/ui/FormStatus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { Notice } from "@/components/ui/Notice";
 import { contrastRatio } from "./contrast";
 
 type ColorKey = keyof Brand["colors"];
@@ -285,6 +287,7 @@ export function BrandEditor({
               const id = `${baseId}-font-${key}`;
               const current = brand.fonts[key];
               const known = SAFE_FONTS.includes(current);
+              const warning = fontWarning(current);
               return (
                 <div key={key}>
                   <label htmlFor={id} className="opale-field__label">
@@ -307,6 +310,10 @@ export function BrandEditor({
                     ))}
                   </SelectInput>
                   <FieldError id={`${id}-err`} message={firstError(fieldErrors, `fonts.${key}`)} />
+                  {/* Polices hors système : absentes du .pptx, remplacées ailleurs. */}
+                  <LiveRegion className="mt-2 text-sm">
+                    {warning ? <Notice tone="warning">{warning}</Notice> : null}
+                  </LiveRegion>
                 </div>
               );
             })}

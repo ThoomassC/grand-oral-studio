@@ -160,4 +160,29 @@ describe("Bloc « Partir d'un exemple » (page Apparence)", () => {
       expect(analyzeFile).not.toHaveBeenCalled();
     },
   );
+
+  it("devrait annoncer la taille maximale de 4 Mo", () => {
+    renderBlock();
+    expect(screen.getByText(/4 Mo au plus\./)).toBeInTheDocument();
+    expect(screen.queryByText(/20 Mo/)).not.toBeInTheDocument();
+  });
+
+  it("devrait refuser un fichier de plus de 4 Mo avant tout envoi, avec le message dédié", async () => {
+    const user = userEvent.setup();
+    renderBlock();
+    await user.upload(dropzone(), new File([new Uint8Array(4 * 1024 * 1024 + 1)], "lourde.pptx"));
+    expect(
+      await screen.findByText("Le fichier dépasse 4 Mo. Allégez-le (images compressées) ou importez seulement le logo."),
+    ).toBeInTheDocument();
+    expect(analyzeFile).not.toHaveBeenCalled();
+  });
+
+  it("devrait envoyer un fichier de 4 Mo tout juste", async () => {
+    analyzeFile.mockResolvedValue({ ok: true, data: { brand: IMPORTED, notes: [] } });
+    const user = userEvent.setup();
+    renderBlock();
+    await user.upload(dropzone(), new File([new Uint8Array(4 * 1024 * 1024)], "limite.pptx"));
+    await screen.findByRole("heading", { name: "Apparence proposée" });
+    expect(analyzeFile).toHaveBeenCalledTimes(1);
+  });
 });
