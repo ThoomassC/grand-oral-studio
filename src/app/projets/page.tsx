@@ -1,3 +1,4 @@
+import { Badge } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
@@ -61,6 +62,12 @@ export default async function ProgramsPage() {
                           {p.name}
                         </Link>
                       </h3>
+                      {/* Projet dont l'utilisateur est membre (éditeur ou lecteur), pas propriétaire. */}
+                      {p.ownerName !== null ? (
+                        <Badge tone="neutral" className="mt-1">
+                          Partagé par {p.ownerName}
+                        </Badge>
+                      ) : null}
                       {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                         <div className="flex gap-1 whitespace-nowrap">

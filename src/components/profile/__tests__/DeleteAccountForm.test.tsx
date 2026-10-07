@@ -46,4 +46,15 @@ describe("DeleteAccountForm", () => {
     await openAndType(EMAIL);
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
+
+  it("devrait prévenir que les projets partagés disparaîtront aussi pour les collègues", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<DeleteAccountForm email={EMAIL} action={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Supprimer mon compte" }));
+    expect(screen.getByRole("dialog")).not.toHaveTextContent("pour vos collègues aussi");
+    rerender(<DeleteAccountForm email={EMAIL} action={vi.fn()} sharesProjects />);
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Les projets que vous partagez seront supprimés pour vos collègues aussi.",
+    );
+  });
 });

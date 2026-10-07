@@ -7,6 +7,7 @@ import { ProfileNameForm } from "@/components/profile/ProfileNameForm";
 import { formatDate, plural } from "@/components/ui/format";
 import { getProfile, type SignInMethod } from "@/server/queries";
 import { isEmailDeliveryEnabled } from "@/lib/auth-options";
+import { countSharedOwnedPrograms } from "@/server/repo/members";
 import { requireUser } from "@/server/session";
 import { deleteAccount, updateProfileName } from "./actions";
 
@@ -19,7 +20,7 @@ const METHOD_LABEL: Record<SignInMethod, string> = {
 
 export default async function ProfilePage() {
   const user = await requireUser();
-  const profile = await getProfile(user.id);
+  const [profile, sharedOwned] = await Promise.all([getProfile(user.id), countSharedOwnedPrograms(user.id)]);
   if (!profile) notFound();
 
   const methods = profile.signInMethods.map((m) => METHOD_LABEL[m]).join(" ; ") || "—";
@@ -92,7 +93,7 @@ export default async function ProfilePage() {
               Votre compte et toutes vos données (projets, sujets, diaporamas, réglages IA) sont supprimés définitivement.
             </p>
             <div className="mt-5">
-              <DeleteAccountForm email={profile.email} action={deleteAccount} />
+              <DeleteAccountForm email={profile.email} action={deleteAccount} sharesProjects={sharedOwned > 0} />
             </div>
           </Card>
         </section>

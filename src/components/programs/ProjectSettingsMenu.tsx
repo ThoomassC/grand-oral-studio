@@ -11,6 +11,8 @@ import {
 } from "@thomascaron/opale-ui";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { updateProgram } from "@/server/actions/programs";
+import type { ProgramRole } from "@/server/repo/access";
+import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { TextArea, TextInput } from "@/components/ui/Field";
@@ -36,17 +38,24 @@ const DIALOG: Record<Field, { title: string; success: string }> = {
  *
  * Focus : sur le champ à l'ouverture, rendu à l'engrenage à la fermeture
  * (l'entrée de menu qui a ouvert la modale n'existe plus à ce moment-là).
+ *
+ * « Partager » (propriétaire) ou « Membres du projet » (éditeur, lecteur) mène à
+ * la page Partage, par la garde « modifications non enregistrées ».
  */
 export function ProjectSettingsMenu({
   programId,
   name,
   description,
+  role,
 }: {
   programId: string;
   name: string;
   description: string;
+  /** Rôle de l'utilisateur : la gestion des membres est réservée au propriétaire. */
+  role: ProgramRole;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const { go } = useGuardedNavigation();
   const [editing, setEditing] = useState<Field | null>(null);
   /** Change à chaque ouverture : le formulaire repart des valeurs en cours. */
   const [session, setSession] = useState(0);
@@ -85,6 +94,13 @@ export function ProjectSettingsMenu({
           </DropdownMenuItem>
           <DropdownMenuItem className="header-menu__item" value="description" onSelect={() => open("description")}>
             Modifier la description
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="header-menu__item"
+            value="partage"
+            onSelect={() => go(`/projets/${programId}/partage`, triggerRef.current)}
+          >
+            {role === "owner" ? "Partager" : "Membres du projet"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
