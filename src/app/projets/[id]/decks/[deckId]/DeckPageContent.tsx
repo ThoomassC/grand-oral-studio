@@ -2,6 +2,7 @@ import { Feedback } from "@thomascaron/opale-ui";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { DeckReview } from "@/components/decks/DeckReview";
 import { EngineBadge } from "@/components/decks/EngineBadge";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { FocusOnMount } from "@/components/ui/FocusOnMount";
 import { formatDateTime } from "@/components/ui/format";
 import { finalDeckReview } from "@/domain/deck-quality";
@@ -25,6 +26,7 @@ export async function DeckPageContent({
   const isSkeleton = deck.kind === "SKELETON";
   const isNew = isNewParam && !isSkeleton;
   const backHref = decksHref(id);
+  const deckHref = `${backHref}/${deck.id}`;
   const updatedAt = toIso(deck.updatedAt);
   const showSubtitle = deck.spec.subtitle && normalize(deck.spec.subtitle) !== normalize(deck.program.name);
   const showProblem = deck.problem && !normalize(deck.spec.title).includes(normalize(deck.problem));
@@ -64,6 +66,21 @@ export async function DeckPageContent({
         ) : null}
         <p className="mt-1 text-sm text-muted">Mis à jour le {formatDateTime(new Date(updatedAt))}</p>
       </div>
+
+      {/* Entraînement (lecteur compris) : répétition chronométrée, questions du jury, fiche d'orateur imprimable. */}
+      {isSkeleton ? null : (
+        <nav aria-label="S'entraîner" className="flex flex-wrap items-center gap-3">
+          <ButtonLink href={`${deckHref}/repetition`} variant="ghost">
+            Répéter
+          </ButtonLink>
+          <ButtonLink href={`${deckHref}/questions`} variant="ghost">
+            Questions du jury
+          </ButtonLink>
+          <ButtonLink href={`${deckHref}/notes`} variant="ghost">
+            Imprimer les notes
+          </ButtonLink>
+        </nav>
+      )}
 
       {isSkeleton ? (
         <Feedback tone="info" title="Ancien squelette">
