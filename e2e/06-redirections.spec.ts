@@ -63,7 +63,7 @@ test.describe("6. Redirections — pages d'arrivée (connecté)", () => {
 
     await page.goto(`/projets/${id}/squelettes`);
     await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/decks`);
-    await expect(main.getByRole("heading", { name: "Decks du jour J", level: 2 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Diaporamas du jour J", level: 2 })).toBeVisible();
   });
 
   test("devrait ouvrir un deck depuis son ancienne adresse /squelettes/<deckId>", async ({ page, account }) => {
@@ -74,6 +74,6 @@ test.describe("6. Redirections — pages d'arrivée (connecté)", () => {
 
     await page.goto(`/projets/${id}/squelettes/${deckId}`);
     await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/decks/${deckId}`);
-    await expect(page.getByRole("main").getByText("Deck final · Sans sujet")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Diaporama final · Sans sujet")).toBeVisible();
   });
 });

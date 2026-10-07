@@ -23,7 +23,7 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
   }
   const coverCount = slides.filter((s) => s.layout === "title").length;
   if (coverCount > 1) {
-    issues.push(`Le deck contient ${coverCount} diapos de couverture ; une seule est attendue.`);
+    issues.push(`Le diaporama contient ${coverCount} diapos de couverture ; une seule est attendue.`);
   }
 
   const counts = new Map<string, number>();
@@ -36,7 +36,7 @@ export function checkDeckAgainstTemplate(deck: DeckSpec, template: PromptTemplat
   for (const section of template.sections) {
     const actual = counts.get(section.id) ?? 0;
     if (actual === 0) {
-      issues.push(`La section « ${section.title} » est absente du deck.`);
+      issues.push(`La section « ${section.title} » est absente du diaporama.`);
     } else if (actual !== section.slides) {
       issues.push(`La section « ${section.title} » compte ${actual} diapo(s) au lieu de ${section.slides}.`);
     }

@@ -30,7 +30,7 @@ function leafOf(programId: string, pathname: string, deck: OpenDeck | undefined)
     const deckHref = deck.id ? `${decks}/${deck.id}` : null;
     const segment = deckHref && pathname.startsWith(`${deckHref}/`) ? pathname.slice(deckHref.length + 1).split("/")[0] : undefined;
     const page = segment ? DECK_PAGES[segment] : undefined;
-    const decksCrumb = { id: "decks", href: decks, label: "Decks" };
+    const decksCrumb = { id: "decks", href: decks, label: "Diaporamas" };
     if (deckHref && page) return [decksCrumb, { id: "deck", href: deckHref, label: deck.title }, { id: "deck-page", label: page }];
     return [decksCrumb, { id: "deck", label: deck.title }];
   }
@@ -43,8 +43,8 @@ function leafOf(programId: string, pathname: string, deck: OpenDeck | undefined)
       { id: "fiche", label: "Fiche de révision" },
     ];
   }
-  if (pathname === decks) return [{ id: "decks", label: "Decks" }];
-  if (pathname.startsWith(`${decks}/`)) return [{ id: "decks", href: decks, label: "Decks" }];
+  if (pathname === decks) return [{ id: "decks", label: "Diaporamas" }];
+  if (pathname.startsWith(`${decks}/`)) return [{ id: "decks", href: decks, label: "Diaporamas" }];
   if (templateTabOfPath(programId, pathname) === "subjects") {
     return [
       { id: "template", href: stepHref(programId, "template"), label: stepCrumb("template") },

@@ -47,7 +47,7 @@ export function BrandImport({
         <Tabs defaultValue="fichier" className="mt-4">
           <TabsList aria-label="Façon d'importer l'apparence">
             <TabsTrigger value="fichier">Depuis un fichier .pptx</TabsTrigger>
-            <TabsTrigger value="prompt">Depuis un prompt</TabsTrigger>
+            <TabsTrigger value="prompt">Depuis vos consignes</TabsTrigger>
           </TabsList>
           <TabsContent value="fichier" className="pt-4">
             <BrandFileImport programId={programId} format={format} />

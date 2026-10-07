@@ -143,12 +143,12 @@ describe("RehearsalPlayer — bilan et enregistrement", () => {
   });
 
   it("devrait proposer de réessayer l'enregistrement après un échec", async () => {
-    saveRehearsal.mockResolvedValueOnce({ ok: false, error: "Ce deck est introuvable." });
+    saveRehearsal.mockResolvedValueOnce({ ok: false, error: "Ce diaporama est introuvable." });
     setup();
     await click("Commencer la répétition");
     elapse(12);
     await click("Terminer");
-    expect(screen.getByRole("alert")).toHaveTextContent("Ce deck est introuvable.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Ce diaporama est introuvable.");
 
     saveRehearsal.mockResolvedValueOnce({ ok: true, data: { rehearsal: { id: "r1" } } });
     await click("Réessayer l'enregistrement");

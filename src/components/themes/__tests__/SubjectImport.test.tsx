@@ -56,7 +56,7 @@ function renderAppearance() {
 
 async function analyzeText(user: ReturnType<typeof userEvent.setup>, label: string | RegExp, text = "Sujets : 1. Cybersécurité") {
   await user.type(screen.getByLabelText(label), text);
-  await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+  await user.click(screen.getByRole("button", { name: "Lire le texte" }));
 }
 
 afterEach(() => {
@@ -84,7 +84,7 @@ describe("Import de sujets depuis un texte (page Sujets)", () => {
   it("devrait exiger un texte avant d'appeler le serveur", async () => {
     const user = userEvent.setup();
     renderSubjects();
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     expect(analyzePrompt).not.toHaveBeenCalled();
     const field = screen.getByLabelText(FIELD);
     expect(field).toHaveAttribute("aria-invalid", "true");

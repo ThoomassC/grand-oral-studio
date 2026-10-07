@@ -19,7 +19,7 @@ import {
 import { brandJson, readBrand, readTemplate, specJson, templateJson, toDeckView, toThemeView } from "./mappers";
 import { prismaErrorCode } from "./ownership";
 import { purgeTrash, undoDeadline } from "./trash";
-import type { ProgramDetail, ProgramSummary } from "./types";
+import type { DegradedPart, ProgramDetail, ProgramSummary } from "./types";
 
 /**
  * Programmes. Chaque fonction prend `userId` explicitement et filtre par rôle
@@ -98,11 +98,7 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
   });
 }
 
-/** Partie du projet illisible en base, remplacée par sa valeur par défaut à la lecture. */
-export type DegradedPart = "brand" | "template";
-
-/** ProgramDetail lu de façon tolérante : `degraded` liste les parties remplacées par défaut. */
-export type ProgramDetailRead = ProgramDetail & { degraded: DegradedPart[] };
+export type { DegradedPart };
 
 /**
  * Lit une colonne JSON ; si elle a dérivé (DataIntegrityError), renvoie la valeur
@@ -133,12 +129,14 @@ export async function getProgram(
   userId: string,
   programId: string,
   log: Logger = createLogger({ scope: "repo.programs" }),
-): Promise<ProgramDetailRead> {
+): Promise<ProgramDetail> {
   const [row, rehearsalCount] = await Promise.all([
     db().program.findFirst({
       where: { id: programId, ...programAccess(userId, "viewer") },
       include: {
         members: memberRoleOf(userId),
+        // Nom du propriétaire, pour le bandeau « Projet partagé par … » d'un membre.
+        owner: { select: { name: true } },
         themes: {
           orderBy: { position: "asc" },
           include: {
@@ -197,6 +195,7 @@ export async function getProgram(
       template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),
     role,
+    ownerName: role === "owner" ? null : row.owner.name,
     degraded,
   };
 }

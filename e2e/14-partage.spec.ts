@@ -84,9 +84,30 @@ test.describe("14. Partage d'un projet entre collègues", () => {
       // Le lecteur voit le bandeau « lecture seule ».
       await viewer.page.goto(`/projets/${programId}/apparence`);
       await expect(viewer.page.getByText("Projet partagé par Alice Martin · lecture seule")).toBeVisible();
-      // L'éditeur, non.
+      // Le lecteur n'a aucun bouton d'édition : apparence, menu du projet, trame, sujets, Jour J.
+      const viewerMain = viewer.page.getByRole("main");
+      await expect(viewerMain.getByRole("button", { name: "Enregistrer l'apparence" })).toHaveCount(0);
+      await expect(viewerMain.getByRole("tab", { name: "Depuis vos consignes" })).toHaveCount(0);
+      const gear = viewer.page.getByRole("button", { name: "Paramètres du projet" });
+      await waitForHydration(gear);
+      await gear.click();
+      const menu = viewer.page.getByRole("menu", { name: "Paramètres du projet" });
+      await expect(menu.getByRole("menuitem", { name: "Membres du projet" })).toBeVisible();
+      await expect(menu.getByRole("menuitem", { name: "Renommer" })).toHaveCount(0);
+      await expect(menu.getByRole("menuitem", { name: "Modifier la description" })).toHaveCount(0);
+      await viewer.page.keyboard.press("Escape");
+      await viewer.page.goto(`/projets/${programId}/trame`);
+      await expect(viewerMain.getByRole("button", { name: "Enregistrer la trame" })).toHaveCount(0);
+      await viewer.page.goto(`/projets/${programId}/trame/sujets`);
+      await expect(viewerMain.getByRole("button", { name: "Ajouter un sujet" })).toHaveCount(0);
+      await viewer.page.goto(`/projets/${programId}/jour-j`);
+      await expect(viewerMain.getByText("Jour J en lecture seule")).toBeVisible();
+      await expect(viewerMain.getByRole("textbox")).toHaveCount(0);
+      await expect(viewerMain.getByRole("button", { name: /Générer|Continuer/ })).toHaveCount(0);
+      // L'éditeur, non : bandeau absent, enregistrement possible.
       await editor.page.goto(`/projets/${programId}/apparence`);
       await expect(editor.page.getByText(/lecture seule/)).toHaveCount(0);
+      await expect(editor.page.getByRole("main").getByRole("button", { name: "Enregistrer l'apparence" })).toBeVisible();
     } finally {
       await Promise.all([owner.context.close(), editor.context.close(), viewer.context.close()]);
     }

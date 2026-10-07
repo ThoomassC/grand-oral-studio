@@ -94,7 +94,7 @@ export function PptxDownloadButton({ href, fallbackName }: { href: string; fallb
       </LiveRegion>
       <LiveRegion role="alert" className="max-w-md text-sm font-medium text-danger">
         {state.kind === "error" ? (
-          "L'export a échoué. Réessayez ; si le problème persiste, utilisez le prompt Canva ci-dessous."
+          "L'export a échoué. Réessayez ; si le problème persiste, utilisez les consignes Canva ci-dessous."
         ) : state.kind === "expired" ? (
           <>
             Votre session a expiré. Reconnectez-vous : votre diaporama est enregistré.{" "}

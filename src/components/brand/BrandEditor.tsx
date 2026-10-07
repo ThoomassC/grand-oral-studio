@@ -207,7 +207,7 @@ export function BrandEditor({
           <h2 tabIndex={-1} className="text-2xl focus:outline-none">
             Couleurs, polices et logo
           </h2>
-          <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et au prompt Canva.</p>
+          <p className="text-sm text-muted">Appliquée à l&apos;aperçu, à l&apos;export .pptx et aux consignes Canva.</p>
         </div>
 
         <div>

@@ -21,7 +21,7 @@ const THEMES: DayTheme[] = [
 ];
 const PROBLEM = "Comment les PME peuvent-elles financer leur transition ?";
 const WRITER: Parameters<typeof DayJourney>[0]["writer"] = {
-  label: "Sans IA (trame remplie avec vos notes)",
+  label: "Sans IA",
   outlineOnly: true,
   waitHint: "Cela prend quelques secondes.",
   engine: "free",
@@ -115,7 +115,7 @@ describe("DayJourney — génération longue", () => {
     expect(reload).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Relancer" })).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Si le diaporama se termine entre-temps, il apparaîtra en haut de cette page et dans Decks : attendez avant de générer à nouveau\./),
+      screen.getByText(/Si le diaporama se termine entre-temps, il apparaîtra en haut de cette page et dans Diaporamas : attendez avant de générer à nouveau\./),
     ).toBeInTheDocument();
   });
 });
@@ -279,7 +279,7 @@ describe("DayJourney — reconnaissance sans IA", () => {
     // Rappel en fin de parcours (le bandeau du haut est vérifié à part).
     const step3 = screen.getByRole("region", { name: /Étape 3 sur 3/ });
     expect(within(step3).getByText(/Rédaction :/).closest("p")).toHaveTextContent(
-      "Rédaction : Sans IA (trame remplie avec vos notes)",
+      "Rédaction : Sans IA",
     );
     expect(within(step3).getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/configuration-ia");
     expect(document.body.textContent).not.toMatch(/squelette|thème/i);
@@ -341,12 +341,12 @@ describe("DayJourney — bandeau « Rédaction »", () => {
   it("devrait expliquer ce que produit « Sans IA »", () => {
     renderWith({ writer: { ...WRITER, label: "Sans IA" } });
     expect(screen.getByText("Rédaction : Sans IA")).toBeInTheDocument();
-    expect(screen.getByText(/votre trame remplie avec vos notes, texte à compléter/)).toBeInTheDocument();
+    expect(screen.getByText(/un diaporama à compléter, construit avec votre trame et vos notes/)).toBeInTheDocument();
   });
 
   it("devrait dire pourquoi le rédacteur choisi ne fonctionnera pas", () => {
     renderWith({
-      writer: { ...MISTRAL_WRITER, ready: false, problem: "Ajoutez votre clé API Mistral dans la Configuration IA pour lancer une génération." },
+      writer: { ...MISTRAL_WRITER, ready: false, problem: "Ajoutez votre clé API Mistral dans la Rédaction IA pour lancer une génération." },
     });
     expect(screen.getByText(/Ajoutez votre clé API Mistral/)).toBeInTheDocument();
   });
@@ -358,7 +358,7 @@ describe("DayJourney — repli en un clic", () => {
     const alert = screen.getByRole("alert");
     expect(within(alert).getByText(/Votre problématique et votre choix sont conservés/)).toBeInTheDocument();
     expect(within(alert).getByRole("link", { name: /Rédaction IA/ })).toHaveAttribute("href", "/configuration-ia");
-    expect(within(alert).queryByRole("link", { name: /Configuration IA/ })).not.toBeInTheDocument();
+    expect(alert).not.toHaveTextContent("Configuration IA");
     expect(within(alert).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Réessayer",
       "Générer avec Claude (clé d'équipe)",
@@ -402,6 +402,13 @@ describe("DayJourney — repli en un clic", () => {
     const alert = await screen.findByRole("alert");
     expect(within(alert).queryByRole("button", { name: "Générer sans IA maintenant" })).not.toBeInTheDocument();
     expect(within(alert).getByRole("button", { name: "Réessayer" })).toBeInTheDocument();
+  });
+
+  it("devrait remplacer « Réessayez dans … » par l'heure quand le serveur précise l'attente", async () => {
+    await failOnce({ engineChoices: CHOICES }, { ...RATE_LIMITED, retryAfterSeconds: 90 });
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Mistral limite le nombre de requêtes en ce moment\. Réessayez à \d{2}:\d{2}, ou choisissez un autre rédacteur\./);
+    expect(alert).not.toHaveTextContent("Réessayez dans 30 s");
   });
 
   it("ne devrait rien proposer pour une erreur qui n'est pas due au rédacteur", async () => {

@@ -29,7 +29,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (!user) return jsonError(401, "Vous devez être connecté.", log.correlationId);
 
   const parsedId = IdSchema.safeParse((await ctx.params).id);
-  if (!parsedId.success) return jsonError(404, "Ce deck est introuvable.", log.correlationId);
+  if (!parsedId.success) return jsonError(404, "Ce diaporama est introuvable.", log.correlationId);
 
   try {
     const deck = await getDeck(user.id, parsedId.data);

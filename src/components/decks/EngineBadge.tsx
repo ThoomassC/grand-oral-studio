@@ -20,7 +20,7 @@ export function EngineBadge({ engine, className }: { engine: DeckEngine | null; 
   const badge = BADGE[engine];
   return (
     <Badge tone={badge.tone} className={className}>
-      <span className="sr-only">Moteur : </span>
+      <span className="sr-only">Rédaction : </span>
       {badge.label}
     </Badge>
   );

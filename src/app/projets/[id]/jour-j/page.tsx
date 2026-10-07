@@ -1,3 +1,4 @@
+import { Feedback } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import { DayJourney, type DayTheme, type DayWriter, type RecentDeck } from "@/components/day/DayJourney";
 import { ExamChecklist } from "@/components/day/ExamChecklist";
@@ -5,10 +6,18 @@ import { engineChoices } from "@/components/day/journey";
 import { PrepCountdown } from "@/components/day/PrepCountdown";
 import { prepStorageKey } from "@/components/day/prep-timer";
 import { generationWaitHint } from "@/components/day/wait-hint";
+import { decksHref } from "@/components/projects/steps";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { examChecklist } from "@/domain/exam-checklist";
 import { prepMinutesOf } from "@/domain/prep-clock";
-import { getAiSettings, getWriter, listFinalDecks, NotFoundError, type FinalDeckSummary } from "@/server/queries";
-import { getExamReadiness } from "@/server/repo/readiness";
+import {
+  getAiSettings,
+  getExamReadiness,
+  getWriter,
+  listFinalDecks,
+  NotFoundError,
+  type FinalDeckSummary,
+} from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
 
@@ -48,10 +57,12 @@ function mostRecent(decks: FinalDeckSummary[], practice: boolean, now: number): 
 export default async function DayPage({ params, searchParams }: PageProps<"/projets/[id]/jour-j">) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const practice = isPractice(query);
-  // Lectures indépendantes en parallèle ; loadProgram vérifie l'accès (404 sinon).
-  const user = await requireUser();
-  const [program, decks, writer, settings, readiness] = await Promise.all([
-    loadProgram(id),
+  // loadProgram vérifie l'accès (404 sinon) ; déjà lu par le layout (cache de la requête).
+  const [user, program] = await Promise.all([requireUser(), loadProgram(id)]);
+  // Lecteur : ni formulaire ni chrono ; le serveur refuse de toute façon la génération.
+  if (program.role === "viewer") return <ReadOnlyDay programId={program.id} practice={practice} />;
+  // Lectures indépendantes en parallèle.
+  const [decks, writer, settings, readiness] = await Promise.all([
     listFinalDecks(user.id, id).catch((error: unknown) => {
       // L'absence du projet est traitée par loadProgram (404).
       if (error instanceof NotFoundError) return [];
@@ -124,6 +135,26 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
         practice={practice}
         prepKey={prepKey}
       />
+    </div>
+  );
+}
+
+/** Jour J (ou entraînement) d'un lecteur : rien à générer, renvoi vers les diaporamas existants. */
+function ReadOnlyDay({ programId, practice }: { programId: string; practice: boolean }) {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className="min-w-0">
+        <h2 className="text-2xl">{practice ? "Entraînement" : "Jour J"}</h2>
+      </div>
+      <Feedback tone="neutral" title={`${practice ? "Entraînement" : "Jour J"} en lecture seule`}>
+        Générer un diaporama est réservé au propriétaire et aux éditeurs du projet. Vous pouvez relire, exporter et
+        répéter les diaporamas déjà créés.
+      </Feedback>
+      <div>
+        <ButtonLink href={decksHref(programId)} variant="ghost">
+          Voir les diaporamas
+        </ButtonLink>
+      </div>
     </div>
   );
 }

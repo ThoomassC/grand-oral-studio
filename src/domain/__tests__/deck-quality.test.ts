@@ -377,7 +377,7 @@ describe("finalDeckReviewItems — avertissements reliés à leurs diapos", () =
   it("devrait relier une section absente à aucune diapo", () => {
     const deck = spoken(makeConformingDeck());
     deck.slides = deck.slides.filter((s) => s.sectionId !== "problem");
-    expect(finalDeckReviewItems(deck, ctx)).toContainEqual({ message: "La section « Problématique » est absente du deck.", slides: [] });
+    expect(finalDeckReviewItems(deck, ctx)).toContainEqual({ message: "La section « Problématique » est absente du diaporama.", slides: [] });
   });
 
   it("devrait relier un chiffre sans source à sa diapo", () => {

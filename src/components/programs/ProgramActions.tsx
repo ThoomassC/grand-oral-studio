@@ -110,7 +110,7 @@ export function ProgramActions({
       <ConfirmActionDialog
         open={confirming}
         title="Supprimer le projet ?"
-        question={`Supprimer « ${programName} », ses sujets et ses decks ? Vous pourrez annuler pendant quelques secondes.`}
+        question={`Supprimer « ${programName} », ses sujets et ses diaporamas ? Vous pourrez annuler pendant quelques secondes.`}
         confirmLabel="Supprimer définitivement"
         requireText={programName}
         onConfirm={async () => {

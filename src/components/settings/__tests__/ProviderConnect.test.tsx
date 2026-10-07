@@ -189,7 +189,7 @@ describe("ProviderConnect — Claude avec une clé", () => {
   });
 
   it("devrait afficher le crédit épuisé renvoyé par le test", async () => {
-    const message = "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit.";
+    const message = "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez Sans IA dans la Rédaction IA.";
     testConnection.mockResolvedValue({ ok: false, error: message });
     const user = userEvent.setup();
     render(<ProviderConnect provider="claude" connection={CLAUDE_KEY} onActivated={vi.fn()} />);

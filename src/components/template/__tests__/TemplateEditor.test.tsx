@@ -284,3 +284,46 @@ describe("Éditeur de trame — concurrence optimiste", () => {
     expect(update.mock.calls[0]?.[2]).toBe(V0);
   });
 });
+
+describe("Éditeur de trame — temps de préparation", () => {
+  const field = () => screen.getByLabelText("Temps de préparation (minutes)");
+
+  it("devrait laisser le champ vide par défaut, avec 90 min annoncées", () => {
+    renderEditor();
+    expect(field()).toHaveValue(null);
+    expect(field()).toHaveAttribute("placeholder", "90");
+    expect(field()).toHaveAccessibleDescription("Chronomètre du jour J ; vide : 90 min.");
+  });
+
+  it("devrait enregistrer le temps saisi avec la trame", async () => {
+    const user = userEvent.setup();
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
+    renderEditor();
+    await user.type(field(), "60");
+    expect(screen.getByText("Modifications non enregistrées")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect((update.mock.calls[0]?.[1] as PromptTemplate).prepMinutes).toBe(60);
+  });
+
+  it("devrait revenir à la valeur par défaut quand le champ est vidé", async () => {
+    const user = userEvent.setup();
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
+    renderEditor({ ...defaultTemplate(), prepMinutes: 120 });
+    expect(field()).toHaveValue(120);
+    await user.clear(field());
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect((update.mock.calls[0]?.[1] as PromptTemplate).prepMinutes).toBeUndefined();
+  });
+
+  it("devrait refuser un temps hors bornes sans rien envoyer", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.type(field(), "5");
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    expect(await screen.findByText("La préparation dure au moins 10 minutes.")).toBeInTheDocument();
+    expect(field()).toHaveAttribute("aria-invalid", "true");
+    expect(update).not.toHaveBeenCalled();
+  });
+});

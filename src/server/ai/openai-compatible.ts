@@ -208,7 +208,7 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
   /** Mémorisé après un refus de json_schema : les appels suivants passent directement en json_object. */
   let preferredMode: Mode = entry.structured;
 
-  const unavailableMessage = `${label} est momentanément indisponible. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Configuration IA.`;
+  const unavailableMessage = `${label} est momentanément indisponible. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Rédaction IA.`;
 
   function body(prompt: PromptPair, name: string, schema: JsonNode, maxTokens: number, mode: Mode) {
     const system =
@@ -229,7 +229,7 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
   function timedOut(operation: string, cause: unknown): AiUnavailableError {
     return new AiUnavailableError(`${operation}: budget de temps dépassé`, {
       cause,
-      userMessage: `${label} n'a pas répondu dans le délai imparti. Réessayez, ou choisissez un autre rédacteur dans la Configuration IA.`,
+      userMessage: `${label} n'a pas répondu dans le délai imparti. Réessayez, ou choisissez un autre rédacteur dans la Rédaction IA.`,
     });
   }
 
@@ -259,7 +259,7 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
     if (status === 404) {
       log.error("ai.model_not_found", { ...fields, model, message: info.message });
       return new AiUnavailableError(`${operation}: modèle ${model} introuvable chez ${provider}`, {
-        userMessage: `Le modèle ${model} n'est pas disponible chez ${label} : choisissez-en un autre dans la Configuration IA.`,
+        userMessage: `Le modèle ${model} n'est pas disponible chez ${label} : choisissez-en un autre dans la Rédaction IA.`,
       });
     }
     if (status >= 500) {
@@ -297,7 +297,7 @@ export function createOpenAiCompatibleProvider(options: OpenAiCompatibleOptions)
         throw new AiUnavailableError(`${operation}: connexion à ${provider}`, {
           cause: error,
           refundable: true,
-          userMessage: `${label} est injoignable pour le moment. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Configuration IA.`,
+          userMessage: `${label} est injoignable pour le moment. Réessayez dans un instant, ou choisissez un autre rédacteur dans la Rédaction IA.`,
         });
       }
 

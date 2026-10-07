@@ -161,7 +161,7 @@ function boundSections(drafts: DraftSection[]): BoundedSections {
       if (coverSeconds === null && read && "seconds" in read) coverSeconds = read.seconds;
     }
     warnings.push(
-      `Ligne ${quoteList(covers.map((c) => c.title))} non reprise : l'application ajoute déjà la couverture en tête du deck` +
+      `Ligne ${quoteList(covers.map((c) => c.title))} non reprise : l'application ajoute déjà la couverture en tête du diaporama` +
         (coverGuidance.length > 0 ? " (son contenu est repris dans les contraintes)." : "."),
     );
   }
@@ -690,7 +690,7 @@ function structuredConstraints(
       kept.push(p);
       length += cost;
     }
-    if (missing) omitted.push(block.title || "Introduction du prompt");
+    if (missing) omitted.push(block.title || "Introduction du texte");
     picked.set(block, kept);
   }
   // Ordre d'affichage : celui du document (la priorité ne sert qu'au remplissage).

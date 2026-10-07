@@ -89,13 +89,13 @@ describe("ProjectSteps", () => {
     pathname = "/projets/p1/decks/d9";
     render(<ProjectSteps programId="p1" steps={STEPS} deckCount={0} />);
     expect(within(nav()).queryByRole("link", { current: "step" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Decks/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /Diaporamas/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("devrait proposer les Decks à part, avec leur nombre", () => {
     render(<ProjectSteps programId="p1" steps={STEPS} deckCount={2} />);
-    expect(screen.getByRole("link", { name: /Decks.*2 diaporamas/ })).toHaveAttribute("href", "/projets/p1/decks");
-    expect(within(nav()).queryByRole("link", { name: /Decks/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Diaporamas.*2 diaporamas/ })).toHaveAttribute("href", "/projets/p1/decks");
+    expect(within(nav()).queryByRole("link", { name: /Diaporamas/ })).not.toBeInTheDocument();
   });
 
   it("devrait demander confirmation avant de quitter une page aux modifications non enregistrées", async () => {
@@ -165,6 +165,6 @@ describe("ProjectSteps", () => {
   it("devrait placer les Decks dans une navigation nommée", () => {
     render(<ProjectSteps programId="p1" steps={STEPS} deckCount={1} />);
     const decks = screen.getByRole("navigation", { name: "Diaporamas du projet" });
-    expect(within(decks).getByRole("link", { name: /Decks.*1 diaporama$/ })).toHaveAttribute("href", "/projets/p1/decks");
+    expect(within(decks).getByRole("link", { name: /Diaporamas.*1 diaporama$/ })).toHaveAttribute("href", "/projets/p1/decks");
   });
 });

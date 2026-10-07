@@ -24,7 +24,7 @@ export interface DeckEdit {
 
 /** Message de la régénération pour un utilisateur Sans IA (le bouton est masqué, l'appel direct reste refusé). */
 const AI_ONLY_MESSAGE =
-  "Disponible avec une rédaction IA : choisissez un rédacteur IA dans la Configuration IA pour réécrire une diapo.";
+  "Disponible avec une rédaction IA : choisissez un rédacteur IA dans la Rédaction IA pour réécrire une diapo.";
 
 /**
  * Remplace la diapo `index`. `expectedUpdatedAt` est la version (ISO) sur

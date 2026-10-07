@@ -1,6 +1,6 @@
 import { db } from "../db/client";
 import { ConflictError, LimitExceededError, NotFoundError, ValidationError } from "../errors";
-import { denyAccess, lockProgramFor, memberRole, programAccess, roleOf, type MemberRole, type ProgramRole } from "./access";
+import { lockProgramFor, memberRole, programAccess, roleOf, type MemberRole, type ProgramRole } from "./access";
 import { prismaErrorCode } from "./ownership";
 
 /**
@@ -197,14 +197,4 @@ export async function countSharedOwnedPrograms(userId: string): Promise<number> 
         SELECT 1 FROM "ProgramMember" m
         WHERE m."programId" = p."id" AND m."userId" <> p."ownerId")`;
   return rows[0]?.count ?? 0;
-}
-
-/** Nom du propriétaire d'un projet actif auquel `userId` a accès (bandeau « Projet partagé par … »). */
-export async function getProgramOwnerName(userId: string, programId: string): Promise<string> {
-  const row = await db().program.findFirst({
-    where: { id: programId, ...programAccess(userId, "viewer") },
-    select: { owner: { select: { name: true } } },
-  });
-  if (!row) return denyAccess(db(), userId, programId, "viewer");
-  return row.owner.name;
 }

@@ -58,7 +58,7 @@ export async function DeckPageContent({
           {deck.spec.title}
         </h2>
         <p className="mt-1 text-sm text-muted">
-          {isSkeleton ? "Squelette (version 1.0)" : "Deck final"} · {deck.themeName ?? "Sans sujet"}
+          {isSkeleton ? "Squelette (version 1.0)" : "Diaporama final"} · {deck.themeName ?? "Sans sujet"}
         </p>
         {/* Arrivée après génération : le focus quitte <body> pour le titre du deck. */}
         {isNew ? <FocusOnMount targetId="titre-deck" /> : null}
@@ -100,8 +100,8 @@ export async function DeckPageContent({
       ) : null}
 
       {deck.engine === "free" && !isSkeleton ? (
-        <Feedback tone="neutral" title="Construit sans IA">
-          Ce diaporama a été construit sans IA, à partir de votre trame
+        <Feedback tone="neutral" title="Sans IA">
+          Ce diaporama à compléter a été construit sans IA, à partir de votre trame
           {deck.themeName ? " et des notes du sujet" : " et de la problématique"} : rien n&apos;a été inventé. Les puces{" "}
           <mark className="rounded-sm bg-highlight-soft px-1 text-text">« À compléter »</mark> sont à remplacer par vos
           contenus.
@@ -144,7 +144,7 @@ export async function DeckPageContent({
       {canEdit ? (
         <section aria-labelledby="zone-suppression" className="border-t border-border pt-6">
           <h2 id="zone-suppression" className="text-lg font-semibold">
-            {isSkeleton ? "Supprimer ce squelette" : "Supprimer ce deck"}
+            {isSkeleton ? "Supprimer ce squelette" : "Supprimer ce diaporama"}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {isSkeleton

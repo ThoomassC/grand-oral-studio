@@ -58,7 +58,7 @@ export function attachmentHeader(filename: string, unicodeName?: string): string
 }
 
 const ENGINE_LABEL: Record<DeckEngine, string> = {
-  free: "Gratuit",
+  free: "Sans IA",
   ollama: "Ollama",
   claude: "Claude",
   mistral: "Mistral",
@@ -82,7 +82,7 @@ export interface DeckFileInfo {
  * sujet) ou « Sujet - squelette - Moteur » (anciens squelettes v1.0).
  */
 export function deckFileTitle(info: DeckFileInfo): string {
-  const parts = [info.themeName?.trim() ?? "", info.kind === "SKELETON" ? "squelette" : "deck final"];
+  const parts = [info.themeName?.trim() ?? "", info.kind === "SKELETON" ? "squelette" : "diaporama"];
   if (info.engine) parts.push(ENGINE_LABEL[info.engine]);
   if (info.kind === "FINAL") parts.push(parisDate(info.createdAt));
   return parts.filter(Boolean).join(" - ");

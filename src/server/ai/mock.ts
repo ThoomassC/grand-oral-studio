@@ -96,7 +96,7 @@ function buildDeck(h: DeckHints): DeckSpec {
     slides,
   };
   const parsed = DeckSpecSchema.safeParse(deck);
-  if (!parsed.success) throw new AiInvalidOutputError("mock: deck hors schéma", { cause: parsed.error });
+  if (!parsed.success) throw new AiInvalidOutputError("mock: diaporama hors schéma", { cause: parsed.error });
   return parsed.data;
 }
 

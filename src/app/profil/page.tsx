@@ -6,9 +6,8 @@ import { DeleteAccountForm } from "@/components/profile/DeleteAccountForm";
 import { ProfileNameForm } from "@/components/profile/ProfileNameForm";
 import { DownloadButton } from "@/components/projects/DownloadButton";
 import { formatDate, plural } from "@/components/ui/format";
-import { getProfile, type SignInMethod } from "@/server/queries";
+import { countSharedOwnedPrograms, getProfile, type SignInMethod } from "@/server/queries";
 import { isEmailDeliveryEnabled } from "@/lib/auth-options";
-import { countSharedOwnedPrograms } from "@/server/repo/members";
 import { requireUser } from "@/server/session";
 import { deleteAccount, updateProfileName } from "./actions";
 

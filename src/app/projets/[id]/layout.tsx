@@ -1,25 +1,10 @@
 import { Feedback } from "@thomascaron/opale-ui";
-import { notFound } from "next/navigation";
 import { Meter } from "@/components/ui/Meter";
 import { ProjectSettingsMenu } from "@/components/programs/ProjectSettingsMenu";
 import { ProjectSteps } from "@/components/layout/ProjectSteps";
 import { StepNav } from "@/components/projects/StepNav";
 import { TemplateTabs } from "@/components/projects/TemplateTabs";
-import { NotFoundError } from "@/server/errors";
-import { getProgramOwnerName } from "@/server/repo/members";
-import { requireUser } from "@/server/session";
 import { loadProgram } from "../_lib/load";
-
-/** Nom du propriétaire, pour le bandeau d'un lecteur (projet retiré entre-temps : 404). */
-async function ownerNameFor(programId: string): Promise<string> {
-  const user = await requireUser();
-  try {
-    return await getProgramOwnerName(user.id, programId);
-  } catch (error) {
-    if (error instanceof NotFoundError) notFound();
-    throw error;
-  }
-}
 
 /**
  * En-tête commun des pages d'un projet : fil d'Ariane (slot `@crumbs`, qui
@@ -38,7 +23,8 @@ export default async function ProgramLayout({ children, crumbs, params }: Layout
   // Decks du jour J, avec ou sans sujet (les anciens squelettes ne sont pas comptés).
   const deckCount = program.finalDeckCount;
   const label = `${doneCount}/${total} étapes`;
-  const sharedBy = program.role === "viewer" ? await ownerNameFor(program.id) : null;
+  // Nom du propriétaire lu avec le projet (une seule requête) : bandeau du lecteur seulement.
+  const sharedBy = program.role === "viewer" ? program.ownerName : null;
 
   return (
     <div className="flex flex-1 flex-col">

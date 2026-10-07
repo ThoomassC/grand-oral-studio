@@ -37,8 +37,8 @@ test.beforeAll(async ({ browser }) => {
     "Étape 2 · Trame": `/projets/${id}/trame`,
     "Trame · Sujets": `/projets/${id}/trame/sujets`,
     "Étape 3 · Jour J": `/projets/${id}/jour-j`,
-    Decks: `/projets/${id}/decks`,
-    Deck: `/projets/${id}/decks/${deckId}`,
+    Diaporamas: `/projets/${id}/decks`,
+    Diaporama: `/projets/${id}/decks/${deckId}`,
     "Squelette (version 1.0)": `/projets/${id}/decks/${skeletonId}`,
   });
 });
@@ -57,8 +57,8 @@ const PAGES = [
   "Étape 2 · Trame",
   "Trame · Sujets",
   "Étape 3 · Jour J",
-  "Decks",
-  "Deck",
+  "Diaporamas",
+  "Diaporama",
   "Squelette (version 1.0)",
 ] as const;
 

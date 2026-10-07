@@ -57,7 +57,7 @@ describe("Bloc « Partir d'un exemple » (page Apparence)", () => {
     // Sous-bloc de la page Apparence (h2) : niveau 3.
     expect(within(region).getByRole("heading", { name: "Partir d'un exemple", level: 3 })).toBeInTheDocument();
     const tabs = within(region).getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Depuis un fichier .pptx", "Depuis un prompt"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Depuis un fichier .pptx", "Depuis vos consignes"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(region).toHaveTextContent("Rien n'est envoyé à une IA.");
     expect(region.textContent).not.toMatch(/Claude|moteur|Configuration IA/);

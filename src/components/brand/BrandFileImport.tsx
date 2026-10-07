@@ -183,7 +183,7 @@ export function BrandFileImport({
         {phase.kind === "error" ? (
           <Notice tone="error" id={ids.error}>
             <p>Import impossible : {phase.message}</p>
-            <p className="mt-1">Choisissez un autre fichier, ou essayez le mode « Depuis un prompt ».</p>
+            <p className="mt-1">Choisissez un autre fichier, ou essayez le mode « Depuis vos consignes ».</p>
           </Notice>
         ) : null}
       </LiveRegion>

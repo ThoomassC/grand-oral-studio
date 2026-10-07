@@ -62,6 +62,9 @@ export interface ThemeWithSkeleton extends ThemeView {
   finalDeckCount: number;
 }
 
+/** Partie du projet illisible en base, remplacée par sa valeur par défaut à la lecture. */
+export type DegradedPart = "brand" | "template";
+
 export interface ProgramDetail {
   id: string;
   name: string;
@@ -80,6 +83,10 @@ export interface ProgramDetail {
   progress: ProjectProgress;
   /** Rôle de l'utilisateur sur ce projet. */
   role: ProgramRole;
+  /** Nom du propriétaire quand le projet est partagé avec l'utilisateur ; null pour le propriétaire. */
+  ownerName: string | null;
+  /** Parties illisibles en base, remplacées par leur valeur par défaut à la lecture (lecture tolérante). */
+  degraded: DegradedPart[];
 }
 
 /**

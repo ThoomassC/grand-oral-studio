@@ -69,7 +69,7 @@ type Exit = { label: string; link: (page: Page) => Locator };
 
 const EXITS: Exit[] = [
   { label: "étapes du projet (Étape 3)", link: (p) => projectSteps(p).getByRole("link", { name: /^Étape 3 : Jour J/ }) },
-  { label: "lien Decks des étapes", link: (p) => p.getByRole("navigation", { name: "Diaporamas du projet" }).getByRole("link", { name: /^Decks/ }) },
+  { label: "lien Decks des étapes", link: (p) => p.getByRole("navigation", { name: "Diaporamas du projet" }).getByRole("link", { name: /^Diaporamas/ }) },
   { label: "fil d'Ariane (Projets)", link: (p) => p.getByRole("navigation", { name: "Fil d'Ariane" }).getByRole("link", { name: "Projets" }) },
   { label: "barre du bas (étape suivante)", link: (p) => p.getByRole("navigation", { name: "Étapes précédente et suivante" }).getByRole("link", { name: /^Étape suivante/ }) },
   { label: "en-tête (onglet Projets)", link: (p) => p.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Projets" }) },
@@ -281,7 +281,7 @@ test.describe("5. Trame — contenu type et durée par ligne", () => {
 
 test.describe("5. Trame — depuis un prompt (sans IA)", () => {
   function promptRegion(page: Page) {
-    return main(page).getByRole("region", { name: "Préremplir avec un prompt" });
+    return main(page).getByRole("region", { name: "Préremplir depuis vos consignes" });
   }
 
   function proposedLines(preview: Locator) {
@@ -305,8 +305,8 @@ test.describe("5. Trame — depuis un prompt (sans IA)", () => {
     const id = await createProject(page, "Trame prompt");
     await openStep(page, id, "trame");
     const region = promptRegion(page);
-    await region.getByLabel("Consignes ou prompt").fill(TEMPLATE_PROMPT);
-    await region.getByRole("button", { name: "Analyser le prompt" }).click();
+    await region.getByLabel("Vos consignes (texte collé)").fill(TEMPLATE_PROMPT);
+    await region.getByRole("button", { name: "Lire le texte" }).click();
     const preview = region.getByRole("region", { name: "Trame proposée" });
     await expect(preview).toBeVisible();
     await expectFourSections(preview);
@@ -341,8 +341,8 @@ test.describe("5. Trame — depuis un prompt (sans IA)", () => {
       "| 10 | Conclusion | Réponse directe à la problématique, puis une ouverture | 3:00 |",
     ].join("\n");
     const region = promptRegion(page);
-    await region.getByLabel("Consignes ou prompt").fill(table);
-    await region.getByRole("button", { name: "Analyser le prompt" }).click();
+    await region.getByLabel("Vos consignes (texte collé)").fill(table);
+    await region.getByRole("button", { name: "Lire le texte" }).click();
     const preview = region.getByRole("region", { name: "Trame proposée" });
     await expect(proposedLines(preview)).toHaveText([
       "Contexte — 2 diapos · 3:00",
@@ -366,8 +366,8 @@ test.describe("5. Trame — depuis un prompt (sans IA)", () => {
     await openStep(page, id, "trame");
     const region = promptRegion(page);
     await region.locator('input[type="file"]').setInputFiles(FILES.promptTxt);
-    await expect(region.getByLabel("Consignes ou prompt")).toHaveValue(TEMPLATE_PROMPT + "\n");
-    await region.getByRole("button", { name: "Analyser le prompt" }).click();
+    await expect(region.getByLabel("Vos consignes (texte collé)")).toHaveValue(TEMPLATE_PROMPT + "\n");
+    await region.getByRole("button", { name: "Lire le texte" }).click();
     await expectFourSections(region.getByRole("region", { name: "Trame proposée" }));
   });
 });

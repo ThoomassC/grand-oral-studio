@@ -22,8 +22,8 @@ afterEach(() => {
 });
 
 async function confirmDelete(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "Supprimer le deck Mobilités" }));
-  const dialog = await screen.findByRole("dialog", { name: "Supprimer le deck ?" });
+  await user.click(screen.getByRole("button", { name: "Supprimer le diaporama Mobilités" }));
+  const dialog = await screen.findByRole("dialog", { name: "Supprimer le diaporama ?" });
   return dialog;
 }
 
@@ -41,7 +41,7 @@ describe("DeleteDeckButton — suppression annulable", () => {
     const dialog = await confirmDelete(user);
     expect(dialog).toHaveTextContent("Vous pourrez annuler pendant quelques secondes.");
     expect(dialog).not.toHaveTextContent("définitive");
-    await user.click(within(dialog).getByRole("button", { name: "Supprimer le deck" }));
+    await user.click(within(dialog).getByRole("button", { name: "Supprimer le diaporama" }));
 
     expect(remove).toHaveBeenCalledWith("d1");
     expect(router.replace).toHaveBeenCalledWith("/projets/p1/decks");
@@ -54,14 +54,14 @@ describe("DeleteDeckButton — suppression annulable", () => {
 
   it("devrait afficher l'échec de l'annulation", async () => {
     remove.mockResolvedValue({ ok: true, data: { undoUntil: "2026-10-07T08:00:30.000Z" } });
-    restore.mockResolvedValue({ ok: false, error: "Ce deck est introuvable." });
+    restore.mockResolvedValue({ ok: false, error: "Ce diaporama est introuvable." });
     const user = userEvent.setup();
     render(
       <ToastProvider>
         <DeleteDeckButton deckId="d1" label="Mobilités" />
       </ToastProvider>,
     );
-    await user.click(within(await confirmDelete(user)).getByRole("button", { name: "Supprimer le deck" }));
+    await user.click(within(await confirmDelete(user)).getByRole("button", { name: "Supprimer le diaporama" }));
     await user.click(await screen.findByRole("button", { name: "Annuler la suppression du diaporama Mobilités" }));
     expect(await screen.findByText("Annulation impossible.")).toBeInTheDocument();
     expect(router.refresh).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe("DeleteDeckButton — suppression annulable", () => {
     );
     const dialog = await confirmDelete(user);
     expect(dialog).toHaveTextContent("Cette action est définitive.");
-    await user.click(within(dialog).getByRole("button", { name: "Supprimer le deck" }));
+    await user.click(within(dialog).getByRole("button", { name: "Supprimer le diaporama" }));
     await waitFor(() => expect(remove).toHaveBeenCalledWith("s1"));
     expect(screen.queryByText("Diaporama supprimé.")).not.toBeInTheDocument();
   });

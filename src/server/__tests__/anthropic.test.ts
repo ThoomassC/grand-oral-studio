@@ -225,7 +225,7 @@ describe("createAnthropicProvider — clé refusée (401/403)", () => {
     const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AiKeyRejectedError);
     expect((error as AiKeyRejectedError).userMessage).toBe(
-      "Votre clé API Anthropic est refusée. Mettez-la à jour dans la Configuration IA.",
+      "Votre clé API Anthropic est refusée. Mettez-la à jour dans la Rédaction IA.",
     );
     expect(calls).toHaveLength(1);
   });
@@ -258,7 +258,7 @@ describe("createAnthropicProvider — crédit épuisé (400 credit balance)", ()
     const error = (await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e)) as AiCreditExhaustedError;
     expect(error).toBeInstanceOf(AiCreditExhaustedError);
     expect(error.userMessage).toBe(
-      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans la Configuration IA.",
+      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez Sans IA dans la Rédaction IA.",
     );
   });
 

@@ -113,7 +113,7 @@ describe("choix du moteur et de la facturation", () => {
     const result = await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
     expect(result).toEqual({
       ok: false,
-      error: "Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.",
+      error: "Ajoutez votre clé API Anthropic dans la Rédaction IA pour lancer une génération.",
       code: "AI_KEY_REQUIRED",
     });
     expect(service.generateFinalDeck).not.toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe("generateFinalDeck — repli en un clic, entraînement et chrono", () =
     expect(service.generateFinalDeck.mock.calls[0]![1]).toMatchObject({ prepStartedAt: NOW });
   });
 
-  it("devrait renvoyer le code d'erreur avec le message (repli proposé par l'interface)", async () => {
+  it("devrait renvoyer le code d'erreur, le message et l'attente (repli proposé par l'interface, heure affichée)", async () => {
     const { AiProviderRateLimitedError } = await import("@/server/errors");
     service.generateFinalDeck.mockRejectedValueOnce(new AiProviderRateLimitedError("mistral", 30));
     const result = await actions.generateFinalDeck("prog-1", null, PROBLEM);
@@ -210,6 +210,7 @@ describe("generateFinalDeck — repli en un clic, entraînement et chrono", () =
       ok: false,
       error: "Mistral limite le nombre de requêtes en ce moment. Réessayez dans 30 s, ou choisissez un autre rédacteur.",
       code: "AI_RATE_LIMITED",
+      retryAfterSeconds: 30,
     });
   });
 });

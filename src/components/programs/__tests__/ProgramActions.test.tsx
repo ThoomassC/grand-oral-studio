@@ -128,7 +128,7 @@ describe("Menu « ⋮ » d'une ligne de projet", () => {
     await user.click(within(await openMenu(user)).getByRole("menuitem", { name: "Supprimer" }));
     const dialog = await screen.findByRole("dialog", { name: "Supprimer le projet ?" });
     expect(dialog).toHaveAccessibleDescription(
-      "Supprimer « BTS SIO », ses sujets et ses decks ? Vous pourrez annuler pendant quelques secondes.",
+      "Supprimer « BTS SIO », ses sujets et ses diaporamas ? Vous pourrez annuler pendant quelques secondes.",
     );
     const input = within(dialog).getByLabelText("Recopiez « BTS SIO » pour confirmer");
     await waitFor(() => expect(input).toHaveFocus());

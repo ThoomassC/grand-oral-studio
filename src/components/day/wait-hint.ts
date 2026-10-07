@@ -13,7 +13,7 @@ export type GenerationEngine = EngineId | "mock";
 export function generationWaitHint(engine: GenerationEngine): string {
   switch (engine) {
     case "ollama":
-      return "Avec un modèle local, comptez plusieurs minutes : souvent 3 à 5, jusqu'à 10 minutes pour un long deck ou une machine modeste, et le double si une seconde tentative est nécessaire.";
+      return "Avec un modèle local, comptez plusieurs minutes : souvent 3 à 5, jusqu'à 10 minutes pour un long diaporama ou une machine modeste, et le double si une seconde tentative est nécessaire.";
     case "free":
     case "mock":
       return "Cela prend quelques secondes.";

@@ -243,10 +243,12 @@ describe("countSharedOwnedPrograms", () => {
   });
 });
 
-describe("getProgramOwnerName", () => {
-  it("devrait donner le nom du propriétaire à un membre, et refuser un inconnu (404)", async () => {
+describe("getProgram — nom du propriétaire (bandeau « Projet partagé par … »)", () => {
+  it("devrait donner le nom du propriétaire à un membre, null au propriétaire, et refuser un inconnu (404)", async () => {
     const { users, programId } = await setup();
-    await expect(members.getProgramOwnerName(users.viewer.id, programId)).resolves.toBe("owner");
-    await expect(members.getProgramOwnerName(users.stranger.id, programId)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await getProgram(users.viewer.id, programId)).ownerName).toBe("owner");
+    expect((await getProgram(users.editor.id, programId)).ownerName).toBe("owner");
+    expect((await getProgram(users.owner.id, programId)).ownerName).toBeNull();
+    await expect(getProgram(users.stranger.id, programId)).rejects.toBeInstanceOf(NotFoundError);
   });
 });

@@ -62,7 +62,7 @@ test.describe("9. Sécurité — cloisonnement entre comptes", () => {
       await expect(page.getByRole("main").getByText("Aucun projet pour l'instant")).toBeVisible();
       // Témoin : le propriétaire, lui, voit bien son deck à la même URL.
       await a.owner.goto(`/projets/${a.programId}/decks/${a.deckId}`);
-      await expect(a.owner.getByRole("main").getByText("Deck final · Cybersécurité")).toBeVisible();
+      await expect(a.owner.getByRole("main").getByText("Diaporama final · Cybersécurité")).toBeVisible();
     } finally {
       await a.close();
     }
@@ -78,7 +78,7 @@ test.describe("9. Sécurité — cloisonnement entre comptes", () => {
       expect(res.status()).toBe(404);
       expect(res.headers()["content-type"]).toContain("application/json");
       const body = await res.json();
-      expect(body.error).toBe("Ce deck est introuvable.");
+      expect(body.error).toBe("Ce diaporama est introuvable.");
       expect(JSON.stringify(body)).not.toContain(SECRET_NAME);
 
       const missing = await page.request.get(`/api/decks/cm0000000000000000000000/pptx`);

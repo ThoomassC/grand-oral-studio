@@ -21,7 +21,8 @@ interface DeckRow {
   updatedAt: Date;
 }
 
-const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]).nullable() satisfies z.ZodType<DeckEngine | null>;
+/** Moteurs connus d'un deck (source unique : toDeckView et la liste des decks de repo/decks). */
+export const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]) satisfies z.ZodType<DeckEngine>;
 
 export function toDeckView(row: DeckRow): DeckView {
   return {
@@ -30,7 +31,7 @@ export function toDeckView(row: DeckRow): DeckView {
     themeId: row.themeId,
     kind: row.kind,
     problem: row.problem,
-    engine: parseStored(DeckEngineSchema, row.engine, "Deck.engine", row.id),
+    engine: parseStored(DeckEngineSchema.nullable(), row.engine, "Deck.engine", row.id),
     practice: row.practice,
     spec: parseStored(DeckSpecSchema, row.spec, "Deck.spec", row.id),
     createdAt: row.createdAt,

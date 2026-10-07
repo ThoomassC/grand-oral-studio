@@ -144,7 +144,7 @@ export function TemplatePromptImport({
       className="opale-card opale-card--e1 block scroll-mt-4 p-4 sm:p-5"
     >
       <h2 id={ids.title} className="text-lg font-semibold">
-        Préremplir avec un prompt
+        Préremplir depuis vos consignes
       </h2>
       <p id={ids.hint} className="mt-1 max-w-3xl text-sm text-muted">
         Facultatif. Collez les consignes de votre oral (ou celles de votre établissement) : durée, format, langue,
@@ -157,7 +157,7 @@ export function TemplatePromptImport({
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
           <div>
             <label htmlFor={ids.text} className="opale-field__label">
-              Consignes ou prompt
+              Vos consignes (texte collé)
             </label>
             <TextArea
               ref={textRef}
@@ -209,9 +209,9 @@ export function TemplatePromptImport({
 
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="ghost" aria-disabled={pending || undefined}>
-            <ButtonLabel idle="Analyser le prompt" busy="Analyse…" isBusy={pending} />
+            <ButtonLabel idle="Lire le texte" busy="Lecture…" isBusy={pending} />
           </Button>
-          <LiveRegion className="text-sm font-medium">{pending ? "Analyse du prompt…" : null}</LiveRegion>
+          <LiveRegion className="text-sm font-medium">{pending ? "Lecture du texte…" : null}</LiveRegion>
         </div>
         <LiveRegion role="alert">
           {phase.kind === "error" ? (

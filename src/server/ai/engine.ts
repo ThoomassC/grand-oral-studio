@@ -105,7 +105,7 @@ export function teamAvailable(provider: CloudProvider, env: Env): boolean {
 
 function teamUnavailable(provider: CloudProvider): EngineUnavailableError {
   return new EngineUnavailableError(
-    `Aucune clé d'équipe ${PROVIDER_INFO[provider].label} n'est configurée sur ce serveur : choisissez votre propre clé ou un autre rédacteur dans la Configuration IA.`,
+    `Aucune clé d'équipe ${PROVIDER_INFO[provider].label} n'est configurée sur ce serveur : choisissez votre propre clé ou un autre rédacteur dans la Rédaction IA.`,
   );
 }
 
@@ -145,9 +145,9 @@ export function planEngine(input: EngineInputs): EnginePlan {
   if (engine === "ollama") {
     const baseUrl = ollamaBaseUrl(input.env);
     if (!baseUrl) {
-      throw new EngineUnavailableError("Ollama n'est pas configuré sur ce serveur : choisissez un autre moteur dans la Configuration IA.");
+      throw new EngineUnavailableError("Ollama n'est pas configuré sur ce serveur : choisissez un autre rédacteur dans la Rédaction IA.");
     }
-    if (!input.ollamaModel) throw new EngineUnavailableError("Choisissez un modèle Ollama dans la Configuration IA.");
+    if (!input.ollamaModel) throw new EngineUnavailableError("Choisissez un modèle Ollama dans la Rédaction IA.");
     return { engine: "ollama", baseUrl, model: input.ollamaModel };
   }
   return cloudPlan(engine, keySource, input);

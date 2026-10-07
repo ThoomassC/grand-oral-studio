@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/connexion"
   if (await getUser()) redirect(next);
 
   return (
-    <AuthCard title="Connexion" intro="Retrouvez vos projets, leur trame et vos decks.">
+    <AuthCard title="Connexion" intro="Retrouvez vos projets, leur trame et vos diaporamas.">
       <AuthForm
         mode="signin"
         next={next}

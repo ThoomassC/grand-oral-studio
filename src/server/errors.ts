@@ -183,7 +183,7 @@ export class AiKeyRequiredError extends AppError {
   readonly status = 422;
   readonly provider: CloudProvider;
   constructor(provider: CloudProvider = "claude") {
-    super(`Ajoutez votre clé API ${PROVIDER_INFO[provider].apiName} dans la Configuration IA pour lancer une génération.`);
+    super(`Ajoutez votre clé API ${PROVIDER_INFO[provider].apiName} dans la Rédaction IA pour lancer une génération.`);
     this.provider = provider;
   }
 }
@@ -195,7 +195,7 @@ export class AiKeyRejectedError extends AppError {
   readonly provider: CloudProvider;
   constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
     const provider = options?.provider ?? "claude";
-    super(`Votre clé API ${PROVIDER_INFO[provider].apiName} est refusée. Mettez-la à jour dans la Configuration IA.`, options);
+    super(`Votre clé API ${PROVIDER_INFO[provider].apiName} est refusée. Mettez-la à jour dans la Rédaction IA.`, options);
     this.provider = provider;
   }
 }
@@ -208,7 +208,7 @@ export class AiCreditExhaustedError extends AppError {
   constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
     const provider = options?.provider ?? "claude";
     super(
-      `Votre compte ${PROVIDER_INFO[provider].apiName} n'a plus de crédit. Rechargez-le sur ${consoleHost(provider)} ou choisissez le moteur gratuit dans la Configuration IA.`,
+      `Votre compte ${PROVIDER_INFO[provider].apiName} n'a plus de crédit. Rechargez-le sur ${consoleHost(provider)} ou choisissez Sans IA dans la Rédaction IA.`,
       options,
     );
     this.provider = provider;
@@ -265,7 +265,7 @@ export class AiKeyUnreadableError extends AppError {
   readonly code = "AI_KEY_UNREADABLE" as const;
   readonly status = 503;
   constructor(options?: { cause?: unknown }) {
-    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans la Configuration IA.", options);
+    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans la Rédaction IA.", options);
   }
 }
 

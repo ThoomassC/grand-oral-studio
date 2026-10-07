@@ -89,7 +89,7 @@ test.describe("7. Jour J — projet sans sujet", () => {
     await expect(subjectHeading(page)).toHaveCount(0);
     await expect(main.getByRole("radio")).toHaveCount(0);
     await expect(
-      main.getByText("Trame du diaporama, texte à compléter, sans sujet : à partir de la problématique et de la trame."),
+      main.getByText("Diaporama à compléter, sans sujet : à partir de la problématique et de la trame."),
     ).toBeVisible();
     // Rappel en fin de parcours (le bandeau du haut l'annonce aussi, cf. « 7. Jour J — v1.2 »).
     await expect(lastStep(page).getByText("Rédaction : Sans IA")).toBeVisible();
@@ -101,9 +101,9 @@ test.describe("7. Jour J — projet sans sujet", () => {
     const id = await setup(page, "free", 0, "Deck sans sujet");
     await generateDeck(page, id, PROBLEM, null);
     const main = page.getByRole("main");
-    await expect(main.getByText("Deck final · Sans sujet")).toBeVisible();
+    await expect(main.getByText("Diaporama final · Sans sujet")).toBeVisible();
     await expect(main.getByText(/^Votre diaporama est prêt : \d+ diapos à compléter\.$/)).toBeVisible();
-    await expect(main.getByText("Construit sans IA", { exact: true })).toBeVisible();
+    await expect(main.getByText("Sans IA", { exact: true })).toBeVisible();
     await expect(main.getByText(/à partir de votre trame et de la problématique : rien n'a été inventé\./)).toBeVisible();
     await expect(main.getByText("Sans IA · à compléter")).toBeVisible();
   });
@@ -122,7 +122,7 @@ test.describe("7. Jour J — projet à un sujet", () => {
     await expect(main.getByRole("radio", { name: "Cybersécurité Le seul sujet du projet" })).toBeChecked();
     await expect(main.getByRole("radio", { name: NONE_RADIO })).not.toBeChecked();
     await expect(
-      main.getByText(/^Trame du diaporama remplie avec vos notes, texte à compléter, pour le sujet Cybersécurité, à partir de la trame et des notes du sujet\.$/),
+      main.getByText(/^Diaporama à compléter, construit avec vos notes, pour le sujet Cybersécurité, à partir de la trame et des notes du sujet\.$/),
     ).toBeVisible();
   });
 
@@ -134,7 +134,7 @@ test.describe("7. Jour J — projet à un sujet", () => {
     await main.getByRole("button", { name: "Continuer", exact: true }).click();
     await main.getByRole("radio", { name: NONE_RADIO }).check();
     await expect(
-      main.getByText("Trame du diaporama, texte à compléter, sans sujet : à partir de la problématique et de la trame."),
+      main.getByText("Diaporama à compléter, sans sujet : à partir de la problématique et de la trame."),
     ).toBeVisible();
   });
 
@@ -143,7 +143,7 @@ test.describe("7. Jour J — projet à un sujet", () => {
     const id = await setup(page, "free", 1, "Deck avec un sujet");
     await generateDeck(page, id, PROBLEM, "Cybersécurité");
     const main = page.getByRole("main");
-    await expect(main.getByText("Deck final · Cybersécurité")).toBeVisible();
+    await expect(main.getByText("Diaporama final · Cybersécurité")).toBeVisible();
     await expect(main.getByText(/à partir de votre trame et des notes du sujet : rien n'a été inventé\./)).toBeVisible();
     await expect(main.getByRole("heading", { name: /\d+ diapos/, level: 2 })).toBeVisible();
     const deckPath = new URL(page.url()).pathname;
@@ -180,7 +180,7 @@ test.describe("7. Jour J — projet à plusieurs sujets", () => {
     await main.getByRole("button", { name: "Reconnaître le sujet" }).click();
     await expect(main.getByRole("radio", { name: /^Cybersécurité Confiance \d+ %/ })).toBeChecked();
     await expect(main.getByText("Reconnaissance sans IA, par mots-clés")).toHaveCount(0);
-    await expect(main.getByText(/^Deck complet avec notes d'orateur pour le sujet Cybersécurité/)).toBeVisible();
+    await expect(main.getByText(/^Diaporama complet avec notes d'orateur pour le sujet Cybersécurité/)).toBeVisible();
     await expect(lastStep(page).getByText("Rédaction : Démo")).toBeVisible();
   });
 
@@ -232,7 +232,7 @@ test.describe("7. Jour J — suppression d'un sujet qui a un deck", () => {
     await modal.getByRole("button", { name: "Supprimer le sujet et son diaporama" }).click();
     await expect(modal).toBeHidden();
     await page.goto(`/projets/${id}/decks`);
-    await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Aucun diaporama pour l'instant")).toBeVisible();
   });
 });
 
@@ -242,7 +242,7 @@ test.describe("7. Jour J — v1.2 : rédacteur, chronomètre, avant l'examen, en
     await setup(page, "free", 0, "Bandeau rédacteur");
     const main = page.getByRole("main");
     await expect(main.getByText("Rédaction : Sans IA", { exact: true })).toBeVisible();
-    await expect(main.getByText(/Sans IA : votre trame remplie avec vos notes, texte à compléter\./)).toBeVisible();
+    await expect(main.getByText(/Sans IA : un diaporama à compléter, construit avec votre trame et vos notes\./)).toBeVisible();
     await expect(main.getByRole("link", { name: /^Changer/ }).first()).toHaveAttribute("href", "/configuration-ia");
   });
 

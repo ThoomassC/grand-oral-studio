@@ -1,4 +1,3 @@
-import { ENGINE_IDS } from "@/domain/ai-providers";
 import type { ProgramContext, ThemeRef } from "@/domain/contracts";
 import {
   COVER_SECTION_ID,
@@ -16,7 +15,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { createLogger, type Logger } from "../logger";
 import { parseStored } from "../validation";
 import { denyAccess, hasRole, liveDeck, lockDeckFor, lockProgramFor, memberRoleOf, programAccess, roleOf } from "./access";
-import { readBrand, readTemplate, specJson, toDeckView } from "./mappers";
+import { DeckEngineSchema, readBrand, readTemplate, specJson, toDeckView } from "./mappers";
 import { prismaErrorCode } from "./ownership";
 import { purgeTrash, undoDeadline } from "./trash";
 import type { DeckEngine, DeckView, DeckWithProgram, FinalDeckSummary } from "./types";
@@ -483,9 +482,6 @@ interface FinalDeckRow {
   practice: boolean;
   createdAt: Date;
 }
-
-/** Moteurs connus d'un deck (même liste que mappers.toDeckView) ; un moteur inconnu est affiché comme absent. */
-const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]) satisfies z.ZodType<DeckEngine>;
 
 /** Ligne de la liste : le titre suit la règle de DeckSpec (non vide après nettoyage, 160 car. au plus). */
 const FinalDeckRowSchema = z.object({

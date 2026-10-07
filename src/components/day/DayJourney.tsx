@@ -13,6 +13,7 @@ import { ProblemInputSchema } from "@/domain/schemas";
 import { classifyProblem, generateFinalDeck } from "@/server/actions/generation";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { pageHref } from "@/components/projects/steps";
+import { failureMessage } from "@/components/settings/action-error";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { ElapsedTime, useElapsed } from "@/components/ui/ElapsedTime";
 import { FieldError } from "@/components/ui/FieldError";
@@ -361,7 +362,8 @@ function DayJourneyInner({
       }
       if (!res.ok) {
         submittedRef.current = false;
-        setGeneration({ kind: "error", message: res.error, code: res.code });
+        // Quota ou limite du fournisseur : « Réessayez dans 2 min » devient l'heure (HH:MM).
+        setGeneration({ kind: "error", message: failureMessage(res), code: res.code });
         return;
       }
       // Avertissements (qualité, écarts à la trame) : affichés une fois sur la page du diaporama.
@@ -394,15 +396,15 @@ function DayJourneyInner({
   const outcomeText = selectedTheme ? (
     <>
       {writer.outlineOnly
-        ? "Trame du diaporama remplie avec vos notes, texte à compléter, pour le sujet "
-        : "Deck complet avec notes d'orateur pour le sujet "}
+        ? "Diaporama à compléter, construit avec vos notes, pour le sujet "
+        : "Diaporama complet avec notes d'orateur pour le sujet "}
       <strong>{selectedTheme.name}</strong>, à partir de la trame et des notes du sujet.
     </>
   ) : subjectId === null ? (
     writer.outlineOnly ? (
-      "Trame du diaporama, texte à compléter, sans sujet : à partir de la problématique et de la trame."
+      "Diaporama à compléter, sans sujet : à partir de la problématique et de la trame."
     ) : (
-      "Deck complet avec notes d'orateur, sans sujet : à partir de la problématique et de la trame."
+      "Diaporama complet avec notes d'orateur, sans sujet : à partir de la problématique et de la trame."
     )
   ) : null;
 
@@ -470,7 +472,7 @@ function DayJourneyInner({
           {!writer.ready && writer.problem
             ? `${writer.problem} `
             : writer.outlineOnly
-              ? "Sans IA : votre trame remplie avec vos notes, texte à compléter. "
+              ? "Sans IA : un diaporama à compléter, construit avec votre trame et vos notes. "
               : null}
           <Link href="/configuration-ia" className="opale-link">
             Changer<span className="sr-only"> qui rédige</span>
@@ -792,14 +794,14 @@ function DayJourneyInner({
                   Génération du diaporama en cours. {writer.waitHint}
                 </p>
                 <p className="mt-1 text-sm">
-                  Ne fermez pas cette page : vous serez redirigé vers le deck dès qu&apos;il sera prêt. En attendant,
+                  Ne fermez pas cette page : vous serez redirigé vers le diaporama dès qu&apos;il sera prêt. En attendant,
                   relisez votre problématique et préparez votre plan.
                 </p>
                 {elapsed > SLOW_AFTER_MS ? (
                   <p className="mt-2 text-sm font-medium">
                     La génération prend plus de temps que d&apos;habitude. Vous pouvez patienter ou recharger la page :
                     votre problématique est conservée. Si le diaporama se termine entre-temps, il apparaîtra en haut de
-                    cette page et dans Decks : attendez avant de générer à nouveau.
+                    cette page et dans Diaporamas : attendez avant de générer à nouveau.
                   </p>
                 ) : null}
               </Notice>

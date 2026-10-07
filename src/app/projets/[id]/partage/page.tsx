@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShareManager } from "@/components/projects/ShareManager";
-import { NotFoundError } from "@/server/errors";
-import { listMembers } from "@/server/repo/members";
+import { listMembers, NotFoundError, type ProgramMembers } from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
 
@@ -20,7 +19,7 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const user = await requireUser();
   const program = await loadProgram(id);
-  let view: Awaited<ReturnType<typeof listMembers>>;
+  let view: ProgramMembers;
   try {
     view = await listMembers(user.id, program.id);
   } catch (error) {

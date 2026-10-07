@@ -248,7 +248,7 @@ function notReachable(baseUrl: string, production: boolean, cause: unknown): AiU
     cause,
     refundable: true,
     userMessage: production
-      ? "Le serveur Ollama ne répond pas. Réessayez plus tard ou choisissez un autre moteur dans la Configuration IA."
+      ? "Le serveur Ollama ne répond pas. Réessayez plus tard ou choisissez un autre rédacteur dans la Rédaction IA."
       : `Ollama ne répond pas à ${baseUrl} : vérifiez qu'il est lancé (ollama serve).`,
   });
 }
@@ -271,7 +271,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
   function timedOut(operation: string, timeoutMs: number, cause: unknown): AiUnavailableError {
     return new AiUnavailableError(`${operation}: délai dépassé`, {
       cause,
-      userMessage: `Le modèle local n'a pas répondu dans le délai imparti (${Math.max(1, Math.round(timeoutMs / 60_000))} min). Réessayez, ou choisissez un modèle plus léger dans la Configuration IA.`,
+      userMessage: `Le modèle local n'a pas répondu dans le délai imparti (${Math.max(1, Math.round(timeoutMs / 60_000))} min). Réessayez, ou choisissez un modèle plus léger dans la Rédaction IA.`,
     });
   }
 
@@ -321,7 +321,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
           log.error("ollama.stream_error", { operation, message: error.detail });
           throw new AiUnavailableError(`${operation}: erreur Ollama en cours de génération`, {
             cause: error,
-            userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre moteur dans la Configuration IA.",
+            userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre rédacteur dans la Rédaction IA.",
           });
         }
         if (isTimeout(error, signal)) throw timedOut(operation, timeoutMs, error);
@@ -356,7 +356,7 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
       }
       log.error("ollama.http_error", { operation, status: response.status, message: message.slice(0, 200) });
       throw new AiUnavailableError(`${operation}: HTTP ${response.status}`, {
-        userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre moteur dans la Configuration IA.",
+        userMessage: "Ollama a renvoyé une erreur. Réessayez, ou choisissez un autre rédacteur dans la Rédaction IA.",
       });
     }
 

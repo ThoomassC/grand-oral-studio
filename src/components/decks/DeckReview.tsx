@@ -181,7 +181,7 @@ export function DeckReview({
         {canEdit && canDuplicate && decksHref ? <DuplicateDeckButton deckId={deckId} decksHref={decksHref} /> : null}
       </div>
       {canEdit && !aiAvailable ? (
-        <p className="text-sm text-muted">Régénérer une diapo : disponible avec une rédaction IA (Configuration IA).</p>
+        <p className="text-sm text-muted">Régénérer une diapo : disponible avec une rédaction IA (Rédaction IA).</p>
       ) : null}
 
       {canvaOpen ? <CanvaPanel id={canvaId} prompt={canvaPrompt} /> : null}

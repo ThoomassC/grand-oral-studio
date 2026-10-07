@@ -11,7 +11,7 @@ import { loadProgram } from "../../_lib/load";
 
 export async function generateMetadata({ params }: PageProps<"/projets/[id]/decks">): Promise<Metadata> {
   const program = await loadProgram((await params).id);
-  return { title: `Decks — ${program.name}` };
+  return { title: `Diaporamas — ${program.name}` };
 }
 
 /** Un ancien squelette (version 1.0), tel qu'affiché dans la liste : rien d'autre ne traverse. */
@@ -40,13 +40,13 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
       <section aria-labelledby="decks-title" className="flex flex-col gap-6">
         <div>
           <h2 id="decks-title" tabIndex={-1} className="text-2xl focus:outline-none">
-            Decks du jour J
+            Diaporamas du jour J
           </h2>
           <p className="text-sm text-muted">Les diaporamas complets générés à partir d&apos;une problématique.</p>
         </div>
         {decks.length === 0 ? (
           <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
-            <p className="font-display text-lg font-semibold">Aucun deck pour l&apos;instant</p>
+            <p className="font-display text-lg font-semibold">Aucun diaporama pour l&apos;instant</p>
             <p className="mt-1 text-muted">
               Saisissez une problématique à l&apos;étape Jour J pour générer votre premier diaporama complet.
             </p>
@@ -76,7 +76,7 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
                   </div>
                   <div className="flex shrink-0 flex-wrap items-start gap-2">
                     <ButtonLink href={`${base}/${d.id}`} variant="ghost" size="small">
-                      Ouvrir<span className="sr-only"> le deck {d.title}</span>
+                      Ouvrir<span className="sr-only"> le diaporama {d.title}</span>
                     </ButtonLink>
                     {canEdit ? (
                       <DeleteDeckButton

@@ -36,10 +36,10 @@ export function DeleteDeckButton({
   return (
     <ConfirmAction
       triggerLabel="Supprimer"
-      triggerAccessibleLabel={`Supprimer le deck ${label}`}
-      title="Supprimer le deck ?"
-      question={`Supprimer le deck « ${label} » ? ${undoable ? "Vous pourrez annuler pendant quelques secondes." : "Cette action est définitive."}`}
-      confirmLabel="Supprimer le deck"
+      triggerAccessibleLabel={`Supprimer le diaporama ${label}`}
+      title="Supprimer le diaporama ?"
+      question={`Supprimer le diaporama « ${label} » ? ${undoable ? "Vous pourrez annuler pendant quelques secondes." : "Cette action est définitive."}`}
+      confirmLabel="Supprimer le diaporama"
       onConfirm={async () => {
         const result = await deleteDeck(deckId);
         if (!result.ok) return result.error;

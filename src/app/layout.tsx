@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s · Grand Oral Studio",
   },
   description:
-    "Préparez votre grand oral : l'apparence et la trame de vos diaporamas, puis le deck rédigé le jour J.",
+    "Préparez votre grand oral : l'apparence et la trame de vos diaporamas, puis le diaporama rédigé le jour J.",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

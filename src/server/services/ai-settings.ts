@@ -298,7 +298,7 @@ function writerState(prefs: UserAiPrefs, env: Env): AiWriterState {
       ready: false,
       problem: isAppError(planned.error)
         ? planned.error.userMessage
-        : "Le service de génération est mal configuré. Choisissez un autre rédacteur dans la Configuration IA.",
+        : "Le service de génération est mal configuré. Choisissez un autre rédacteur dans la Rédaction IA.",
     };
   }
   const plan = planned.plan;
@@ -442,7 +442,7 @@ export const SetEngineInputSchema = z.discriminatedUnion(
     z.object({ engine: z.literal("free") }),
     z.object({ engine: z.literal("ollama"), ollamaModel: OllamaModelNameSchema }),
   ],
-  { error: "Moteur attendu : claude, ollama, free." },
+  { error: "Rédaction attendue : claude, ollama, free." },
 );
 export type SetEngineInput = z.input<typeof SetEngineInputSchema>;
 
