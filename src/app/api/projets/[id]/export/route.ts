@@ -1,4 +1,3 @@
-import { serializeProjectExport } from "@/domain/project-export";
 import { isAppError, RateLimitedError } from "@/server/errors";
 import { attachmentHeader, safeFilename, unicodeFilename } from "@/server/filename";
 import { createLogger } from "@/server/logger";
@@ -9,8 +8,10 @@ import { IdSchema } from "@/server/validation";
 /**
  * GET /api/projets/:id/export — fichier JSON d'export d'un projet auquel
  * l'utilisateur a accès (lecteur au moins). 401 sans session, 404 si le projet
- * n'existe pas, est à la corbeille OU est inaccessible (indistinguables), 429 au-delà
- * du quota d'exports, 500 générique sur panne (journalisée). Aucun identifiant
+ * n'existe pas, est à la corbeille OU est inaccessible (indistinguables), 413 si le
+ * fichier dépasserait 4 Mo (il ne pourrait pas être réimporté), 429 au-delà du quota
+ * d'exports, 500 générique sur panne (journalisée). JSON compact ; une donnée abîmée
+ * en base dégrade l'export (apparence par défaut, diaporama écarté et compté) sans l'empêcher. Aucun identifiant
  * interne, membre ni secret dans le fichier (cf. src/domain/project-export.ts).
  */
 
@@ -31,8 +32,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 
   const scoped = log.child({ userId: user.id, programId: parsedId.data });
   try {
-    const { data, title } = await exportProject(user.id, parsedId.data, { log: scoped });
-    const body = serializeProjectExport(data);
+    const { body, title } = await exportProject(user.id, parsedId.data, { log: scoped });
     return new Response(body, {
       status: 200,
       headers: {

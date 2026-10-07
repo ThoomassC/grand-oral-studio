@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  assembleProjectExport,
   buildProjectExport,
+  canonicalProjectContent,
   parseProjectExport,
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
@@ -9,6 +11,7 @@ import {
   type ExportedProject,
 } from "@/domain/project-export";
 import { BRAND_FILE_MAX_BYTES } from "@/domain/import/limits";
+import { defaultBrand, defaultTemplate } from "@/domain/defaults";
 import { makeBrand, makeConformingDeck, makeTemplate } from "@/test/fixtures";
 
 function project(overrides: Partial<ExportedProject> = {}): ExportedProject {
@@ -124,7 +127,7 @@ describe("buildProjectExport / parseProjectExport", () => {
   it("ne devrait produire à l'export que les champs du format", () => {
     const exported = buildProjectExport(project(), NOW);
     expect(Object.keys(exported).sort()).toEqual(["exportedAt", "format", "project", "version"]);
-    expect(Object.keys(exported.project).sort()).toEqual(["brand", "decks", "description", "name", "template", "themes"]);
+    expect(Object.keys(exported.project).sort()).toEqual(["brand", "decks", "description", "name", "skipped", "template", "themes"]);
     expect(Object.keys(exported.project.themes[0]!).sort()).toEqual(["description", "keywords", "name", "notes", "problems"]);
     expect(Object.keys(exported.project.decks[0]!).sort()).toEqual([
       "createdAt",
@@ -142,5 +145,83 @@ describe("buildProjectExport / parseProjectExport", () => {
     delete raw.project.themes[1]!.problems;
     const parsed = parseProjectExport(JSON.stringify(raw));
     expect(parsed.ok && parsed.project.themes[1]!.problems).toEqual([]);
+  });
+});
+
+describe("export tolérant (données abîmées en base)", () => {
+  it("devrait remplacer une apparence ou une trame illisible par celle par défaut, et le signaler", () => {
+    const { data, issues } = assembleProjectExport({ ...project(), brand: { colors: "rouge" }, template: null }, NOW);
+    expect(data.project.brand).toEqual(defaultBrand());
+    expect(data.project.template).toEqual(defaultTemplate());
+    expect(issues.map((i) => i.item)).toEqual(["brand", "template"]);
+    // L'apparence et la trame remplacées ne sont pas des éléments écartés.
+    expect(data.project.skipped).toBe(0);
+  });
+
+  it("devrait écarter un diaporama illisible, le compter dans le fichier et garder les autres", () => {
+    const source = project();
+    const decks = [{ ...source.decks[0]!, ref: "deck-abime", spec: { slides: "pas une liste" } }, { ...source.decks[1]!, ref: "deck-sain" }];
+    const { data, issues } = assembleProjectExport({ ...source, decks }, NOW);
+    expect(data.project.decks).toHaveLength(1);
+    expect(data.project.decks[0]!.problem).toBe("Une problématique sans sujet rattaché");
+    expect(data.project.skipped).toBe(1);
+    expect(issues).toEqual([{ item: "deck", ref: "deck-abime" }]);
+    // Toujours réimportable.
+    expect(parseProjectExport(serializeProjectExport(data)).ok).toBe(true);
+  });
+
+  it("devrait écarter un sujet illisible et détacher ses diaporamas plutôt que les perdre", () => {
+    const source = project();
+    const themes = [{ ...source.themes[0]!, name: "x" }, source.themes[1]!]; // 1 caractère : refusé par le format
+    const decks = [{ ...source.decks[0]!, themeName: "x" }, source.decks[1]!];
+    const { data, issues } = assembleProjectExport({ ...source, themes, decks }, NOW);
+    expect(data.project.themes.map((t) => t.name)).toEqual(["Ville de demain"]);
+    expect(data.project.decks.map((d) => d.themeName)).toEqual([null, null]);
+    expect(data.project.skipped).toBe(1);
+    expect(issues).toEqual([{ item: "theme", ref: "0" }]);
+    expect(parseProjectExport(serializeProjectExport(data)).ok).toBe(true);
+  });
+
+  it("devrait ramener un nom de projet hors format (vide, trop long en UTF-16) dans le format", () => {
+    const emoji = "🎓".repeat(120); // 120 caractères pour la base, 240 unités UTF-16 pour le format
+    const long = assembleProjectExport({ ...project(), name: emoji }, NOW).data.project.name;
+    expect(long.length).toBeLessThanOrEqual(120);
+    expect(long.startsWith("🎓")).toBe(true);
+    expect(assembleProjectExport({ ...project(), name: "   " }, NOW).data.project.name).toBe("Projet sans nom");
+  });
+});
+
+describe("serializeProjectExport", () => {
+  it("devrait produire un JSON compact (sans indentation)", () => {
+    const text = serializeProjectExport(buildProjectExport(project(), NOW));
+    expect(text).not.toContain("\n");
+    expect(text).toBe(JSON.stringify(JSON.parse(text)));
+  });
+});
+
+describe("canonicalProjectContent", () => {
+  const content = () => ({
+    name: "Projet",
+    description: "",
+    brand: makeBrand(),
+    template: makeTemplate(),
+    themes: project().themes,
+    decks: project().decks.map(({ themeName, practice, problem, spec, engine }) => ({ themeName, practice, problem, spec, engine })),
+  });
+
+  it("ne devrait dépendre ni de l'ordre des clés (relecture jsonb) ni de l'ordre des diaporamas", () => {
+    const base = content();
+    const reordered = {
+      ...base,
+      brand: Object.fromEntries(Object.entries(base.brand).reverse()),
+      decks: [...base.decks].reverse(),
+    };
+    expect(canonicalProjectContent(reordered)).toBe(canonicalProjectContent(base));
+  });
+
+  it("devrait changer avec le contenu", () => {
+    const base = content();
+    expect(canonicalProjectContent({ ...base, description: "autre" })).not.toBe(canonicalProjectContent(base));
+    expect(canonicalProjectContent({ ...base, decks: base.decks.slice(1) })).not.toBe(canonicalProjectContent(base));
   });
 });

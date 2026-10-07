@@ -17,7 +17,7 @@ async function rehearse(deckId: string, userId: string): Promise<void> {
 }
 
 describe("liste « Avant l'examen » : compteurs", () => {
-  it("devrait compter les diaporamas d'entraînement actifs et les répétitions de l'utilisateur, lecteur compris", async () => {
+  it("devrait compter tous les diaporamas actifs (entraînement et jour J) et les répétitions de l'utilisateur, lecteur compris", async () => {
     const [owner, viewer, stranger] = [await createUser("o"), await createUser("v"), await createUser("s")];
     const programId = await seedProgram(owner.id);
     await seedMember(programId, viewer.id, "VIEWER");
@@ -30,9 +30,9 @@ describe("liste « Avant l'examen » : compteurs", () => {
     await rehearse(p2, owner.id); // diaporama à la corbeille : ne compte pas
     await rehearse(p1, viewer.id);
 
-    expect(await readiness.getExamReadiness(owner.id, programId)).toEqual({ practiceDecks: 1, rehearsals: 2, exportTried: false });
-    expect(await readiness.getExamReadiness(viewer.id, programId)).toEqual({ practiceDecks: 1, rehearsals: 1, exportTried: false });
-    expect(await readiness.getExamReadiness(stranger.id, programId)).toEqual({ practiceDecks: 0, rehearsals: 0, exportTried: false });
+    expect(await readiness.getExamReadiness(owner.id, programId)).toEqual({ decks: 2, rehearsals: 2, exportTried: false });
+    expect(await readiness.getExamReadiness(viewer.id, programId)).toEqual({ decks: 2, rehearsals: 1, exportTried: false });
+    expect(await readiness.getExamReadiness(stranger.id, programId)).toEqual({ decks: 0, rehearsals: 0, exportTried: false });
   });
 
   it("markExportTried devrait noter l'export sans toucher Program.updatedAt, une seule fois", async () => {

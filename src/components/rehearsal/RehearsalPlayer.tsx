@@ -176,8 +176,14 @@ export function RehearsalPlayer({
       return;
     }
     setSave({ kind: "saving" });
-    const result = await saveRehearsal(deckId, { totalSeconds: total, perSlide });
-    setSave(result.ok ? { kind: "saved" } : { kind: "error", message: result.error });
+    try {
+      const result = await saveRehearsal(deckId, { totalSeconds: total, perSlide });
+      setSave(result.ok ? { kind: "saved" } : { kind: "error", message: result.error });
+    } catch {
+      // Réseau coupé ou serveur injoignable : sans réponse, on ne sait pas si l'enregistrement
+      // a abouti. Le bilan reste affiché, avec « Réessayer l'enregistrement ».
+      setSave({ kind: "error", message: "La connexion a été interrompue : la répétition n'a peut-être pas été enregistrée." });
+    }
   }
 
   function finish() {

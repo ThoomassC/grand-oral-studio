@@ -56,11 +56,10 @@ Un changement de schéma se livre en trois temps, jamais en une migration qui ca
 
 Sur Vercel, `vercel-build` applique les migrations dans l'ordre (`20261008090000_v120_expand` puis `20261008090100_v120_validate`) avant de construire le code : l'ordre est respecté par un seul déploiement.
 
-**Après le déploiement de la 1.2.0**, rejouer le bloc `copy_claude_keys` de la migration expand : il recopie dans `user_ai_credential` les clés Claude enregistrées par le code 1.1 entre l'application de la migration et la mise en ligne du code 1.2. Il est idempotent (`ON CONFLICT DO NOTHING`) :
+**Après le déploiement de la 1.2.0**, exécuter `scripts/sync-claude-keys.sql` : entre l'application de la migration et la mise en ligne du code 1.2, le code 1.1 a pu ajouter, remplacer ou supprimer une clé Claude dans les colonnes historiques ; le script aligne sur elles les clés recopiées (`aadScheme` 1) de `user_ai_credential`, sans toucher à celles que le code 1.2 a déjà réécrites (`aadScheme` 2). Il est rejouable (un second passage ne change rien). Ne pas rejouer le bloc `copy_claude_keys` de la migration : il ne voit que les ajouts.
 
 ```bash
-sed -n '/BEGIN copy_claude_keys/,/END copy_claude_keys/p' prisma/migrations/20261008090000_v120_expand/migration.sql \
-  | { cat; echo ';'; } | psql "$DATABASE_URL" -v ON_ERROR_STOP=1
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/sync-claude-keys.sql
 ```
 
 À rejouer encore une fois avant le « contract » de la 1.3 (suppression des colonnes `anthropicKey*` de `user_ai_settings`).

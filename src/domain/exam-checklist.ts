@@ -13,11 +13,16 @@ export interface ExamChecklistInput {
   templateSaved: boolean;
   /** Un export (PPTX) a déjà été tenté sur ce projet. */
   exportTried: boolean;
-  practiceDecks: number;
+  /**
+   * Diaporamas actifs du projet, entraînement ET jour J confondus : le même compte
+   * que la règle « prêt pour le jour J » (isExamReady), pour que la liste et la
+   * progression du projet ne se contredisent jamais.
+   */
+  decks: number;
   rehearsals: number;
 }
 
-export type ExamChecklistItemId = "writer" | "template" | "export" | "practice" | "rehearsals";
+export type ExamChecklistItemId = "writer" | "template" | "export" | "decks" | "rehearsals";
 
 export interface ExamChecklistItem {
   id: ExamChecklistItemId;
@@ -36,7 +41,7 @@ function item(id: ExamChecklistItemId, label: string, done: boolean, hint: strin
 }
 
 export function examChecklist(input: ExamChecklistInput): ExamChecklistItem[] {
-  const decks = count(input.practiceDecks);
+  const decks = count(input.decks);
   const rehearsals = count(input.rehearsals);
   const writer = input.writerLabel.trim() || "non choisie";
   return [
@@ -54,10 +59,10 @@ export function examChecklist(input: ExamChecklistInput): ExamChecklistItem[] {
       "Téléchargez un PPTX d'essai et ouvrez-le sur l'ordinateur que vous utiliserez le jour J.",
     ),
     item(
-      "practice",
-      `${READY_MIN_DECKS} diaporamas d'entraînement`,
+      "decks",
+      `${READY_MIN_DECKS} diaporamas (entraînement ou jour J)`,
       decks >= READY_MIN_DECKS,
-      `Générez un diaporama sur une problématique d'entraînement (${decks} sur ${READY_MIN_DECKS}).`,
+      `Générez un diaporama, d'entraînement ou du jour J (${decks} sur ${READY_MIN_DECKS}).`,
     ),
     item(
       "rehearsals",

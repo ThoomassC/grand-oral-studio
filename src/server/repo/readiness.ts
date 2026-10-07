@@ -7,10 +7,13 @@ import { liveDeck, programAccess } from "./access";
  * la page a déjà répondu 404 en lisant le projet.
  */
 
-/** Diaporamas d'entraînement actifs du projet (tous auteurs confondus). */
-export function countPracticeDecks(userId: string, programId: string): Promise<number> {
+/**
+ * Diaporamas actifs du projet, entraînement ET jour J confondus (tous auteurs) : le
+ * compte de la règle « prêt pour le jour J » (isExamReady, via Program.finalDeckCount).
+ */
+export function countDecks(userId: string, programId: string): Promise<number> {
   return db().deck.count({
-    where: { programId, kind: "FINAL", practice: true, ...liveDeck, program: programAccess(userId, "viewer") },
+    where: { programId, kind: "FINAL", ...liveDeck, program: programAccess(userId, "viewer") },
   });
 }
 
@@ -31,19 +34,20 @@ export async function exportTried(userId: string, programId: string): Promise<bo
 }
 
 export interface ExamReadinessCounts {
-  practiceDecks: number;
+  /** Diaporamas actifs, entraînement compris. */
+  decks: number;
   rehearsals: number;
   exportTried: boolean;
 }
 
 /** Les trois lectures, en parallèle. */
 export async function getExamReadiness(userId: string, programId: string): Promise<ExamReadinessCounts> {
-  const [practiceDecks, rehearsals, tried] = await Promise.all([
-    countPracticeDecks(userId, programId),
+  const [decks, rehearsals, tried] = await Promise.all([
+    countDecks(userId, programId),
     countRehearsals(userId, programId),
     exportTried(userId, programId),
   ]);
-  return { practiceDecks, rehearsals, exportTried: tried };
+  return { decks, rehearsals, exportTried: tried };
 }
 
 /**

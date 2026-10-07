@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { defaultBrand, defaultTemplate } from "./defaults";
 import { BRAND_FILE_MAX_BYTES } from "./import/limits";
 import { BrandSchema, DeckSpecSchema, PromptTemplateSchema, stripControlChars, ThemeInputSchema } from "./schemas";
 
@@ -14,6 +15,10 @@ import { BrandSchema, DeckSpecSchema, PromptTemplateSchema, stripControlChars, T
  * clair sur un fichier étranger ou d'une version plus récente ; puis le contenu
  * est revalidé par les schémas du domaine (Brand, PromptTemplate, ThemeInput,
  * DeckSpec). Toute clé inconnue est écartée par zod.
+ *
+ * Écriture tolérante : une donnée abîmée en base ne fait jamais échouer l'export.
+ * Apparence ou trame illisible → celle par défaut ; sujet ou diaporama illisible →
+ * écarté, compté dans `project.skipped` (champ informatif, ignoré à l'import).
  */
 
 export const PROJECT_EXPORT_FORMAT = "grand-oral-studio/projet";
@@ -26,6 +31,9 @@ export const PROJECT_EXPORT_VERSION = 1;
  */
 export const PROJECT_FILE_MAX_BYTES = BRAND_FILE_MAX_BYTES;
 export const PROJECT_FILE_TOO_LARGE_MESSAGE = "Le fichier dépasse 4 Mo : il ne peut pas être importé.";
+/** Export d'un projet plus lourd que ce que l'import accepte : refusé (413) plutôt que livré inutilisable. */
+export const PROJECT_EXPORT_TOO_LARGE_MESSAGE =
+  "Ce projet dépasse 4 Mo une fois exporté : il ne pourrait pas être réimporté. Supprimez des diaporamas anciens ou allégez le logo.";
 
 /** Sujets par projet : aligné sur MAX_THEMES_PER_PROGRAM (src/server/validation.ts). */
 export const PROJECT_EXPORT_MAX_THEMES = 60;
@@ -97,25 +105,184 @@ export const ProjectExportSchema = z.object({
 export type ExportedTheme = z.output<typeof ExportedThemeSchema>;
 export type ExportedDeck = z.output<typeof ExportedDeckSchema>;
 export type ExportedProject = z.output<typeof ExportedProjectSchema>;
-export type ProjectExport = z.output<typeof ProjectExportSchema>;
 
-/**
- * Construit le fichier d'export. L'entrée vient de la base (déjà validée à la
- * lecture) : un échec ici est une panne (ZodError levée), pas une erreur utilisateur.
- * Seuls les champs du format sont recopiés (les clés en trop sont écartées).
- */
-export function buildProjectExport(project: z.input<typeof ExportedProjectSchema>, exportedAt: Date): ProjectExport {
-  return ProjectExportSchema.parse({
-    format: PROJECT_EXPORT_FORMAT,
-    version: PROJECT_EXPORT_VERSION,
-    exportedAt: exportedAt.toISOString(),
-    project,
-  });
+/** Projet tel qu'écrit dans le fichier : le contenu, plus le nombre d'éléments écartés à l'export. */
+export type ExportFileProject = ExportedProject & {
+  /** Sujets et diaporamas illisibles en base, laissés hors du fichier (0 d'ordinaire). Ignoré à l'import. */
+  skipped: number;
+};
+
+/** Fichier d'export produit (ProjectExportSchema le relit ; `project.skipped` y est écarté). */
+export type ProjectExport = Omit<z.output<typeof ProjectExportSchema>, "project"> & { project: ExportFileProject };
+
+/** Diaporama lu en base pour l'export : JSON non encore validés, `ref` pour le journal (jamais écrit). */
+export interface ExportDeckSource {
+  ref?: string;
+  themeName: string | null;
+  practice: boolean;
+  problem: string | null;
+  spec: unknown;
+  engine: unknown;
+  createdAt: string | Date;
 }
 
-/** Texte du fichier téléchargé (indenté : lisible et comparable). */
+/** Contenu d'un projet lu en base pour l'export (apparence, trame et diaporamas non encore validés). */
+export interface ProjectExportSource {
+  name: string;
+  description?: string;
+  brand: unknown;
+  template: unknown;
+  themes: z.input<typeof ExportedThemeSchema>[];
+  decks: ExportDeckSource[];
+}
+
+/** Élément remplacé (apparence, trame) ou écarté (sujet : `ref` = position ; diaporama : `ref` fourni). */
+export interface ExportIssue {
+  item: "brand" | "template" | "theme" | "deck";
+  ref?: string;
+}
+
+const PROJECT_NAME_FALLBACK = "Projet sans nom";
+
+/** Texte normalisé comme le format (caractères de contrôle, espaces) et tenu sous `max` unités UTF-16. */
+function fitText(value: string, max: number): string {
+  let out = stripControlChars(value).trim();
+  if (out.length <= max) return out;
+  // Coupe par points de code : jamais une moitié de paire de substitution.
+  const chars = Array.from(out);
+  while (chars.length > 0 && chars.join("").length > max) chars.pop();
+  out = chars.join("").trim();
+  return out;
+}
+
+/**
+ * Construit le fichier d'export à partir du contenu lu en base, sans jamais échouer
+ * sur une donnée abîmée : apparence ou trame illisible → par défaut ; sujet ou
+ * diaporama illisible → écarté et compté (`project.skipped`) ; un diaporama dont le
+ * sujet est écarté est détaché (sans sujet) plutôt que perdu. Le fichier produit est
+ * toujours relisible par parseProjectExport. `issues` dit quoi journaliser.
+ */
+export function assembleProjectExport(
+  source: ProjectExportSource,
+  exportedAt: Date,
+): { data: ProjectExport; issues: ExportIssue[] } {
+  const issues: ExportIssue[] = [];
+
+  const brand = BrandSchema.safeParse(source.brand);
+  if (!brand.success) issues.push({ item: "brand" });
+  const template = PromptTemplateSchema.safeParse(source.template);
+  if (!template.success) issues.push({ item: "template" });
+
+  let skipped = 0;
+  const themes: ExportedTheme[] = [];
+  source.themes.forEach((raw, index) => {
+    const theme = ExportedThemeSchema.safeParse(raw);
+    if (theme.success && themes.length < PROJECT_EXPORT_MAX_THEMES) {
+      themes.push(theme.data);
+    } else {
+      skipped += 1;
+      issues.push({ item: "theme", ref: String(index) });
+    }
+  });
+  const themeNames = new Set(themes.map((t) => t.name));
+
+  const decks: ExportedDeck[] = [];
+  for (const raw of source.decks) {
+    const deck = ExportedDeckSchema.safeParse({
+      // Sujet écarté (ou nom normalisé différemment) : diaporama détaché, pas perdu.
+      themeName: raw.themeName !== null && themeNames.has(raw.themeName.trim()) ? raw.themeName.trim() : null,
+      practice: raw.practice,
+      problem: raw.problem ?? "",
+      spec: raw.spec,
+      engine: raw.engine,
+      createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : raw.createdAt,
+    });
+    if (deck.success && decks.length < PROJECT_EXPORT_MAX_DECKS) {
+      decks.push(deck.data);
+    } else {
+      skipped += 1;
+      issues.push({ item: "deck", ...(raw.ref ? { ref: raw.ref } : {}) });
+    }
+  }
+
+  const project = ExportedProjectSchema.parse({
+    name: fitText(source.name, 120) || PROJECT_NAME_FALLBACK,
+    description: fitText(source.description ?? "", 2000),
+    brand: brand.success ? brand.data : defaultBrand(),
+    template: template.success ? template.data : defaultTemplate(),
+    themes,
+    decks,
+  });
+  return {
+    data: {
+      format: PROJECT_EXPORT_FORMAT,
+      version: PROJECT_EXPORT_VERSION,
+      exportedAt: exportedAt.toISOString(),
+      project: { ...project, skipped },
+    },
+    issues,
+  };
+}
+
+/** Fichier d'export (cf. assembleProjectExport), sans le détail à journaliser. */
+export function buildProjectExport(source: ProjectExportSource, exportedAt: Date): ProjectExport {
+  return assembleProjectExport(source, exportedAt).data;
+}
+
+/**
+ * Texte du fichier téléchargé : JSON compact. L'indentation gonflait le fichier
+ * d'un bon tiers et le rapprochait de la limite d'import (4 Mo).
+ */
 export function serializeProjectExport(value: ProjectExport): string {
-  return JSON.stringify(value, null, 2);
+  return JSON.stringify(value);
+}
+
+/** Taille en octets (UTF-8) d'un texte d'export. */
+export function exportByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+/** Contenu d'un projet tel qu'écrit en base par un import (comparaison de rejeu). */
+export interface ProjectContent {
+  name: string;
+  description: string;
+  brand: unknown;
+  template: unknown;
+  themes: { name: string; description: string; keywords: string[]; notes: string; problems: string[] }[];
+  decks: { themeName: string | null; practice: boolean; problem: string; spec: unknown; engine: string | null }[];
+}
+
+/** JSON aux clés d'objet triées : indépendant de l'ordre de construction ou de relecture (jsonb). */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+
+/**
+ * Forme normalisée d'un contenu de projet, à hacher (sha-256) pour reconnaître un
+ * import rejoué : clés triées, sujets dans leur ordre, diaporamas sans ordre (la base
+ * ne garde pas l'ordre du fichier), sans date de création (bornée à l'import).
+ */
+export function canonicalProjectContent(content: ProjectContent): string {
+  return canonicalJson({
+    name: content.name,
+    description: content.description,
+    brand: content.brand,
+    template: content.template,
+    themes: content.themes.map((t) => ({
+      name: t.name,
+      description: t.description,
+      keywords: t.keywords,
+      notes: t.notes,
+      problems: t.problems,
+    })),
+    decks: content.decks
+      .map((d) => canonicalJson({ themeName: d.themeName, practice: d.practice, problem: d.problem, spec: d.spec, engine: d.engine }))
+      .sort(),
+  });
 }
 
 export type ParseProjectExportResult =
@@ -124,10 +291,6 @@ export type ParseProjectExportResult =
 
 const EnvelopeSchema = z.object({ format: z.unknown(), version: z.unknown() });
 
-function byteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
-}
-
 /**
  * Lit un fichier de projet. Jamais d'exception : un résultat `ok: false` porte un
  * message affichable (français) et, pour un contenu invalide, les champs en cause.
@@ -135,7 +298,7 @@ function byteLength(value: string): number {
  */
 export function parseProjectExport(raw: string): ParseProjectExportResult {
   // Une chaîne de plus de N unités UTF-16 pèse au moins N octets : refus sans encoder.
-  if (raw.length > PROJECT_FILE_MAX_BYTES || byteLength(raw) > PROJECT_FILE_MAX_BYTES) {
+  if (raw.length > PROJECT_FILE_MAX_BYTES || exportByteLength(raw) > PROJECT_FILE_MAX_BYTES) {
     return { ok: false, message: PROJECT_FILE_TOO_LARGE_MESSAGE };
   }
   let json: unknown;

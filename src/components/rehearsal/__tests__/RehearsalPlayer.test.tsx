@@ -157,6 +157,21 @@ describe("RehearsalPlayer — bilan et enregistrement", () => {
     expect(screen.getByText("Répétition enregistrée.")).toBeInTheDocument();
   });
 
+  it("devrait proposer de réessayer quand la connexion coupe pendant l'enregistrement", async () => {
+    saveRehearsal.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    setup();
+    await click("Commencer la répétition");
+    elapse(12);
+    await click("Terminer");
+    expect(screen.getByRole("alert")).toHaveTextContent(/connexion a été interrompue/);
+    expect(screen.queryByText("Enregistrement de la répétition…")).not.toBeInTheDocument();
+
+    saveRehearsal.mockResolvedValueOnce({ ok: true, data: { rehearsal: { id: "r1" } } });
+    await click("Réessayer l'enregistrement");
+    expect(saveRehearsal).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Répétition enregistrée.")).toBeInTheDocument();
+  });
+
   it("ne devrait pas enregistrer une répétition de moins d'une seconde", async () => {
     setup();
     await click("Commencer la répétition");

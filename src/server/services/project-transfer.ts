@@ -1,15 +1,18 @@
 import { z } from "zod";
 import { exampleProject } from "@/domain/examples";
 import {
-  buildProjectExport,
+  assembleProjectExport,
+  exportByteLength,
   parseProjectExport,
+  PROJECT_EXPORT_TOO_LARGE_MESSAGE,
   PROJECT_FILE_MAX_BYTES,
   PROJECT_FILE_TOO_LARGE_MESSAGE,
-  type ExportedProject,
+  serializeProjectExport,
+  type ExportFileProject,
   type ProjectExport,
 } from "@/domain/project-export";
 import type { Brand, PromptTemplate } from "@/domain/schemas";
-import { NotFoundError, ValidationError } from "../errors";
+import { AppError, NotFoundError, ValidationError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeImportQuota, consumeQuota, type QuotaPolicy } from "../rate-limit";
 import {
@@ -66,21 +69,52 @@ export const ProjectFileSchema = z.object({
 
 const clock = (deps: TransferDeps) => (deps.now ?? (() => new Date()))();
 
-/** Fichier d'export d'un projet que `userId` peut lire, et le titre à donner au fichier. */
+/**
+ * Export trop lourd pour être servi (coupure des hébergeurs à 4,5 Mo) ou réimporté
+ * (4 Mo) : erreur attendue, 413, avec ce que l'utilisateur peut faire.
+ */
+export class ExportTooLargeError extends AppError {
+  readonly code = "LIMIT_EXCEEDED" as const;
+  readonly status = 413;
+}
+
+/**
+ * Taille maximale de l'export du compte : sous la coupure des réponses des hébergeurs
+ * (Vercel : 4,5 Mo), faute de quoi le téléchargement échouerait sans explication.
+ */
+export const ACCOUNT_EXPORT_MAX_BYTES = 4_500_000;
+export const ACCOUNT_EXPORT_TOO_LARGE_MESSAGE =
+  "Vos données dépassent 4,5 Mo une fois exportées, même sans les logos : le fichier ne peut pas être téléchargé d'un bloc. Exportez vos projets un par un depuis leur menu « Exporter le projet ».";
+
+/**
+ * Fichier d'export d'un projet que `userId` peut lire : contenu, texte du fichier
+ * (JSON compact) et titre à lui donner. Donnée abîmée en base → export dégradé
+ * (journalisé), jamais une panne. Plus lourd que l'import n'accepte (4 Mo) →
+ * ExportTooLargeError (413) : un fichier qu'on ne pourrait pas réimporter n'est pas livré.
+ */
 export async function exportProject(
   userId: string,
   programId: string,
   deps: TransferDeps,
-): Promise<{ data: ProjectExport; title: string }> {
+): Promise<{ data: ProjectExport; body: string; title: string }> {
   await consumeQuota(projectExportQuotaKey(userId), 1, PROJECT_EXPORT_QUOTA, "import");
-  const project = await readProjectForExport(userId, programId);
-  const data = buildProjectExport(project, clock(deps));
+  const source = await readProjectForExport(userId, programId);
+  const { data, issues } = assembleProjectExport(source, clock(deps));
+  if (issues.length > 0) deps.log.warn("project.export_degraded", { programId, issues });
+  const body = serializeProjectExport(data);
+  const bytes = exportByteLength(body);
+  if (bytes > PROJECT_FILE_MAX_BYTES) {
+    deps.log.info("project.export_too_large", { programId, bytes });
+    throw new ExportTooLargeError(PROJECT_EXPORT_TOO_LARGE_MESSAGE);
+  }
   deps.log.info("project.exported", {
     programId,
     themes: data.project.themes.length,
     decks: data.project.decks.length,
+    skipped: data.project.skipped,
+    bytes,
   });
-  return { data, title: data.project.name };
+  return { data, body, title: data.project.name };
 }
 
 export interface ImportedProject {
@@ -134,12 +168,29 @@ export async function createExampleProject(userId: string, deps: TransferDeps): 
 export const ACCOUNT_EXPORT_FORMAT = "grand-oral-studio/compte";
 export const ACCOUNT_EXPORT_VERSION = 1;
 
+/** Mention posée sur un projet ou un modèle dont le logo a été retiré de l'export du compte. */
+export const LOGO_NOT_INCLUDED = "logo non inclus";
+
+/** Projet de l'export du compte : format d'export de projet, logo retiré (mention `note`). */
+export type AccountExportProject = ExportFileProject & { note?: typeof LOGO_NOT_INCLUDED };
+
+export type AccountExportModel = {
+  kind: SharedModelKind;
+  name: string;
+  payload: Brand | PromptTemplate;
+  createdAt: string;
+  updatedAt: string;
+  note?: typeof LOGO_NOT_INCLUDED;
+};
+
 /**
  * Export du compte (portabilité RGPD) : profil, réglages IA SANS aucune clé (ni
  * chiffrée, ni ses 4 derniers caractères), projets POSSÉDÉS au format d'export de
  * projet, modèles publiés. Jamais : hash de mot de passe, jeton, session,
  * identifiant interne, projets partagés par d'autres (ils appartiennent à leur
- * propriétaire), membres.
+ * propriétaire), membres. Logos retirés (« logo non inclus ») : jusqu'à 500 Ko
+ * chacun, ils feraient dépasser la taille téléchargeable ; l'export d'un projet
+ * les contient.
  */
 export interface AccountExport {
   format: typeof ACCOUNT_EXPORT_FORMAT;
@@ -148,32 +199,73 @@ export interface AccountExport {
   profile: AccountRecord["profile"];
   aiSettings: AccountRecord["aiSettings"];
   aiConnections: AccountRecord["aiConnections"];
-  projects: ExportedProject[];
+  projects: AccountExportProject[];
   /** Vrai si le compte possède plus de projets que l'export n'en contient. */
   projectsTruncated: boolean;
-  sharedModels: { kind: SharedModelKind; name: string; payload: Brand | PromptTemplate; createdAt: string; updatedAt: string }[];
+  /** Projets illisibles même en mode dégradé, laissés hors de l'export (0 d'ordinaire). */
+  projectsSkipped: number;
+  sharedModels: AccountExportModel[];
 }
 
-export async function exportAccount(userId: string, deps: TransferDeps): Promise<AccountExport> {
+/** Retire le logo d'une apparence ; `removed` dit s'il y en avait un. */
+function withoutLogo<T extends object>(payload: T): { payload: T; removed: boolean } {
+  if (!("logoDataUrl" in payload) || payload.logoDataUrl === null || payload.logoDataUrl === undefined) {
+    return { payload, removed: false };
+  }
+  return { payload: { ...payload, logoDataUrl: null }, removed: true };
+}
+
+/**
+ * Export du compte : contenu et texte du fichier (JSON compact). Un projet abîmé
+ * ne fait jamais échouer l'export (dégradé, ou écarté et compté si même cela
+ * échoue). Plus lourd que ACCOUNT_EXPORT_MAX_BYTES → ExportTooLargeError (413).
+ */
+export async function exportAccount(userId: string, deps: TransferDeps): Promise<{ data: AccountExport; body: string }> {
   await consumeQuota(accountExportQuotaKey(userId), 1, ACCOUNT_EXPORT_QUOTA, "import");
   const record = await readAccountRecord(userId);
   // Compte supprimé entre la session et la lecture.
   if (!record) throw new NotFoundError();
-  const { projects, truncated } = await readOwnedProjectsForExport(userId);
-  const sharedModels = await listAuthoredModels(userId);
+  const { projects: rows, truncated } = await readOwnedProjectsForExport(userId);
+  const models = await listAuthoredModels(userId);
   const now = clock(deps);
-  const result: AccountExport = {
+
+  const projects: AccountExportProject[] = [];
+  let projectsSkipped = 0;
+  for (const { programId, source } of rows) {
+    try {
+      const { data, issues } = assembleProjectExport(source, now);
+      if (issues.length > 0) deps.log.warn("project.export_degraded", { programId, issues });
+      const { payload: brand, removed } = withoutLogo(data.project.brand);
+      // Même format que l'export d'un projet : chaque entrée se réimporte telle quelle.
+      projects.push({ ...data.project, brand, ...(removed ? { note: LOGO_NOT_INCLUDED } : {}) });
+    } catch (error) {
+      projectsSkipped += 1;
+      deps.log.error("account.export_project_skipped", { programId, error });
+    }
+  }
+  const sharedModels: AccountExportModel[] = models.map((model) => {
+    const { payload, removed } = withoutLogo(model.payload);
+    return { ...model, payload, ...(removed ? { note: LOGO_NOT_INCLUDED } : {}) };
+  });
+
+  const data: AccountExport = {
     format: ACCOUNT_EXPORT_FORMAT,
     version: ACCOUNT_EXPORT_VERSION,
     exportedAt: now.toISOString(),
     profile: record.profile,
     aiSettings: record.aiSettings,
     aiConnections: record.aiConnections,
-    // Même format que l'export d'un projet : chaque entrée se réimporte telle quelle.
-    projects: projects.map((p) => buildProjectExport(p, now).project),
+    projects,
     projectsTruncated: truncated,
+    projectsSkipped,
     sharedModels,
   };
-  deps.log.info("account.exported", { projects: result.projects.length, truncated, models: sharedModels.length });
-  return result;
+  const body = JSON.stringify(data);
+  const bytes = exportByteLength(body);
+  if (bytes > ACCOUNT_EXPORT_MAX_BYTES) {
+    deps.log.info("account.export_too_large", { projects: projects.length, bytes });
+    throw new ExportTooLargeError(ACCOUNT_EXPORT_TOO_LARGE_MESSAGE);
+  }
+  deps.log.info("account.exported", { projects: projects.length, truncated, skipped: projectsSkipped, models: sharedModels.length, bytes });
+  return { data, body };
 }

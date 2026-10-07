@@ -99,6 +99,12 @@ export function ThemeManager({
 }) {
   const [optimisticThemes, setOptimisticThemes] = useOptimistic(themes);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /**
+   * Version du sujet lue à l'ouverture du formulaire, qui affiche le contenu de
+   * cet instant : une page rafraîchie pendant l'édition (modification d'un autre
+   * membre) ne doit pas l'avancer, sinon l'enregistrement écraserait sans conflit.
+   */
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
   // Le bloc « Importer des sujets depuis un texte », au-dessus, est la voie
   // principale : la saisie manuelle et l'import de liste restent à un clic.
   const [panel, setPanel] = useState<"none" | "add" | "import">("none");
@@ -317,7 +323,8 @@ export function ThemeManager({
                       onSubmit={async (value) => {
                         // Sujet enregistré entre-temps (autre onglet, autre membre) : échec CONFLICT,
                         // affiché par le formulaire, qui invite à recharger la page.
-                        const result = await updateTheme(theme.id, value, latestVersion(theme.updatedAt, savedVersions[theme.id]));
+                        const version = editingVersion ?? latestVersion(theme.updatedAt, savedVersions[theme.id]);
+                        const result = await updateTheme(theme.id, value, version);
                         if (result.ok) setSavedVersions((prev) => ({ ...prev, [theme.id]: result.data.updatedAt }));
                         return result;
                       }}
@@ -405,6 +412,7 @@ export function ThemeManager({
                             variant="ghost" size="small"
                             onClick={() => {
                               setEditingId(theme.id);
+                              setEditingVersion(latestVersion(theme.updatedAt, savedVersions[theme.id]));
                               focusLater([`edit-name-${theme.id}`]);
                             }}
                             aria-label={`Modifier ${theme.name}`}

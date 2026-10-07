@@ -99,7 +99,7 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
         writerLabel: writer.label,
         templateSaved: program.templateSavedAt !== null,
         exportTried: readiness.exportTried,
-        practiceDecks: readiness.practiceDecks,
+        decks: readiness.decks,
         rehearsals: readiness.rehearsals,
       })
     : null;

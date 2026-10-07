@@ -7,8 +7,10 @@ import { getUser } from "@/server/session";
 /**
  * GET /api/compte/export — export des données du compte connecté (JSON) : profil,
  * réglages IA sans aucune clé, projets possédés, modèles publiés. Toujours le compte
- * de la session : aucun paramètre ne désigne un autre utilisateur. 401 sans session,
- * 429 au-delà de 5 exports par heure, 500 générique sur panne (journalisée).
+ * de la session : aucun paramètre ne désigne un autre utilisateur. JSON compact, logos
+ * retirés (« logo non inclus »). 401 sans session, 413 au-delà de 4,5 Mo (message :
+ * exporter les projets un par un), 429 au-delà de 5 exports par heure, 500 générique
+ * sur panne (journalisée). Un projet abîmé ne fait pas échouer l'export.
  */
 
 function jsonError(status: number, error: string, correlationId: string, extra: Record<string, string> = {}): Response {
@@ -30,8 +32,7 @@ export async function GET(): Promise<Response> {
 
   const scoped = log.child({ userId: user.id });
   try {
-    const data = await exportAccount(user.id, { log: scoped });
-    const body = JSON.stringify(data, null, 2);
+    const { body } = await exportAccount(user.id, { log: scoped });
     return new Response(body, {
       status: 200,
       headers: {

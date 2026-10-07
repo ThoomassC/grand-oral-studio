@@ -168,6 +168,32 @@ describe("Gestionnaire de sujets — notes", () => {
     expect(updateTheme.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
   });
 
+  it("devrait partir de la version de la page rafraîchie quand le sujet a changé avant l'ouverture du formulaire", async () => {
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    const theme = { id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0 };
+    const { rerender } = render(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V0 }]} />);
+    rerender(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V1 }]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    expect(updateTheme.mock.calls.map((call) => call[2])).toEqual([V1]);
+  });
+
+  it("ne devrait pas écraser une modification arrivée par la page rafraîchie pendant l'édition (version de l'ouverture)", async () => {
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    const theme = { id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0 };
+    const { rerender } = render(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V0 }]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    // Un autre membre a enregistré le sujet ; la page est rafraîchie (autre action de l'onglet)
+    // mais le formulaire affiche toujours le contenu lu à l'ouverture.
+    rerender(<ThemeManager programId="p1" themes={[{ ...theme, notes: "Saisie d'un autre membre", updatedAt: V1 }]} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await waitFor(() => expect(updateTheme).toHaveBeenCalledTimes(1));
+    expect(updateTheme.mock.calls[0]?.[2]).toBe(V0);
+  });
+
   it("devrait afficher le conflit dans le formulaire, ouvert et saisie conservée, quand le sujet a changé entre-temps", async () => {
     const conflict = "Ce sujet a été modifié entre-temps (autre onglet ou autre membre du projet). Rechargez la page.";
     updateTheme.mockResolvedValue({ ok: false, error: conflict, code: "CONFLICT" });
