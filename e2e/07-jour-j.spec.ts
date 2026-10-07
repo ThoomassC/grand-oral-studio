@@ -1,6 +1,6 @@
 import { test, expect } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, dialog, importThemeList, openDayJourney } from "./support/app";
+import { createProject, dialog, importThemeList, openDayJourney, waitForHydration } from "./support/app";
 import { SUBJECTS, chooseFreeWriter, generateDeck } from "./support/parcours";
 import type { Page } from "@playwright/test";
 
@@ -26,6 +26,11 @@ async function setup(page: Page, writer: "free" | "demo", subjects: Subjects, na
 
 function problemField(page: Page) {
   return page.getByRole("main").getByRole("textbox", { name: "Problématique tirée au sort" });
+}
+
+/** Dernière étape du parcours (« Le diaporama »). */
+function lastStep(page: Page) {
+  return page.getByRole("main").getByRole("region", { name: /Le diaporama/ });
 }
 
 function subjectHeading(page: Page) {
@@ -86,7 +91,8 @@ test.describe("7. Jour J — projet sans sujet", () => {
     await expect(
       main.getByText("Trame du diaporama, texte à compléter, sans sujet : à partir de la problématique et de la trame."),
     ).toBeVisible();
-    await expect(main.getByText("Rédaction : Sans IA (trame remplie avec vos notes)")).toBeVisible();
+    // Rappel en fin de parcours (le bandeau du haut l'annonce aussi, cf. « 7. Jour J — v1.2 »).
+    await expect(lastStep(page).getByText("Rédaction : Sans IA")).toBeVisible();
     await expect(main.getByRole("button", { name: "Générer le diaporama" })).toBeFocused();
   });
 
@@ -175,7 +181,7 @@ test.describe("7. Jour J — projet à plusieurs sujets", () => {
     await expect(main.getByRole("radio", { name: /^Cybersécurité Confiance \d+ %/ })).toBeChecked();
     await expect(main.getByText("Reconnaissance sans IA, par mots-clés")).toHaveCount(0);
     await expect(main.getByText(/^Deck complet avec notes d'orateur pour le sujet Cybersécurité/)).toBeVisible();
-    await expect(main.getByText("Rédaction : Démo (contenus factices)")).toBeVisible();
+    await expect(lastStep(page).getByText("Rédaction : Démo")).toBeVisible();
   });
 
   test("devrait permettre de choisir un autre sujet du projet", async ({ page, account }) => {
@@ -227,5 +233,57 @@ test.describe("7. Jour J — suppression d'un sujet qui a un deck", () => {
     await expect(modal).toBeHidden();
     await page.goto(`/projets/${id}/decks`);
     await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+  });
+});
+
+test.describe("7. Jour J — v1.2 : rédacteur, chronomètre, avant l'examen, entraînement", () => {
+  test("devrait annoncer le rédacteur en haut de la page, avant la saisie, avec un lien « Changer »", async ({ page, account }) => {
+    void account;
+    await setup(page, "free", 0, "Bandeau rédacteur");
+    const main = page.getByRole("main");
+    await expect(main.getByText("Rédaction : Sans IA", { exact: true })).toBeVisible();
+    await expect(main.getByText(/Sans IA : votre trame remplie avec vos notes, texte à compléter\./)).toBeVisible();
+    await expect(main.getByRole("link", { name: /^Changer/ }).first()).toHaveAttribute("href", "/configuration-ia");
+  });
+
+  test("devrait démarrer le chronomètre à la saisie de la problématique et le garder au rechargement", async ({ page, account }) => {
+    void account;
+    await setup(page, "free", 0, "Chrono réel");
+    const main = page.getByRole("main");
+    await expect(main.getByText("de préparation")).toBeVisible();
+    await expect(main.getByRole("button", { name: "Pause" })).toHaveCount(0);
+    await problemField(page).fill(PROBLEM);
+    await expect(main.getByText("restantes")).toBeVisible();
+    await page.reload();
+    await expect(main.getByText("restantes")).toBeVisible();
+    await main.getByRole("button", { name: "Pause" }).click();
+    await expect(main.getByText("en pause")).toBeVisible();
+    await main.getByRole("button", { name: "Reprendre" }).click();
+    await main.getByRole("button", { name: "Réinitialiser" }).click();
+    await expect(main.getByText("de préparation")).toBeVisible();
+  });
+
+  test("devrait afficher la liste « Avant l'examen » le jour J, et pas à l'entraînement", async ({ page, account }) => {
+    void account;
+    const id = await setup(page, "free", 0, "Avant l'examen");
+    const main = page.getByRole("main");
+    await expect(main.getByText(/^Avant l'examen : \d+ points? à vérifier$/)).toBeVisible();
+    await expect(main.getByText("Export essayé")).toBeVisible();
+    await page.goto(`/projets/${id}/jour-j?mode=entrainement`);
+    await expect(main.getByRole("heading", { name: "Entraînement", level: 2 })).toBeVisible();
+    await expect(main.getByText(/^Avant l'examen/)).toHaveCount(0);
+  });
+
+  test("devrait générer un diaporama d'entraînement", async ({ page, account }) => {
+    void account;
+    const id = await setup(page, "free", 0, "Entraînement");
+    await page.goto(`/projets/${id}/jour-j?mode=entrainement`);
+    const main = page.getByRole("main");
+    await waitForHydration(problemField(page));
+    await expect(page).toHaveTitle(/Entraînement/);
+    await problemField(page).fill(PROBLEM);
+    await main.getByRole("button", { name: "Continuer", exact: true }).click();
+    await main.getByRole("button", { name: "Générer le diaporama d'entraînement" }).click();
+    await page.waitForURL(/\/decks\/[a-z0-9]+\?nouveau=1/, { timeout: 90_000 });
   });
 });

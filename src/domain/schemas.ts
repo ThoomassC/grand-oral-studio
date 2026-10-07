@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SAFE_FONTS } from "./fonts";
+import { PREP_MINUTES_MAX, PREP_MINUTES_MIN } from "./prep-clock";
 
 /**
  * Contrats du domaine. Toute donnée qui traverse une frontière (formulaire,
@@ -181,6 +182,13 @@ export const PromptTemplateSchema = z
       .int("La durée doit être un nombre entier de minutes.")
       .min(3, "L'oral dure au moins 3 minutes.")
       .max(90, "L'oral dure au plus 90 minutes."),
+    /** Temps de préparation du jour J (chronomètre) ; absent = 90 min (cf. prepMinutesOf). */
+    prepMinutes: z
+      .number("Indiquez un temps de préparation en minutes.")
+      .int("Le temps de préparation doit être un nombre entier de minutes.")
+      .min(PREP_MINUTES_MIN, `La préparation dure au moins ${PREP_MINUTES_MIN} minutes.`)
+      .max(PREP_MINUTES_MAX, `La préparation dure au plus ${PREP_MINUTES_MAX} minutes.`)
+      .optional(),
     sections: z
       .array(SectionSchema)
       .min(1, "La trame compte au moins une ligne.")

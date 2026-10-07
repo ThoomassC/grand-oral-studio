@@ -7,6 +7,7 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import type { EngineId, KeySource } from "@/domain/ai-providers";
 import type { ClassificationOutcome } from "@/domain/contracts";
 import { ProblemInputSchema } from "@/domain/schemas";
 import { classifyProblem, generateFinalDeck } from "@/server/actions/generation";
@@ -18,12 +19,48 @@ import { FieldError } from "@/components/ui/FieldError";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { Meter } from "@/components/ui/Meter";
-import { NONE, OTHER, parseDraft, restoreDraft, selectedSubject, subjectMode, type Draft } from "./journey";
+import { storeDeckNotice } from "./deck-notice";
+import {
+  draftKey,
+  drawProblem,
+  NONE,
+  offersFallback,
+  OTHER,
+  otherChoices,
+  parseDraft,
+  restoreDraft,
+  selectedSubject,
+  subjectMode,
+  type AttemptedWriter,
+  type Draft,
+  type EngineChoice,
+  type WriterOverride,
+} from "./journey";
+import { effectiveStart, readPrepTimer, startPrepTimerIfIdle } from "./prep-timer";
 
 /** Sujet du projet proposé le jour J (identifiant de code historique : « theme »). */
 export interface DayTheme {
   id: string;
   name: string;
+  /** Problématiques enregistrées sur le sujet (tirage au hasard de l'entraînement). */
+  problems?: string[];
+}
+
+/**
+ * Rédacteur qui sera tenté (vue WriterView du serveur, réduite) : libellé prêt à
+ * afficher, `outlineOnly` pour Sans IA (trame remplie avec les notes, texte à
+ * compléter), `waitHint` (durée d'attente annoncée, cf. generationWaitHint),
+ * moteur et origine de la clé (pour ne pas proposer en repli la connexion qui
+ * vient d'échouer), et `ready`/`problem` quand le choix ne fonctionnera pas.
+ */
+export interface DayWriter {
+  label: string;
+  outlineOnly: boolean;
+  waitHint: string;
+  engine: EngineId | "mock";
+  keySource: KeySource | null;
+  ready: boolean;
+  problem: string | null;
 }
 
 export interface RecentDeck {
@@ -37,6 +74,7 @@ const clock = () => Date.now();
 const PROBLEM_MAX = 1500;
 const SLOW_AFTER_MS = 3 * 60 * 1000;
 const NETWORK_ERROR = "La connexion a été interrompue. Votre problématique est conservée : relancez la génération.";
+const FREE_OVERRIDE: WriterOverride = { engine: "free" };
 const NONE_LABEL = "Sans sujet (problématique et trame seules)";
 
 function readDraft(key: string): Draft | null {
@@ -109,16 +147,15 @@ interface DayJourneyProps {
   programId: string;
   themes: DayTheme[];
   recentDeck: RecentDeck | null;
-  /**
-   * Moteur qui rédigera le deck : libellé prêt à afficher (ex. « Ollama · mistral »)
-   * et `outlineOnly` pour le moteur sans IA (trame remplie avec les notes, texte à
-   * compléter) ; `waitHint` : durée d'attente annoncée, qui dépend du moteur
-   * (cf. generationWaitHint).
-   */
-  writer: { label: string; outlineOnly: boolean; waitHint: string };
+  writer: DayWriter;
+  /** Connexions proposées en repli après un échec dû au rédacteur (cf. engineChoices). */
+  engineChoices?: EngineChoice[];
+  /** Entraînement : diaporama marqué « entraînement », tirage au hasard, brouillon à part. */
+  practice?: boolean;
+  /** Clé localStorage du chronomètre de préparation (démarré à la première saisie) ; absente : pas de chrono. */
+  prepKey?: string;
 }
 
-const draftKey = (programId: string) => `grand-oral-studio:jour-j:${programId}`;
 const noopSubscribe = () => () => {};
 
 /**
@@ -136,7 +173,7 @@ export function DayJourney(props: DayJourneyProps) {
       initialDraft={
         hydrated
           ? restoreDraft(
-              readDraft(draftKey(props.programId)),
+              readDraft(draftKey(props.programId, props.practice ?? false)),
               props.themes.map((t) => t.id),
             )
           : null
@@ -145,7 +182,16 @@ export function DayJourney(props: DayJourneyProps) {
   );
 }
 
-function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }: DayJourneyProps & { initialDraft: Draft | null }) {
+function DayJourneyInner({
+  programId,
+  themes,
+  recentDeck,
+  writer,
+  engineChoices = [],
+  practice = false,
+  prepKey,
+  initialDraft,
+}: DayJourneyProps & { initialDraft: Draft | null }) {
   const router = useRouter();
   const baseId = useId();
   const ids = {
@@ -158,7 +204,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     generate: `${baseId}-generate`,
     counter: `${baseId}-counter`,
   };
-  const storageKey = draftKey(programId);
+  const storageKey = draftKey(programId, practice);
   const submittedRef = useRef(false);
   const mode = subjectMode(themes.length);
   const totalSteps = mode === "none" ? 2 : 3;
@@ -172,8 +218,10 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [classifyError, setClassifyError] = useState<string | null>(null);
   const [generation, setGeneration] = useState<
-    { kind: "idle" } | { kind: "running"; startedAt: number } | { kind: "error"; message: string }
+    { kind: "idle" } | { kind: "running"; startedAt: number } | { kind: "error"; message: string; code?: string }
   >({ kind: "idle" });
+  /** Rédacteur ponctuel de la dernière tentative (null : celui de la Rédaction IA) : « Réessayer » le reprend. */
+  const [attempt, setAttempt] = useState<WriterOverride | null>(null);
   const [classifying, startClassify] = useTransition();
   const [, startGenerate] = useTransition();
 
@@ -187,6 +235,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   const directTheme =
     mode === "single" ? themes[0] : (hintedTheme ?? (choice !== OTHER && choice !== NONE ? themeById.get(choice) : undefined));
   const problemLength = problem.trim().length;
+  const canDraw = practice && drawProblem(themes, 0) !== null;
 
   /** Met à jour l'état et le brouillon en une fois (pas d'effet de synchronisation). */
   function update(next: Partial<Draft>) {
@@ -198,6 +247,23 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     if (next.choice !== undefined) setChoice(next.choice);
     if (next.otherThemeId !== undefined) setOtherThemeId(next.otherThemeId);
     writeDraft(storageKey, draft);
+  }
+
+  /** Saisie (ou collage) de la problématique : la première démarre le chrono de préparation. */
+  function changeProblem(next: string, extra: Partial<Draft> = {}) {
+    update({ ...extra, problem: next });
+    if (prepKey && next.trim() !== "") startPrepTimerIfIdle(prepKey, clock());
+  }
+
+  /** Entraînement : une problématique enregistrée sur un sujet, au hasard, avec son sujet indiqué. */
+  function draw() {
+    if (classifying || generating) return;
+    const drawn = drawProblem(themes, Math.random());
+    if (!drawn) return;
+    setFieldErrors({});
+    setClassifyError(null);
+    changeProblem(drawn.problem, mode === "many" ? { hintedThemeId: drawn.themeId } : {});
+    focusLater([ids.problem]);
   }
 
   function validateProblem(): boolean {
@@ -275,14 +341,19 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
     focusLater([ids.problem]);
   }
 
-  function generate() {
+  /** `override` : rédacteur ponctuel (repli en un clic) ; null : celui de la Rédaction IA. */
+  function generate(override: WriterOverride | null) {
     if (submittedRef.current || subjectId === undefined) return;
     submittedRef.current = true;
-    setGeneration({ kind: "running", startedAt: clock() });
+    const startedAt = clock();
+    const prep = prepKey ? readPrepTimer(prepKey, startedAt) : null;
+    const prepStartedAt = prep ? new Date(effectiveStart(prep, startedAt)).toISOString() : null;
+    setAttempt(override);
+    setGeneration({ kind: "running", startedAt });
     startGenerate(async () => {
       let res: Awaited<ReturnType<typeof generateFinalDeck>>;
       try {
-        res = await generateFinalDeck(programId, subjectId, problem.trim());
+        res = await generateFinalDeck(programId, subjectId, problem.trim(), { practice, prepStartedAt, override });
       } catch {
         submittedRef.current = false;
         setGeneration({ kind: "error", message: NETWORK_ERROR });
@@ -290,9 +361,11 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
       }
       if (!res.ok) {
         submittedRef.current = false;
-        setGeneration({ kind: "error", message: res.error });
+        setGeneration({ kind: "error", message: res.error, code: res.code });
         return;
       }
+      // Avertissements (qualité, écarts à la trame) : affichés une fois sur la page du diaporama.
+      storeDeckNotice(res.data.deckId, res.data.warnings);
       writeDraft(storageKey, null);
       // L'état « en cours » est conservé jusqu'à l'arrivée sur la page du deck.
       router.push(`/projets/${programId}/decks/${res.data.deckId}?nouveau=1`);
@@ -304,6 +377,15 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
   }
 
   const chosen = stage === "chosen";
+  /** Rédacteur de la tentative en échec, et les replis à proposer. */
+  const attempted: AttemptedWriter =
+    attempt === null
+      ? { engine: writer.engine, keySource: writer.keySource }
+      : attempt.engine === "free"
+        ? { engine: "free", keySource: null }
+        : { engine: attempt.engine, keySource: attempt.keySource };
+  const fallback = generation.kind === "error" && offersFallback(generation.code);
+  const fallbackChoices = fallback ? otherChoices(engineChoices, attempted) : [];
   const step1State = chosen ? "done" : "current";
   const step2State = chosen ? (subjectId !== undefined ? "done" : "current") : "todo";
   const lastState = chosen && subjectId !== undefined ? "current" : "todo";
@@ -382,6 +464,20 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      {/* Qui rédigera, annoncé avant la saisie (et rappelé à la dernière étape). */}
+      <Notice tone={writer.ready ? "info" : "warning"} title={`Rédaction : ${writer.label}`}>
+        <p>
+          {!writer.ready && writer.problem
+            ? `${writer.problem} `
+            : writer.outlineOnly
+              ? "Sans IA : votre trame remplie avec vos notes, texte à compléter. "
+              : null}
+          <Link href="/configuration-ia" className="opale-link">
+            Changer<span className="sr-only"> qui rédige</span>
+          </Link>
+        </p>
+      </Notice>
+
       {recentDeck ? (
         <div className="flex flex-col gap-3 rounded-lg border border-success/40 bg-success-soft p-4 sm:flex-row sm:items-center sm:justify-between">
           <p>
@@ -409,6 +505,13 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
             }}
             className="mt-4 flex flex-col gap-4"
           >
+            {canDraw ? (
+              <div>
+                <Button type="button" variant="ghost" size="small" onClick={draw} aria-disabled={classifying || undefined}>
+                  Tirer une problématique au hasard
+                </Button>
+              </div>
+            ) : null}
             <div>
               <label htmlFor={ids.problem} className="opale-field__label">
                 Problématique tirée au sort
@@ -419,7 +522,7 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 rows={4}
                 value={problem}
                 maxLength={PROBLEM_MAX}
-                onChange={(e) => update({ problem: e.target.value })}
+                onChange={(e) => changeProblem(e.target.value)}
                 placeholder="Recopiez l'intitulé exact"
                 {...errorProps(fieldErrors, "problem", `${ids.problem}-err`, ids.counter)}
               />
@@ -670,11 +773,15 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
               id={ids.generate}
               type="button"
               size="large"
-              onClick={generate}
+              onClick={() => generate(null)}
               aria-disabled={generating || subjectId === undefined || undefined}
               aria-describedby={generating ? `${ids.s3}-progress` : undefined}
             >
-              <ButtonLabel idle="Générer le diaporama" busy="Génération en cours…" isBusy={generating} />
+              <ButtonLabel
+                idle={practice ? "Générer le diaporama d'entraînement" : "Générer le diaporama"}
+                busy="Génération en cours…"
+                isBusy={generating}
+              />
             </Button>
           </div>
 
@@ -720,10 +827,33 @@ function DayJourneyInner({ programId, themes, recentDeck, writer, initialDraft }
                 <p className="mt-1 text-sm">
                   Votre problématique et votre choix sont conservés : relancez la génération, ou{" "}
                   <Link href="/configuration-ia" className="font-semibold underline underline-offset-2">
-                    changez qui rédige dans la Configuration IA
+                    changez qui rédige dans Rédaction IA
                   </Link>
                   .
                 </p>
+                {fallback ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" variant="ghost" size="small" onClick={() => generate(attempt)}>
+                      Réessayer
+                    </Button>
+                    {fallbackChoices.map((c) => (
+                      <Button
+                        key={`${c.override.engine}:${c.override.keySource}`}
+                        type="button"
+                        variant="ghost"
+                        size="small"
+                        onClick={() => generate(c.override)}
+                      >
+                        Générer avec {c.label}
+                      </Button>
+                    ))}
+                    {attempted.engine !== "free" ? (
+                      <Button type="button" variant="ghost" size="small" onClick={() => generate(FREE_OVERRIDE)}>
+                        Générer sans IA maintenant
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </Notice>
             ) : null}
           </LiveRegion>

@@ -1,6 +1,7 @@
 /**
- * Repères visuels du temps de préparation (1 h 30). Purement présentationnels,
- * rendus côté serveur : ils ne décomptent rien, ils rappellent l'enjeu.
+ * Repères visuels du temps de préparation (1 h 30 par défaut). Purement
+ * présentationnels, rendus côté serveur ou client : ils ne décomptent rien
+ * (le décompte réel du jour J est PrepCountdown, qui s'en sert).
  */
 
 export const PREP_MINUTES = 90;
@@ -35,20 +36,33 @@ export function Duration({ minutes, className = "" }: { minutes: number; classNa
 }
 
 /**
- * Cadran de chronomètre : graduations tous les quarts d'heure sur 1 h 30, et
- * le secteur surligné des premières minutes (`usedMinutes`). Décoratif : le
- * texte équivalent est toujours donné à côté.
+ * Cadran de chronomètre : graduations régulières, et le secteur surligné des
+ * minutes écoulées (`usedMinutes`) sur la durée totale (`totalMinutes`, 1 h 30
+ * par défaut). Décoratif : le texte équivalent est toujours donné à côté.
  */
-export function PrepDial({ usedMinutes = 3, className = "h-28 w-28" }: { usedMinutes?: number; className?: string }) {
+export function PrepDial({
+  usedMinutes = 3,
+  totalMinutes = PREP_MINUTES,
+  className = "h-28 w-28",
+}: {
+  usedMinutes?: number;
+  totalMinutes?: number;
+  className?: string;
+}) {
   const r = 40;
-  const angle = (Math.min(usedMinutes, PREP_MINUTES) / PREP_MINUTES) * 2 * Math.PI;
+  const total = totalMinutes > 0 ? totalMinutes : PREP_MINUTES;
+  // Un tour complet ne se dessine pas en arc : on s'arrête juste avant.
+  const angle = (Math.min(Math.max(0, usedMinutes), total * 0.9999) / total) * 2 * Math.PI;
   const end = { x: 50 + r * Math.sin(angle), y: 50 - r * Math.cos(angle) };
   const ticks = Array.from({ length: 18 }, (_, i) => i);
   return (
     <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false" className={className}>
       <circle cx="50" cy="50" r="47" fill="var(--opale-surface)" stroke="currentColor" strokeWidth="2.5" />
       {angle > 0 ? (
-        <path d={`M50 50 L50 ${50 - r} A${r} ${r} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)} Z`} fill="var(--opale-accent)" />
+        <path
+          d={`M50 50 L50 ${50 - r} A${r} ${r} 0 ${angle > Math.PI ? 1 : 0} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)} Z`}
+          fill="var(--opale-accent)"
+        />
       ) : null}
       {ticks.map((i) => {
         const a = (i / ticks.length) * 2 * Math.PI;

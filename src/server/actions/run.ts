@@ -7,7 +7,8 @@ import type { ActionResult } from "./result";
 /**
  * Enveloppe commune des Server Actions : session obligatoire, journalisation
  * corrélée, traduction des erreurs.
- *  - AppError (attendue)  → { ok: false, error: message FR, fieldErrors? }
+ *  - AppError (attendue)  → { ok: false, error: message FR, code?, fieldErrors? }
+ *    (`code` seulement si l'action le demande : `exposeCode`)
  *  - redirect/notFound Next → relancées telles quelles (unstable_rethrow)
  *  - toute autre erreur (panne) → journalisée avec contexte, message générique
  *    portant la référence de corrélation, jamais le message brut.
@@ -18,7 +19,16 @@ export interface ActionContext {
   log: Logger;
 }
 
-export async function runAction<T>(name: string, fn: (ctx: ActionContext) => Promise<T>): Promise<ActionResult<T>> {
+export interface RunOptions {
+  /** Renvoie aussi le code de l'erreur attendue (AppErrorCode), pour une interface qui en dépend. */
+  exposeCode?: boolean;
+}
+
+export async function runAction<T>(
+  name: string,
+  fn: (ctx: ActionContext) => Promise<T>,
+  options: RunOptions = {},
+): Promise<ActionResult<T>> {
   const log = createLogger({ action: name });
   const started = Date.now();
   try {
@@ -34,6 +44,7 @@ export async function runAction<T>(name: string, fn: (ctx: ActionContext) => Pro
       return {
         ok: false,
         error: error.userMessage,
+        ...(options.exposeCode ? { code: error.code } : {}),
         ...(error instanceof ValidationError && error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
       };
     }

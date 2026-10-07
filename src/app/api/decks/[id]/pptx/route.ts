@@ -3,6 +3,7 @@ import { isAppError } from "@/server/errors";
 import { attachmentHeader, deckFileTitle, safeFilename, unicodeFilename } from "@/server/filename";
 import { createLogger } from "@/server/logger";
 import { getDeck } from "@/server/queries";
+import { markExportTried } from "@/server/repo/readiness";
 import { getUser } from "@/server/session";
 import { IdSchema } from "@/server/validation";
 
@@ -36,6 +37,10 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     // Même règle pour tous les moteurs (le titre du deck, lui, varie d'un moteur à l'autre).
     const title = deckFileTitle({ themeName: deck.themeName, kind: deck.kind, engine: deck.engine, createdAt: deck.createdAt });
     log.info("deck.exported", { userId: user.id, deckId: deck.id, bytes: buffer.byteLength });
+    // Liste « Avant l'examen » : export essayé. Sans effet sur Program.updatedAt ; un échec n'empêche pas le téléchargement.
+    await markExportTried(deck.program.id).catch((error: unknown) =>
+      log.warn("deck.export_mark_failed", { programId: deck.program.id, error }),
+    );
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {

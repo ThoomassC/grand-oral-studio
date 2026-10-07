@@ -206,7 +206,7 @@ describe("generateFinalDeck — avec un sujet", () => {
     const first = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
     const replay = await gen.generateFinalDeck(a.id, { programId, themeId: numerique, problem: PROBLEM }, deps(ai));
 
-    expect(replay).toEqual({ deckId: first.deckId, warnings: [], reused: true });
+    expect(replay).toEqual({ deckId: first.deckId, warnings: [], reused: true, engine: "claude" });
     expect(ai.calls).toBe(1);
     expect(await quotaUsed(a.id)).toBe(1);
     expect(await db().deck.count({ where: { themeId: numerique, kind: "FINAL" } })).toBe(1);
@@ -371,7 +371,7 @@ describe("generateFinalDeck — sans sujet", () => {
     const { a, programId } = await setup();
     const first = await gen.generateFinalDeck(a.id, { programId, themeId: null, problem: PROBLEM }, FREE);
     const replay = await gen.generateFinalDeck(a.id, { programId, themeId: null, problem: PROBLEM }, FREE);
-    expect(replay).toEqual({ deckId: first.deckId, warnings: [], reused: true });
+    expect(replay).toEqual({ deckId: first.deckId, warnings: [], reused: true, engine: "free" });
     expect(await quotaUsed(a.id, freeQuotaKey)).toBe(1);
   });
 

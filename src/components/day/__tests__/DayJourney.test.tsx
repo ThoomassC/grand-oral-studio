@@ -20,7 +20,22 @@ const THEMES: DayTheme[] = [
   { id: "t2", name: "Économie circulaire" },
 ];
 const PROBLEM = "Comment les PME peuvent-elles financer leur transition ?";
-const WRITER = { label: "Sans IA (trame remplie avec vos notes)", outlineOnly: true, waitHint: "Cela prend quelques secondes." };
+const WRITER: Parameters<typeof DayJourney>[0]["writer"] = {
+  label: "Sans IA (trame remplie avec vos notes)",
+  outlineOnly: true,
+  waitHint: "Cela prend quelques secondes.",
+  engine: "free",
+  keySource: null,
+  ready: true,
+  problem: null,
+};
+/** Options de génération envoyées par défaut : jour J, chrono absent, rédacteur enregistré. */
+const DEFAULT_OPTIONS = { practice: false, prepStartedAt: null, override: null };
+
+/** Réponse de generateFinalDeck en cas de succès (contrat v1.2 : avertissements, réutilisation, moteur). */
+function succeeded(deckId: string) {
+  return { ok: true, data: { deckId, warnings: [], reused: false, engine: "free" } };
+}
 
 function outcome(overrides: Partial<ClassificationOutcome>): ClassificationOutcome {
   return {
@@ -64,7 +79,7 @@ afterEach(() => {
 
 describe("DayJourney — projet sans sujet", () => {
   it("devrait passer de la problématique au diaporama, sans reconnaissance, et générer sans sujet", async () => {
-    generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });
+    generate.mockResolvedValue(succeeded("d1"));
     const user = userEvent.setup();
     renderJourney([]);
     expect(screen.getByText("Sans sujet : le diaporama part de la problématique et de la trame.")).toBeInTheDocument();
@@ -78,7 +93,7 @@ describe("DayJourney — projet sans sujet", () => {
     expect(screen.getByRole("heading", { name: /Étape 2 sur 2 :\s*Le diaporama/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
-    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM);
+    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM, DEFAULT_OPTIONS);
     expect(push).toHaveBeenCalledWith("/projets/p1/decks/d1?nouveau=1");
   });
 });
@@ -107,7 +122,7 @@ describe("DayJourney — génération longue", () => {
 
 describe("DayJourney — un seul sujet", () => {
   it("devrait présélectionner le sujet sans reconnaissance, avec l'option « Sans sujet »", async () => {
-    generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });
+    generate.mockResolvedValue(succeeded("d1"));
     const user = userEvent.setup();
     renderJourney([THEMES[0] as DayTheme]);
     expect(screen.queryByLabelText(/Sujet indiqué sur l'énoncé/)).not.toBeInTheDocument();
@@ -121,11 +136,11 @@ describe("DayJourney — un seul sujet", () => {
     expect(within(group).queryByRole("radio", { name: "Un autre sujet du projet" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
-    expect(generate).toHaveBeenCalledWith("p1", "t1", PROBLEM);
+    expect(generate).toHaveBeenCalledWith("p1", "t1", PROBLEM, DEFAULT_OPTIONS);
   });
 
   it("devrait envoyer null quand « Sans sujet » est choisi", async () => {
-    generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });
+    generate.mockResolvedValue(succeeded("d1"));
     const user = userEvent.setup();
     renderJourney([THEMES[0] as DayTheme]);
     await typeProblem(user);
@@ -133,13 +148,13 @@ describe("DayJourney — un seul sujet", () => {
     await user.click(screen.getByRole("radio", { name: "Sans sujet (problématique et trame seules)" }));
     expect(screen.getByText(/à partir de la problématique et de la trame/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
-    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM);
+    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM, DEFAULT_OPTIONS);
   });
 });
 
 describe("DayJourney — plusieurs sujets", () => {
   it("devrait reconnaître le sujet et proposer « Sans sujet », qui envoie null", async () => {
-    generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });
+    generate.mockResolvedValue(succeeded("d1"));
     const user = await recognize(outcome({}));
     expect(classify).toHaveBeenCalledWith("p1", { problem: PROBLEM, hintedThemeId: null });
     const group = screen.getByRole("group", { name: "Sujet retenu pour le diaporama" });
@@ -147,11 +162,11 @@ describe("DayJourney — plusieurs sujets", () => {
     expect(within(group).getByRole("radio", { name: "Un autre sujet du projet" })).toBeInTheDocument();
     await user.click(within(group).getByRole("radio", { name: "Sans sujet (problématique et trame seules)" }));
     await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
-    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM);
+    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM, DEFAULT_OPTIONS);
   });
 
   it("devrait continuer avec le sujet indiqué sur l'énoncé sans reconnaissance", async () => {
-    generate.mockResolvedValue({ ok: true, data: { deckId: "d1" } });
+    generate.mockResolvedValue(succeeded("d1"));
     const user = userEvent.setup();
     renderJourney();
     await typeProblem(user);
@@ -163,7 +178,7 @@ describe("DayJourney — plusieurs sujets", () => {
     expect(classify).not.toHaveBeenCalled();
     expect(screen.getByRole("radio", { name: /Économie circulaire/ })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
-    expect(generate).toHaveBeenCalledWith("p1", "t2", PROBLEM);
+    expect(generate).toHaveBeenCalledWith("p1", "t2", PROBLEM, DEFAULT_OPTIONS);
   });
 
   it("ne devrait lancer qu'une génération sur un double clic", async () => {
@@ -261,10 +276,190 @@ describe("DayJourney — reconnaissance sans IA", () => {
 
   it("devrait rappeler le moteur qui rédigera, avec un lien pour le changer, sans parler de squelette", async () => {
     await recognize(outcome({ source: "free" }));
-    expect(screen.getByText(/Rédaction :/).closest("p")).toHaveTextContent(
+    // Rappel en fin de parcours (le bandeau du haut est vérifié à part).
+    const step3 = screen.getByRole("region", { name: /Étape 3 sur 3/ });
+    expect(within(step3).getByText(/Rédaction :/).closest("p")).toHaveTextContent(
       "Rédaction : Sans IA (trame remplie avec vos notes)",
     );
-    expect(screen.getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/configuration-ia");
+    expect(within(step3).getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/configuration-ia");
     expect(document.body.textContent).not.toMatch(/squelette|thème/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1.2 : bandeau du rédacteur, repli en un clic, entraînement, tirage au hasard
+// ---------------------------------------------------------------------------
+
+type Props = Parameters<typeof DayJourney>[0];
+const MISTRAL_WRITER: Props["writer"] = {
+  label: "Mistral (votre clé)",
+  outlineOnly: false,
+  waitHint: "Comptez une à deux minutes.",
+  engine: "mistral",
+  keySource: "user",
+  ready: true,
+  problem: null,
+};
+const CHOICES: NonNullable<Props["engineChoices"]> = [
+  { override: { engine: "mistral", keySource: "user" }, label: "Mistral (votre clé)" },
+  { override: { engine: "claude", keySource: "server" }, label: "Claude (clé d'équipe)" },
+  { override: { engine: "openai", keySource: "user" }, label: "OpenAI (votre clé)" },
+];
+const RATE_LIMITED = {
+  ok: false,
+  error: "Mistral limite le nombre de requêtes en ce moment. Réessayez dans 30 s, ou choisissez un autre rédacteur.",
+  code: "AI_RATE_LIMITED",
+};
+
+function renderWith(props: Partial<Props> = {}) {
+  return render(<DayJourney programId="p1" themes={[]} recentDeck={null} writer={MISTRAL_WRITER} {...props} />);
+}
+
+/** Saisie, « Continuer », « Générer le diaporama » : l'échec est affiché. */
+async function failOnce(props: Partial<Props> = {}, failure: unknown = RATE_LIMITED) {
+  generate.mockResolvedValueOnce(failure);
+  const user = userEvent.setup();
+  renderWith(props);
+  await typeProblem(user);
+  await user.click(screen.getByRole("button", { name: "Continuer" }));
+  await user.click(screen.getByRole("button", { name: /Générer le diaporama/ }));
+  await screen.findByText(/limite le nombre de requêtes|introuvable|interrompue|Trop de générations/);
+  return user;
+}
+
+describe("DayJourney — bandeau « Rédaction »", () => {
+  it("devrait annoncer le rédacteur dès la saisie, avec un lien « Changer »", () => {
+    renderWith();
+    const banner = screen.getByText("Rédaction : Mistral (votre clé)").closest(".opale-feedback") as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(within(banner).getByRole("link", { name: /Changer/ })).toHaveAttribute("href", "/configuration-ia");
+    // Avant l'étape 1 dans l'ordre du document.
+    const problem = screen.getByLabelText("Problématique tirée au sort");
+    expect(banner.compareDocumentPosition(problem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("devrait expliquer ce que produit « Sans IA »", () => {
+    renderWith({ writer: { ...WRITER, label: "Sans IA" } });
+    expect(screen.getByText("Rédaction : Sans IA")).toBeInTheDocument();
+    expect(screen.getByText(/votre trame remplie avec vos notes, texte à compléter/)).toBeInTheDocument();
+  });
+
+  it("devrait dire pourquoi le rédacteur choisi ne fonctionnera pas", () => {
+    renderWith({
+      writer: { ...MISTRAL_WRITER, ready: false, problem: "Ajoutez votre clé API Mistral dans la Configuration IA pour lancer une génération." },
+    });
+    expect(screen.getByText(/Ajoutez votre clé API Mistral/)).toBeInTheDocument();
+  });
+});
+
+describe("DayJourney — repli en un clic", () => {
+  it("devrait proposer Réessayer, chaque autre connexion et « Sans IA », sans le rédacteur en échec", async () => {
+    await failOnce({ engineChoices: CHOICES });
+    const alert = screen.getByRole("alert");
+    expect(within(alert).getByText(/Votre problématique et votre choix sont conservés/)).toBeInTheDocument();
+    expect(within(alert).getByRole("link", { name: /Rédaction IA/ })).toHaveAttribute("href", "/configuration-ia");
+    expect(within(alert).queryByRole("link", { name: /Configuration IA/ })).not.toBeInTheDocument();
+    expect(within(alert).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Réessayer",
+      "Générer avec Claude (clé d'équipe)",
+      "Générer avec OpenAI (votre clé)",
+      "Générer sans IA maintenant",
+    ]);
+  });
+
+  it("devrait relancer avec le même moteur, avec une autre connexion, ou sans IA", async () => {
+    const user = await failOnce({ engineChoices: CHOICES });
+    generate.mockResolvedValueOnce(RATE_LIMITED);
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    expect(generate).toHaveBeenLastCalledWith("p1", null, PROBLEM, DEFAULT_OPTIONS);
+
+    generate.mockResolvedValueOnce(RATE_LIMITED);
+    await user.click(await screen.findByRole("button", { name: "Générer avec Claude (clé d'équipe)" }));
+    expect(generate).toHaveBeenLastCalledWith("p1", null, PROBLEM, {
+      ...DEFAULT_OPTIONS,
+      override: { engine: "claude", keySource: "server" },
+    });
+
+    generate.mockResolvedValueOnce({ ok: true, data: { deckId: "d9", warnings: [], reused: false, engine: "free" } });
+    await user.click(await screen.findByRole("button", { name: "Générer sans IA maintenant" }));
+    expect(generate).toHaveBeenLastCalledWith("p1", null, PROBLEM, { ...DEFAULT_OPTIONS, override: { engine: "free" } });
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projets/p1/decks/d9?nouveau=1"));
+  });
+
+  it("ne devrait proposer que « Réessayer » et « Sans IA » sans autre connexion", async () => {
+    await failOnce({ engineChoices: [CHOICES[0]!] });
+    expect(within(screen.getByRole("alert")).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Réessayer",
+      "Générer sans IA maintenant",
+    ]);
+  });
+
+  it("ne devrait pas proposer « Sans IA » quand c'est déjà le rédacteur", async () => {
+    await failOnce(
+      { writer: { ...WRITER, label: "Sans IA" } },
+      { ok: false, error: "Trop de générations en peu de temps. Réessayez dans 2 min.", code: "RATE_LIMITED" },
+    );
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).queryByRole("button", { name: "Générer sans IA maintenant" })).not.toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: "Réessayer" })).toBeInTheDocument();
+  });
+
+  it("ne devrait rien proposer pour une erreur qui n'est pas due au rédacteur", async () => {
+    await failOnce({ engineChoices: CHOICES }, { ok: false, error: "Ce projet est introuvable.", code: "NOT_FOUND" });
+    expect(within(screen.getByRole("alert")).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("DayJourney — entraînement", () => {
+  const WITH_PROBLEMS: DayTheme[] = [
+    { id: "t1", name: "Transition énergétique", problems: ["Faut-il taxer le kérosène des avions ?"] },
+    { id: "t2", name: "Économie circulaire", problems: [] },
+  ];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("devrait tirer une problématique au hasard et indiquer son sujet", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const user = userEvent.setup();
+    renderWith({ themes: WITH_PROBLEMS, practice: true });
+    await user.click(screen.getByRole("button", { name: "Tirer une problématique au hasard" }));
+    expect(screen.getByLabelText("Problématique tirée au sort")).toHaveValue("Faut-il taxer le kérosène des avions ?");
+    expect(screen.getByLabelText(/Sujet indiqué sur l'énoncé/)).toHaveValue("t1");
+  });
+
+  it("ne devrait pas proposer de tirage sans problématique enregistrée, ni le jour J", () => {
+    renderWith({ themes: THEMES, practice: true });
+    expect(screen.queryByRole("button", { name: "Tirer une problématique au hasard" })).not.toBeInTheDocument();
+    cleanup();
+    renderWith({ themes: WITH_PROBLEMS });
+    expect(screen.queryByRole("button", { name: "Tirer une problématique au hasard" })).not.toBeInTheDocument();
+  });
+
+  it("devrait générer un diaporama d'entraînement, avec un brouillon distinct du jour J", async () => {
+    generate.mockResolvedValue({ ok: true, data: { deckId: "d1", warnings: [], reused: false, engine: "mistral" } });
+    const user = userEvent.setup();
+    renderWith({ practice: true });
+    await typeProblem(user);
+    expect(window.sessionStorage.getItem("grand-oral-studio:jour-j:p1")).toBeNull();
+    expect(window.sessionStorage.getItem("grand-oral-studio:jour-j:p1:entrainement")).toContain(PROBLEM);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    await user.click(screen.getByRole("button", { name: "Générer le diaporama d'entraînement" }));
+    expect(generate).toHaveBeenCalledWith("p1", null, PROBLEM, { ...DEFAULT_OPTIONS, practice: true });
+  });
+});
+
+describe("DayJourney — avertissements de génération", () => {
+  it("devrait ranger les avertissements pour la page du diaporama", async () => {
+    generate.mockResolvedValue({ ok: true, data: { deckId: "d7", warnings: ["Conclusion à relire."], reused: false, engine: "mistral" } });
+    const user = userEvent.setup();
+    renderWith();
+    await typeProblem(user);
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+    await user.click(screen.getByRole("button", { name: "Générer le diaporama" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(JSON.parse(window.sessionStorage.getItem("grand-oral-studio:deck-notice:d7") ?? "null")).toEqual({
+      v: 1,
+      warnings: ["Conclusion à relire."],
+    });
   });
 });
