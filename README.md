@@ -105,7 +105,9 @@ Seuls les scopes `openid`, `email` et `profile` sont demandés. Un compte créé
 
 Facultatifs : sans `RESEND_API_KEY` **et** `EMAIL_FROM` (les deux ou aucune, sinon le serveur refuse de démarrer), aucun e-mail n'est envoyé, comme en 1.1. Avec les deux (API Resend, sans dépendance) : vérification de l'adresse à l'inscription (les comptes existants non vérifiés reçoivent un lien à leur prochaine connexion), « Mot de passe oublié », notification d'invitation à un projet partagé. Les liens pointent vers `BETTER_AUTH_URL`.
 
-`ALLOWED_EMAIL_DOMAINS` (facultatif, ex. `lycee-exemple.fr, ac-paris.fr`) limite la création de comptes à ces domaines exacts, connexion Google comprise.
+`ALLOWED_EMAIL_DOMAINS` (facultatif, ex. `lycee-exemple.fr, ac-paris.fr`) limite la création de comptes à ces domaines exacts, connexion Google comprise. Attention : sans vérification d'adresse (RESEND), la restriction de domaine ne prouve pas la possession de la boîte (n'importe qui peut s'inscrire sous une adresse du domaine) ; le serveur démarre mais l'écrit dans son journal.
+
+Partage d'un projet : avec e-mails, seul un compte à l'adresse confirmée peut être ajouté ; sans e-mails, l'adresse ne prouve pas l'identité de son titulaire, l'écran « Partage » le rappelle au propriétaire.
 
 Profil : changer de mot de passe (compte par e-mail), supprimer son compte (les projets partagés dont on est propriétaire disparaissent aussi pour les membres, l'écran le rappelle), télécharger ses données (JSON, sans clé ni jeton).
 
@@ -128,7 +130,7 @@ Profil : changer de mot de passe (compte par e-mail), supprimer son compte (les 
 
 ## Limites connues
 
-- Sans `RESEND_API_KEY`/`EMAIL_FROM`, ni vérification d'adresse ni « Mot de passe oublié » (aucun e-mail ne part).
+- Sans `RESEND_API_KEY`/`EMAIL_FROM`, ni vérification d'adresse ni « Mot de passe oublié » (aucun e-mail ne part) : `ALLOWED_EMAIL_DOMAINS` et l'adresse d'un collègue invité ne prouvent alors pas la possession de la boîte.
 - Pas d'intégration directe à l'API Canva : passage par l'import `.pptx` ou les consignes Canva.
 - Le partage invite seulement des comptes existants (pas d'invitation par e-mail d'une personne sans compte) ; 20 membres au plus par projet.
 - La sortie structurée `json_schema` de Gemini n'a pas été vérifiée avec une vraie clé : en cas de refus, l'adaptateur se replie sur `json_object`.

@@ -20,18 +20,22 @@ import { TemplatePromptImport } from "./TemplatePromptImport";
  *
  * `readOnly` (lecteur d'un projet partagé) : la trame en lecture seule, sans
  * import, éditeur ni bibliothèque (le serveur refuse de toute façon).
+ * `canPublish` (propriétaire seul) : propose de publier dans la bibliothèque.
  */
 export function TemplateWorkspace({
   programId,
   initialTemplate,
   savedAt,
   readOnly = false,
+  canPublish = false,
 }: {
   programId: string;
   initialTemplate: PromptTemplate;
   /** templateSavedAt (ISO ; null = jamais enregistrée) : jeton de concurrence de l'éditeur. */
   savedAt?: string | null;
   readOnly?: boolean;
+  /** Propriétaire du projet : seul autorisé à publier la trame dans la bibliothèque. */
+  canPublish?: boolean;
 }) {
   const editorRef = useRef<TemplateEditorHandle>(null);
   const [editorKey, setEditorKey] = useState(0);
@@ -57,6 +61,7 @@ export function TemplateWorkspace({
       <ModelLibrary
         programId={programId}
         kind="template"
+        canPublish={canPublish}
         onApplied={() => setApplyingFrom({ version: savedAt })}
       />
     </div>

@@ -1,19 +1,22 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
-import { EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE } from "@/components/auth/oauth-error";
 import { db } from "@/server/db/client";
 import { createAuthEmails } from "@/server/email/auth-emails";
+import { createLogger } from "@/server/logger";
 import {
   ACCOUNT_LINKING_OPTIONS,
   allowedEmailDomains,
   DISABLED_AUTH_PATHS,
+  domainRestrictionWarning,
   emailDeliveryConfig,
+  emailDomainNotAllowedError,
   googleProviderOptions,
   ipAddressOptions,
   isEmailDomainAllowed,
   SESSION_OPTIONS,
+  signUpGuard,
 } from "./auth-options";
 
 /**
@@ -32,6 +35,8 @@ import {
  *
  * ALLOWED_EMAIL_DOMAINS (facultatif) : seuls ces domaines peuvent créer un
  * compte, par e-mail comme par Google. Les comptes existants ne sont pas touchés.
+ * Sans e-mails, l'adresse n'est pas vérifiée : la restriction filtre une adresse
+ * déclarée, pas une boîte possédée (avertissement au démarrage).
  */
 
 const secret = process.env.BETTER_AUTH_SECRET;
@@ -44,10 +49,8 @@ const email = emailDeliveryConfig(process.env);
 const authEmails = email ? createAuthEmails(email) : undefined;
 const allowedDomains = allowedEmailDomains(process.env);
 
-function domainNotAllowed(): APIError {
-  // Le code devient `?error=EMAIL_DOMAIN_NOT_ALLOWED` au retour de Google (oauth-error.ts).
-  return new APIError("FORBIDDEN", { code: "EMAIL_DOMAIN_NOT_ALLOWED", message: EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE });
-}
+const domainWarning = domainRestrictionWarning(process.env);
+if (domainWarning) createLogger({ scope: "auth" }).warn("auth.config.domain_restriction_unverified", { message: domainWarning });
 
 export const auth = betterAuth({
   appName: "Grand Oral Studio",
@@ -90,25 +93,20 @@ export const auth = betterAuth({
           create: {
             // Tout chemin de création (e-mail, Google) passe ici.
             before: async (user) => {
-              if (!isEmailDomainAllowed(user.email, allowedDomains)) throw domainNotAllowed();
+              if (!isEmailDomainAllowed(user.email, allowedDomains)) throw emailDomainNotAllowedError();
             },
           },
         },
       }
     : undefined,
-  hooks: allowedDomains
-    ? {
-        // Inscription par e-mail : refus explicite AVANT le point d'entrée. Quand la
-        // vérification est active, Better Auth convertit un refus du hook de création
-        // en fausse réussite (anti-énumération) : l'utilisateur attendrait un e-mail
-        // qui ne partira jamais. Le domaine n'est pas une donnée personnelle.
-        before: createAuthMiddleware(async (ctx) => {
-          if (ctx.path !== "/sign-up/email") return;
-          const address: unknown = (ctx.body as { email?: unknown } | undefined)?.email;
-          if (typeof address === "string" && !isEmailDomainAllowed(address, allowedDomains)) throw domainNotAllowed();
-        }),
-      }
-    : undefined,
+  hooks: {
+    // Inscription par e-mail : domaine autorisé et nom borné, refusés AVANT le
+    // point d'entrée (voir signUpGuard) ; le nom normalisé remplace celui reçu.
+    before: createAuthMiddleware(async (ctx) => {
+      const body = signUpGuard(ctx.path, ctx.body, allowedDomains);
+      if (body) return { context: { body } };
+    }),
+  },
   socialProviders: google ? { google } : undefined,
   account: { accountLinking: ACCOUNT_LINKING_OPTIONS },
   disabledPaths: DISABLED_AUTH_PATHS,

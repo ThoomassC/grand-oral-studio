@@ -29,10 +29,15 @@ const roleName = (role: MemberRoleInput) => ROLE_LABEL[role].toLowerCase();
 
 /**
  * Page « Partage » d'un projet. Tout membre voit la liste (propriétaire, puis
- * membres : nom, adresse, rôle). Le propriétaire invite un collègue (compte
+ * membres : nom et rôle ; l'adresse e-mail, pour le seul propriétaire — le
+ * serveur ne l'envoie pas aux autres). Le propriétaire invite un collègue (compte
  * existant), change un rôle ou retire un membre ; un éditeur ou un lecteur peut
  * quitter le projet. Le serveur revérifie chaque droit ; après chaque action,
  * `router.refresh()` relit la liste (l'action revalide le projet).
+ *
+ * Sans e-mails sur l'instance, aucune adresse n'est confirmée : le propriétaire
+ * est prévenu qu'une adresse ne prouve pas l'identité de son titulaire (avec
+ * e-mails, le serveur n'accepte qu'un compte à l'adresse confirmée).
  */
 export function ShareManager({
   programId,
@@ -41,13 +46,17 @@ export function ShareManager({
   myRole,
   owner,
   members,
+  emailDeliveryEnabled,
 }: {
   programId: string;
   programName: string;
   currentUserId: string;
   myRole: ProgramRole;
-  owner: { userId: string; name: string; email: string };
+  /** `email` : null sauf pour le propriétaire (cf. listMembers). */
+  owner: { userId: string; name: string; email: string | null };
   members: MemberView[];
+  /** Vrai si l'instance envoie des e-mails (adresses confirmées). */
+  emailDeliveryEnabled: boolean;
 }) {
   const router = useRouter();
   const isOwner = myRole === "owner";
@@ -60,6 +69,9 @@ export function ShareManager({
           <h3 className="text-xl">Ajouter un collègue</h3>
           <p className="mt-1 max-w-3xl text-sm text-muted">
             Votre collègue doit déjà avoir un compte sur Grand Oral Studio. {MAX_MEMBERS} membres au plus par projet.
+            {emailDeliveryEnabled
+              ? null
+              : " L'adresse e-mail ne prouve pas l'identité tant que les e-mails ne sont pas activés sur cette instance : vérifiez auprès de votre collègue."}
           </p>
           <div className="mt-5">
             <InviteForm programId={programId} onInvited={() => router.refresh()} />
@@ -133,7 +145,7 @@ function MemberLine({
   children,
 }: {
   name: string;
-  email: string;
+  email: string | null;
   isMe: boolean;
   children: React.ReactNode;
 }) {
@@ -144,7 +156,7 @@ function MemberLine({
           {name}
           {isMe ? <span className="font-normal text-muted"> (vous)</span> : null}
         </p>
-        <p className="text-sm break-all text-muted">{email}</p>
+        {email ? <p className="text-sm break-all text-muted">{email}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </li>

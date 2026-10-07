@@ -31,18 +31,28 @@ const OWNER = { userId: "u-owner", name: "Claire Martin", email: "claire@lycee.f
 const EDITOR = { userId: "u-ed", name: "Hugo Petit", email: "hugo@lycee.fr", role: "editor" as const, addedAt: "2026-10-01T08:00:00.000Z" };
 const VIEWER = { userId: "u-vi", name: "Inès Roy", email: "ines@lycee.fr", role: "viewer" as const, addedAt: "2026-10-02T08:00:00.000Z" };
 
-function renderAs(myRole: "owner" | "editor" | "viewer", currentUserId = myRole === "owner" ? OWNER.userId : myRole === "editor" ? EDITOR.userId : VIEWER.userId) {
+function renderAs(
+  myRole: "owner" | "editor" | "viewer",
+  currentUserId = myRole === "owner" ? OWNER.userId : myRole === "editor" ? EDITOR.userId : VIEWER.userId,
+  emailDeliveryEnabled = true,
+) {
+  // Comme le serveur (listMembers) : adresses réservées au propriétaire.
+  const hide = myRole !== "owner";
+  const withoutEmail = <T extends { email: string }>(p: T) => (hide ? { ...p, email: null } : p);
   return render(
     <ShareManager
       programId="p1"
       programName="BTS SIO 2026"
       currentUserId={currentUserId}
       myRole={myRole}
-      owner={OWNER}
-      members={[EDITOR, VIEWER]}
+      owner={withoutEmail(OWNER)}
+      members={[withoutEmail(EDITOR), withoutEmail(VIEWER)]}
+      emailDeliveryEnabled={emailDeliveryEnabled}
     />,
   );
 }
+
+const IDENTITY_WARNING = /L'adresse e-mail ne prouve pas l'identité tant que les e-mails ne sont pas activés sur cette instance : vérifiez auprès de votre collègue\./;
 
 function memberList() {
   return screen.getByRole("list", { name: "Membres du projet" });
@@ -58,6 +68,16 @@ describe("ShareManager — propriétaire", () => {
     expect(items[0]).toHaveTextContent("Propriétaire");
     expect(within(items[1]!).getByLabelText("Rôle de Hugo Petit")).toHaveValue("editor");
     expect(within(items[2]!).getByLabelText("Rôle de Inès Roy")).toHaveValue("viewer");
+  });
+
+  it("devrait prévenir que l'adresse ne prouve pas l'identité quand les e-mails sont désactivés", () => {
+    renderAs("owner", OWNER.userId, false);
+    expect(screen.getByText(IDENTITY_WARNING)).toBeInTheDocument();
+  });
+
+  it("ne devrait pas afficher cet avertissement quand les e-mails sont actifs (adresse confirmée exigée)", () => {
+    renderAs("owner", OWNER.userId, true);
+    expect(screen.queryByText(IDENTITY_WARNING)).not.toBeInTheDocument();
   });
 
   it("devrait expliquer chaque rôle dans le formulaire d'invitation", () => {
@@ -166,6 +186,18 @@ describe("ShareManager — membres", () => {
     expect(items[1]).toHaveTextContent("Hugo Petit (vous)");
     expect(items[1]).toHaveTextContent("Éditeur");
     expect(items[2]).toHaveTextContent("Lecteur");
+  });
+
+  it("ne devrait afficher aucune adresse e-mail à un éditeur ni à un lecteur", () => {
+    for (const role of ["editor", "viewer"] as const) {
+      renderAs(role);
+      const list = memberList();
+      expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+      expect(list).not.toHaveTextContent("@");
+      // Pas de ligne d'adresse vide sous le nom.
+      expect(list.querySelectorAll("li p")).toHaveLength(3);
+      cleanup();
+    }
   });
 
   it("devrait permettre à un lecteur de quitter le projet, puis revenir à la liste des projets", async () => {

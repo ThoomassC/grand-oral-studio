@@ -1,3 +1,4 @@
+import { isEmailDeliveryEnabled } from "@/lib/auth-options";
 import { db } from "../db/client";
 import { ConflictError, LimitExceededError, NotFoundError, ValidationError } from "../errors";
 import { lockProgramFor, memberRole, programAccess, roleOf, type MemberRole, type ProgramRole } from "./access";
@@ -8,6 +9,8 @@ import { prismaErrorCode } from "./ownership";
  *  - le propriétaire est `Program.ownerId`, jamais une ligne ProgramMember ; une
  *    ligne parasite du propriétaire est ignorée partout (liste, plafond, gestion) ;
  *  - lire la liste : lecteur et plus ; inviter, changer un rôle, retirer : propriétaire ;
+ *  - les adresses e-mail (propriétaire et membres) ne sont renvoyées qu'au
+ *    propriétaire : éditeurs et lecteurs voient noms et rôles, `email` vaut null ;
  *  - un membre (éditeur ou lecteur) peut se retirer lui-même (`leaveProject`) ;
  *  - chaque écriture verrouille d'abord la ligne du projet (lockProgramFor, sous
  *    condition d'accès) : les invitations concurrentes sont sérialisées, le plafond
@@ -20,6 +23,12 @@ import { prismaErrorCode } from "./ownership";
  * réservée au propriétaire et limitée en débit (quota `invite:<userId>`) pour
  * qu'elle ne serve pas d'annuaire. Les adresses sont stockées en minuscules par
  * Better Auth : la recherche par adresse minuscule passe par l'index unique.
+ *
+ * Preuve d'identité : quand les e-mails sont actifs, seul un compte dont l'adresse
+ * est CONFIRMÉE peut être ajouté (sinon un tiers ayant inscrit d'avance l'adresse
+ * d'un collègue recevrait l'accès à sa place). Sans e-mails, aucune adresse n'est
+ * jamais confirmée : l'invitation reste possible et l'interface prévient le
+ * propriétaire que l'adresse ne prouve pas l'identité.
  */
 
 export const MAX_MEMBERS_PER_PROGRAM = 20;
@@ -28,6 +37,8 @@ export const MAX_MEMBERS_PER_PROGRAM = 20;
 const LIST_LIMIT = 100;
 
 export const UNKNOWN_ACCOUNT_MESSAGE = "Aucun compte n'utilise cette adresse : votre collègue doit d'abord créer son compte.";
+export const UNVERIFIED_ACCOUNT_MESSAGE =
+  "Ce compte n'a pas encore confirmé son adresse e-mail. Votre collègue reçoit le lien de confirmation à sa prochaine connexion.";
 const SELF_INVITE_MESSAGE = "Vous êtes le propriétaire de ce projet : vous y avez déjà tous les droits.";
 const ALREADY_MEMBER_MESSAGE = "Cette personne est déjà membre du projet.";
 const NOT_A_MEMBER_MESSAGE = "Cette personne n'est plus membre du projet. Rechargez la page.";
@@ -41,7 +52,8 @@ const STORED_ROLE: Record<MemberRole, "EDITOR" | "VIEWER"> = { editor: "EDITOR",
 export interface MemberView {
   userId: string;
   name: string;
-  email: string;
+  /** Adresse e-mail : renseignée pour le seul propriétaire du projet, null sinon. */
+  email: string | null;
   role: MemberRole;
   /** Date d'ajout (ISO). */
   addedAt: string;
@@ -51,19 +63,22 @@ export interface ProgramMembers {
   programId: string;
   /** Rôle de l'appelant sur le projet. */
   myRole: ProgramRole;
-  owner: { userId: string; name: string; email: string };
+  /** `email` : renseigné pour le seul propriétaire du projet, null sinon. */
+  owner: { userId: string; name: string; email: string | null };
   /** Membres invités, du plus ancien au plus récent (propriétaire exclu). */
   members: MemberView[];
 }
 
 export interface InvitedMember {
-  member: MemberView;
+  /** L'appelant est le propriétaire : l'adresse est toujours connue (destinataire de la notification). */
+  member: MemberView & { email: string };
   /** Nom du projet (pour la notification). */
   programName: string;
 }
 
 /**
  * Propriétaire et membres d'un projet actif, pour tout membre (lecteur et plus).
+ * Adresses e-mail réservées au propriétaire (null pour un éditeur ou un lecteur).
  * Absent, étranger ou à la corbeille → NotFoundError.
  */
 export async function listMembers(userId: string, programId: string): Promise<ProgramMembers> {
@@ -82,36 +97,43 @@ export async function listMembers(userId: string, programId: string): Promise<Pr
   if (!row) throw new NotFoundError("programme");
   const myRole = roleOf(userId, row.ownerId, row.members.find((m) => m.userId === userId)?.role);
   if (!myRole) throw new NotFoundError("programme");
+  // Confidentialité : un éditeur ou un lecteur ne reçoit aucune adresse, pas même la sienne.
+  const emailOf = (email: string): string | null => (myRole === "owner" ? email : null);
 
   const members = row.members.flatMap((m): MemberView[] => {
     const role = memberRole(m.role);
     // Ligne parasite du propriétaire, ou rôle inconnu : ignorée.
     if (m.userId === row.ownerId || !role) return [];
-    return [{ userId: m.userId, name: m.user.name, email: m.user.email, role, addedAt: m.createdAt.toISOString() }];
+    return [{ userId: m.userId, name: m.user.name, email: emailOf(m.user.email), role, addedAt: m.createdAt.toISOString() }];
   });
   return {
     programId,
     myRole,
-    owner: { userId: row.ownerId, name: row.owner.name, email: row.owner.email },
+    owner: { userId: row.ownerId, name: row.owner.name, email: emailOf(row.owner.email) },
     members,
   };
 }
 
 /**
  * Ajoute le compte d'adresse `email` au projet (propriétaire seul), avec `role`.
- * Refus : adresse sans compte, le propriétaire lui-même (ValidationError), déjà
+ * Refus : adresse sans compte, le propriétaire lui-même, adresse non confirmée
+ * quand les e-mails sont actifs (ValidationError), déjà
  * membre (ConflictError, rôle inchangé), plafond atteint (LimitExceededError).
  */
 export async function inviteMember(ownerId: string, programId: string, email: string, role: MemberRole): Promise<InvitedMember> {
   const address = email.trim().toLowerCase();
+  const requireVerifiedEmail = isEmailDeliveryEnabled(process.env);
   try {
     return await db().$transaction(async (tx) => {
       await lockProgramFor(tx, ownerId, programId, "owner");
       // Requêtes successives : une transaction interactive n'a qu'une connexion.
       const program = await tx.program.findUniqueOrThrow({ where: { id: programId }, select: { name: true } });
-      const target = await tx.user.findUnique({ where: { email: address }, select: { id: true, name: true, email: true } });
+      const target = await tx.user.findUnique({ where: { email: address }, select: { id: true, name: true, email: true, emailVerified: true } });
       if (!target) throw new ValidationError(UNKNOWN_ACCOUNT_MESSAGE, { email: [UNKNOWN_ACCOUNT_MESSAGE] });
       if (target.id === ownerId) throw new ValidationError(SELF_INVITE_MESSAGE, { email: [SELF_INVITE_MESSAGE] });
+      if (requireVerifiedEmail && !target.emailVerified) {
+        throw new ValidationError(UNVERIFIED_ACCOUNT_MESSAGE, { email: [UNVERIFIED_ACCOUNT_MESSAGE] });
+      }
 
       const existing = await tx.programMember.findUnique({
         where: { programId_userId: { programId, userId: target.id } },

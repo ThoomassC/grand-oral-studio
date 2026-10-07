@@ -1,3 +1,7 @@
+import { APIError } from "better-auth/api";
+import { EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE } from "@/components/auth/oauth-error";
+import { ProfileNameSchema } from "@/components/profile/schema";
+
 /**
  * Options Better Auth dérivées de l'environnement — fonctions pures, testables
  * sans base ni Next.
@@ -168,4 +172,59 @@ export function isEmailDomainAllowed(email: string, domains: readonly string[] |
   const at = email.lastIndexOf("@");
   if (at < 1) return false;
   return domains.includes(email.slice(at + 1).trim().toLowerCase());
+}
+
+/**
+ * Avertissement de démarrage : sans e-mails, aucune adresse n'est vérifiée, donc
+ * ALLOWED_EMAIL_DOMAINS filtre une adresse DÉCLARÉE, pas une boîte possédée
+ * (n'importe qui peut s'inscrire avec prenom.nom@lycee-exemple.fr). Pas de refus
+ * au démarrage : la restriction garde un intérêt (pas d'inscription par erreur).
+ */
+export function domainRestrictionWarning(env: Record<string, string | undefined>): string | undefined {
+  if (!allowedEmailDomains(env) || isEmailDeliveryEnabled(env)) return undefined;
+  return "ALLOWED_EMAIL_DOMAINS est défini sans e-mails : sans vérification d'adresse (RESEND), la restriction de domaine ne prouve pas la possession de la boîte.";
+}
+
+/** Caractères de contrôle (sauts de ligne compris) et séparateurs de ligne Unicode. */
+const NAME_CONTROL_CHARS = /[\p{Cc}\u2028\u2029]/u;
+const NAME_CONTROL_MESSAGE = "Le nom ne doit contenir ni saut de ligne ni caractère de contrôle.";
+
+/**
+ * Garde de l'inscription par e-mail (hooks.before de Better Auth, toujours actif) :
+ *  1. domaine d'adresse (ALLOWED_EMAIL_DOMAINS) : refus explicite AVANT le point
+ *     d'entrée. Quand la vérification est active, Better Auth convertit un refus du
+ *     hook de création en fausse réussite (anti-énumération) : l'utilisateur
+ *     attendrait un e-mail qui ne partira jamais. Le domaine n'est pas une donnée
+ *     personnelle ;
+ *  2. nom : Better Auth l'accepte sans borne. Même règle que /profil
+ *     (ProfileNameSchema, 2 à 80 caractères), sans caractère de contrôle : il
+ *     finit dans l'objet et le corps des e-mails envoyés à des collègues.
+ *
+ * Renvoie le corps à transmettre (nom normalisé) pour /sign-up/email, rien pour
+ * les autres chemins. Lève une APIError (FORBIDDEN, BAD_REQUEST) en cas de refus.
+ */
+export function signUpGuard(
+  path: string,
+  body: unknown,
+  allowedDomains: readonly string[] | undefined,
+): Record<string, unknown> | undefined {
+  if (path !== "/sign-up/email") return undefined;
+  const fields: Record<string, unknown> = typeof body === "object" && body !== null ? { ...(body as Record<string, unknown>) } : {};
+  if (typeof fields.email === "string" && !isEmailDomainAllowed(fields.email, allowedDomains)) {
+    // Le code devient `?error=EMAIL_DOMAIN_NOT_ALLOWED` au retour de Google (oauth-error.ts).
+    throw emailDomainNotAllowedError();
+  }
+  if (typeof fields.name === "string" && NAME_CONTROL_CHARS.test(fields.name)) throw invalidName(NAME_CONTROL_MESSAGE);
+  const parsed = ProfileNameSchema.safeParse({ name: fields.name });
+  if (!parsed.success) throw invalidName(parsed.error.issues[0]?.message ?? "Indiquez votre nom.");
+  return { ...fields, name: parsed.data.name };
+}
+
+/** Refus d'un domaine d'adresse non autorisé (inscription par e-mail ou par Google). */
+export function emailDomainNotAllowedError(): APIError {
+  return new APIError("FORBIDDEN", { code: "EMAIL_DOMAIN_NOT_ALLOWED", message: EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE });
+}
+
+function invalidName(message: string): APIError {
+  return new APIError("BAD_REQUEST", { code: "INVALID_NAME", message });
 }

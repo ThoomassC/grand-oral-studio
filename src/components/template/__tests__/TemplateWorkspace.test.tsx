@@ -88,6 +88,15 @@ describe("Page Trame — bibliothèque de l'équipe", () => {
     expect(screen.queryByDisplayValue("Contexte actuel")).not.toBeInTheDocument();
   });
 
+  it("ne devrait proposer la publication qu'au propriétaire du projet", () => {
+    render(<TemplateWorkspace programId="p1" initialTemplate={CURRENT} savedAt={V0} />);
+    expect(screen.getByRole("button", { name: "Voir la bibliothèque" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publier dans la bibliothèque" })).not.toBeInTheDocument();
+    cleanup();
+    render(<TemplateWorkspace programId="p1" initialTemplate={CURRENT} savedAt={V0} canPublish />);
+    expect(screen.getByRole("button", { name: "Publier dans la bibliothèque" })).toBeInTheDocument();
+  });
+
   it("ne devrait pas remplacer la saisie de l'éditeur quand aucun modèle n'a été appliqué", () => {
     const { rerender } = render(<TemplateWorkspace programId="p1" initialTemplate={CURRENT} savedAt={V0} />);
     rerender(<TemplateWorkspace programId="p1" initialTemplate={FROM_MODEL} savedAt={V1} />);

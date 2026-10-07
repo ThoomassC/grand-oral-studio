@@ -1,7 +1,7 @@
 /**
  * Modèles des e-mails transactionnels (texte brut + HTML minimal). Le nom est
  * saisi par l'utilisateur et le lien vient de Better Auth : tout est échappé
- * dans le HTML.
+ * dans le HTML, et les noms passent par `displayName` (une ligne, bornée).
  */
 
 export interface RenderedEmail {
@@ -11,6 +11,25 @@ export interface RenderedEmail {
 }
 
 const APP_NAME = "Grand Oral Studio";
+
+/** Longueurs maximales d'un nom affiché dans un e-mail (objet comme corps). */
+export const EMAIL_NAME_MAX = { user: 80, project: 120 } as const;
+
+/** Caractères de contrôle (sauts de ligne, tabulations compris) et séparateurs de ligne Unicode. */
+const LINE_BREAKING = /[\p{Cc}\u2028\u2029]/gu;
+
+/**
+ * Nom saisi par un utilisateur, prêt pour un e-mail : sauts de ligne et caractères
+ * de contrôle remplacés par une espace (aucune ligne injectée dans l'objet ni le
+ * corps), espaces réduites, puis tronqué à `max` caractères (« … » compris).
+ * Défense en profondeur : le nom d'un compte créé avant la v1.2, ou venu de
+ * Google, n'est pas passé par la validation d'inscription.
+ */
+export function displayName(value: string, max: number): string {
+  const clean = value.replace(LINE_BREAKING, " ").replace(/\s+/g, " ").trim();
+  const chars = Array.from(clean);
+  return chars.length <= max ? clean : `${chars.slice(0, max - 1).join("").trimEnd()}…`;
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -43,7 +62,8 @@ function render({
   outro: string;
 }): RenderedEmail {
   const link = assertHttpUrl(url);
-  const greeting = name.trim() ? `Bonjour ${name.trim()},` : "Bonjour,";
+  const shown = displayName(name, EMAIL_NAME_MAX.user);
+  const greeting = shown ? `Bonjour ${shown},` : "Bonjour,";
   const text = [greeting, "", intro, "", `${action} : ${link}`, "", outro, "", `— ${APP_NAME}`].join("\n");
   const html = `<!doctype html>
 <html lang="fr">

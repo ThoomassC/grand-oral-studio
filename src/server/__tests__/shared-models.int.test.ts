@@ -21,16 +21,25 @@ async function programWithBrand(ownerId: string): Promise<string> {
 }
 
 describe("publishModel", () => {
-  it("devrait publier l'apparence d'un projet pour un éditeur, avec son nom d'auteur", async () => {
+  it("devrait publier l'apparence d'un projet pour son propriétaire", async () => {
+    const owner = await createUser("alice");
+    const programId = await programWithBrand(owner.id);
+
+    const { id } = await models.publishModel(owner.id, programId, "brand", "  Charte de l'école  ");
+
+    const row = await db().sharedModel.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ authorId: owner.id, kind: "BRAND", name: "Charte de l'école" });
+    expect(row.payload).toMatchObject({ name: "Charte école", logoDataUrl: LOGO });
+  });
+
+  it("devrait refuser un éditeur (403) : publier à toute l'instance revient au propriétaire", async () => {
     const [owner, editor] = [await createUser("alice"), await createUser("bob")];
     const programId = await programWithBrand(owner.id);
     await seedMember(programId, editor.id, "EDITOR");
 
-    const { id } = await models.publishModel(editor.id, programId, "brand", "  Charte de l'école  ");
-
-    const row = await db().sharedModel.findUniqueOrThrow({ where: { id } });
-    expect(row).toMatchObject({ authorId: editor.id, kind: "BRAND", name: "Charte de l'école" });
-    expect(row.payload).toMatchObject({ name: "Charte école", logoDataUrl: LOGO });
+    await expect(models.publishModel(editor.id, programId, "brand", "Copie")).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(models.publishModel(editor.id, programId, "template", "Copie")).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await db().sharedModel.count()).toBe(0);
   });
 
   it("devrait publier la trame d'un projet pour le propriétaire", async () => {

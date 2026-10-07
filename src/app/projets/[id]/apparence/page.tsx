@@ -36,6 +36,8 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
         savedAt={program.brandSavedAt}
         format={program.template.format}
         readOnly={readOnly}
+        // Publier dans la bibliothèque : propriétaire seul (le serveur refuse un éditeur).
+        canPublish={program.role === "owner"}
       />
     </div>
   );

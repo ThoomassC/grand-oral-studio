@@ -50,10 +50,11 @@ function previewText(model: SharedModelSummary): string {
 
 /**
  * Bibliothèque de modèles de l'équipe (apparences ou trames), sous l'éditeur des
- * pages Apparence et Trame (éditeurs seulement : le serveur vérifie les droits) :
+ * pages Apparence et Trame (éditeurs et propriétaire : le serveur vérifie les droits) :
  *
- *  - « Publier dans la bibliothèque » : `Modal` d'Opale qui demande un nom, puis
- *    publie la version ENREGISTRÉE du projet ;
+ *  - « Publier dans la bibliothèque » (propriétaire seul, `canPublish` ; le serveur
+ *    refuse un éditeur en 403) : `Modal` d'Opale qui demande un nom, puis publie la
+ *    version ENREGISTRÉE du projet ;
  *  - « Bibliothèque de l'équipe » : panneau dépliable, chargé à l'ouverture (états
  *    chargement, vide, erreur avec « Réessayer ») ; chaque modèle s'applique au
  *    projet après confirmation (il REMPLACE l'apparence ou la trame), et son auteur
@@ -67,10 +68,13 @@ export function ModelLibrary({
   programId,
   kind,
   defaultName = "",
+  canPublish,
   onApplied,
 }: {
   programId: string;
   kind: SharedModelKind;
+  /** Vrai pour le propriétaire du projet, seul autorisé à publier. */
+  canPublish: boolean;
   /** Nom proposé à la publication (ex. le nom de l'apparence). */
   defaultName?: string;
   onApplied?: () => void;
@@ -123,13 +127,17 @@ export function ModelLibrary({
             Bibliothèque de l&apos;équipe
           </h3>
           <p className="max-w-3xl text-sm text-muted">
-            Partagez {wording.the} de ce projet avec l&apos;équipe, ou reprenez celle d&apos;un autre projet.
+            {canPublish
+              ? `Partagez ${wording.the} de ce projet avec l'équipe, ou reprenez celle d'un autre projet.`
+              : `Reprenez ${wording.the} d'un autre projet de l'équipe.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button ref={publishRef} type="button" variant="secondary" aria-haspopup="dialog" onClick={() => setPublishing(true)}>
-            Publier dans la bibliothèque
-          </Button>
+          {canPublish ? (
+            <Button ref={publishRef} type="button" variant="secondary" aria-haspopup="dialog" onClick={() => setPublishing(true)}>
+              Publier dans la bibliothèque
+            </Button>
+          ) : null}
           <Button id={toggleId} type="button" variant="ghost" aria-expanded={open} aria-controls={open ? panelId : undefined} onClick={toggle}>
             {open ? "Masquer la bibliothèque" : "Voir la bibliothèque"}
           </Button>
@@ -162,8 +170,9 @@ export function ModelLibrary({
             <div>
               <p className="font-display text-lg font-semibold">Aucun modèle publié</p>
               <p className="mt-1 text-muted">
-                Publiez {wording.the} de ce projet (« Publier dans la bibliothèque ») pour que l&apos;équipe puisse la
-                reprendre.
+                {canPublish
+                  ? `Publiez ${wording.the} de ce projet (« Publier dans la bibliothèque ») pour que l'équipe puisse la reprendre.`
+                  : `Le propriétaire d'un projet peut y publier ${wording.the} de son projet.`}
               </p>
             </div>
           ) : library.kind === "ready" ? (
@@ -227,7 +236,7 @@ export function ModelLibrary({
         </div>
       ) : null}
 
-      {publishing ? (
+      {canPublish && publishing ? (
         <PublishDialog programId={programId} kind={kind} defaultName={defaultName} hint={wording.publishHint} onClose={closePublish} />
       ) : null}
     </section>

@@ -150,7 +150,7 @@ describe("Page Apparence — bibliothèque de l'équipe", () => {
   it("devrait publier l'apparence enregistrée sous le nom demandé", async () => {
     publishModel.mockResolvedValue({ ok: true, data: { id: "m9", reused: false } });
     const user = userEvent.setup();
-    render(<BrandWorkspace programId="p1" initialBrand={{ ...defaultBrand(), name: "Ma charte" }} format="16:9" />);
+    render(<BrandWorkspace programId="p1" initialBrand={{ ...defaultBrand(), name: "Ma charte" }} format="16:9" canPublish />);
     await user.click(screen.getByRole("button", { name: "Publier dans la bibliothèque" }));
     const dialog = await screen.findByRole("dialog", { name: "Publier dans la bibliothèque" });
     expect(dialog).toHaveAccessibleDescription(/apparence enregistrée/);
@@ -165,6 +165,21 @@ describe("Page Apparence — bibliothèque de l'équipe", () => {
     expect(publishModel).toHaveBeenCalledWith("p1", { kind: "brand", name: "Charte BTS" });
     expect(await screen.findByText("« Charte BTS » publié dans la bibliothèque de l'équipe.")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("ne devrait proposer la publication qu'au propriétaire du projet (un éditeur reçoit 403)", async () => {
+    listSharedModels.mockResolvedValue({ ok: true, data: [] });
+    const user = userEvent.setup();
+    render(<BrandWorkspace programId="p1" initialBrand={defaultBrand()} format="16:9" />);
+    expect(screen.queryByRole("button", { name: "Publier dans la bibliothèque" })).not.toBeInTheDocument();
+    // L'éditeur garde la bibliothèque (appliquer un modèle) ; l'état vide ne l'invite pas à publier.
+    await user.click(screen.getByRole("button", { name: "Voir la bibliothèque" }));
+    expect(await screen.findByText("Aucun modèle publié")).toBeInTheDocument();
+    expect(screen.queryByText(/Publier dans la bibliothèque/)).not.toBeInTheDocument();
+    cleanup();
+
+    render(<BrandWorkspace programId="p1" initialBrand={defaultBrand()} format="16:9" canPublish />);
+    expect(screen.getByRole("button", { name: "Publier dans la bibliothèque" })).toBeInTheDocument();
   });
 
   it("devrait charger la bibliothèque à l'ouverture et dire quand elle est vide", async () => {

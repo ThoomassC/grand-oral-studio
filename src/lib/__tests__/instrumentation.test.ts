@@ -36,6 +36,24 @@ describe("requestErrorFields", () => {
     expect(fields).not.toHaveProperty("headers");
   });
 
+  it.each([
+    ["/api/auth/reset-password/jeton-secret?callbackURL=%2Freinitialiser", "/api/auth/reset-password/[masqué]"],
+    ["/api/auth/reset-password/jeton-secret/suite", "/api/auth/reset-password/[masqué]"],
+    ["/api/auth/verify-email/jeton-secret", "/api/auth/verify-email/[masqué]"],
+    ["/api/auth/verify-email?token=jeton-secret&callbackURL=%2F", "/api/auth/verify-email"],
+    ["/projets/p1#jeton-secret", "/projets/p1"],
+  ])("devrait masquer le jeton porté par le chemin %s", (path, expected) => {
+    const fields = requestErrorFields(new Error("boom"), { ...REQUEST, path }, CONTEXT);
+    expect(fields.path).toBe(expected);
+    expect(JSON.stringify(fields)).not.toContain("jeton-secret");
+  });
+
+  it("devrait laisser intact un chemin sans jeton", () => {
+    expect(requestErrorFields(new Error("boom"), { ...REQUEST, path: "/api/auth/reset-password" }, CONTEXT).path).toBe(
+      "/api/auth/reset-password",
+    );
+  });
+
   it("devrait accepter une valeur levée qui n'est pas une Error", () => {
     expect(requestErrorFields("oops", REQUEST, CONTEXT)).toMatchObject({ digest: undefined, error: "oops" });
   });

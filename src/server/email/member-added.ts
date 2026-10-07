@@ -1,8 +1,9 @@
-import type { RenderedEmail } from "./templates";
+import { displayName, EMAIL_NAME_MAX, type RenderedEmail } from "./templates";
 
 /**
  * E-mail « X vous a ajouté au projet Y » (partage d'un projet, v1.2). Noms
- * saisis par les utilisateurs : tout est échappé dans le HTML ; le lien est
+ * saisis par les utilisateurs : nettoyés et bornés (displayName, même valeur dans
+ * l'objet et le corps), puis échappés dans le HTML ; le lien est
  * construit à partir de BETTER_AUTH_URL (jamais d'une entrée client).
  */
 
@@ -42,15 +43,17 @@ export function memberAddedEmail({
   role: "editor" | "viewer";
   url: string;
 }): RenderedEmail {
-  const greeting = recipientName.trim() ? `Bonjour ${recipientName.trim()},` : "Bonjour,";
-  const inviter = inviterName.trim() || "Un collègue";
+  const recipient = displayName(recipientName, EMAIL_NAME_MAX.user);
+  const greeting = recipient ? `Bonjour ${recipient},` : "Bonjour,";
+  const inviter = displayName(inviterName, EMAIL_NAME_MAX.user) || "Un collègue";
+  const project = displayName(programName, EMAIL_NAME_MAX.project);
   const access =
     role === "editor"
       ? "Vous pouvez le modifier : apparence, trame, sujets et diaporamas."
       : "Vous pouvez le consulter, exporter et répéter ses diaporamas, sans le modifier.";
-  const intro = `${inviter} vous a ajouté au projet « ${programName} ».`;
-  // Objet sur une ligne : aucun saut de ligne venu d'un nom saisi.
-  const subject = `${inviter} vous a ajouté au projet « ${programName} » – ${APP_NAME}`.replace(/[\r\n]+/g, " ");
+  const intro = `${inviter} vous a ajouté au projet « ${project} ».`;
+  // Objet sur une ligne : les noms ne portent plus aucun saut de ligne (displayName).
+  const subject = `${inviter} vous a ajouté au projet « ${project} » – ${APP_NAME}`;
   const action = "Ouvrir le projet";
   const text = [greeting, "", intro, access, "", `${action} : ${url}`, "", `— ${APP_NAME}`].join("\n");
   const html = `<!doctype html>

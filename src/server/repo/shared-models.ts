@@ -18,7 +18,8 @@ import { updateBrand, updateTemplate } from "./programs";
  * projet, visibles de TOUTE l'instance, appliquées à un autre projet par copie.
  *
  * Droits :
- *  - publier : éditeur au moins du projet source (copie de son apparence ou de sa trame) ;
+ *  - publier : propriétaire du projet source seul (copie de son apparence ou de sa trame,
+ *    diffusée à toute l'instance : un éditeur invité ne publie pas le travail d'autrui) ;
  *  - lister : tout utilisateur connecté (l'auteur est affiché par son nom, jamais son id
  *    ni son e-mail) ;
  *  - appliquer : éditeur au moins du projet cible (remplace l'apparence ou la trame et
@@ -95,7 +96,7 @@ export interface SharedModelSummary {
 }
 
 /**
- * Publie l'apparence ou la trame du projet `programId` (éditeur au moins) sous le nom
+ * Publie l'apparence ou la trame du projet `programId` (propriétaire seul) sous le nom
  * `name`. Rejouée dans la minute avec les mêmes auteur, type et nom, renvoie le modèle
  * déjà publié (double clic, retry réseau) au lieu d'un doublon.
  */
@@ -107,10 +108,11 @@ export async function publishModel(
 ): Promise<{ id: string; reused: boolean }> {
   const modelName = parseInput(SharedModelNameSchema, name);
   const program = await db().program.findFirst({
-    where: { id: programId, ...programAccess(userId, "editor") },
+    where: { id: programId, ...programAccess(userId, "owner") },
     select: { id: true, brand: true, template: true },
   });
-  if (!program) return denyAccess(db(), userId, programId, "editor");
+  // Éditeur ou lecteur : 403 ; inconnu ou projet à la corbeille : 404.
+  if (!program) return denyAccess(db(), userId, programId, "owner");
   // Revalidé : on ne publie jamais un JSON qui aurait dérivé du contrat.
   const payload = kind === "brand" ? brandJson(readBrand(program.brand, program.id)) : templateJson(readTemplate(program.template, program.id));
   const storedKind = STORED_KIND[kind];

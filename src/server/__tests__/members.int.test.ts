@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { db } from "@/server/db/client";
 import { ConflictError, ForbiddenError, LimitExceededError, NotFoundError, ValidationError } from "@/server/errors";
 import * as members from "@/server/repo/members";
@@ -41,14 +41,30 @@ describe("listMembers", () => {
     ] as const) {
       const view = await members.listMembers(users[who].id, programId);
       expect(view.myRole).toBe(expectedRole);
-      expect(view.owner).toEqual({ userId: users.owner.id, name: "owner", email: users.owner.email });
+      expect(view.owner).toMatchObject({ userId: users.owner.id, name: "owner" });
       expect(view.members.map((m) => [m.userId, m.role])).toEqual([
         [users.editor.id, "editor"],
         [users.viewer.id, "viewer"],
       ]);
-      expect(view.members[0]).toMatchObject({ name: "editor", email: users.editor.email });
+      expect(view.members[0]).toMatchObject({ name: "editor" });
     }
     await expect(members.listMembers(users.stranger.id, programId)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("devrait réserver les adresses e-mail au propriétaire", async () => {
+    const { users, programId } = await setup();
+    const ownerView = await members.listMembers(users.owner.id, programId);
+    expect(ownerView.owner.email).toBe(users.owner.email);
+    expect(ownerView.members.map((m) => m.email)).toEqual([users.editor.email, users.viewer.email]);
+
+    for (const who of ["editor", "viewer"] as const) {
+      const view = await members.listMembers(users[who].id, programId);
+      expect(view.owner.email).toBeNull();
+      expect(view.members.map((m) => m.email)).toEqual([null, null]);
+      // Aucune adresse, même la sienne, ne transite dans la réponse.
+      const serialized = JSON.stringify(view);
+      for (const user of Object.values(users)) expect(serialized).not.toContain(user.email);
+    }
   });
 
   it("devrait ignorer une ligne membre parasite du propriétaire", async () => {
@@ -110,6 +126,48 @@ describe("inviteMember", () => {
       "Aucun compte n'utilise cette adresse : votre collègue doit d'abord créer son compte.",
     );
     expect((error as ValidationError).fieldErrors?.email).toHaveLength(1);
+  });
+
+  describe("e-mails actifs (RESEND_API_KEY + EMAIL_FROM)", () => {
+    beforeEach(() => {
+      vi.stubEnv("RESEND_API_KEY", "re_test_key");
+      vi.stubEnv("EMAIL_FROM", "noreply@example.test");
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("devrait refuser un compte dont l'adresse n'est pas confirmée, sans l'ajouter", async () => {
+      const { users, programId } = await setup();
+      const colleague = await createUser("colleague");
+      const error = await members.inviteMember(users.owner.id, programId, colleague.email, "editor").catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).userMessage).toMatch(/^Ce compte n'a pas encore confirmé son adresse e-mail\./);
+      expect((error as ValidationError).fieldErrors?.email).toHaveLength(1);
+      expect(await db().programMember.count({ where: { programId, userId: colleague.id } })).toBe(0);
+    });
+
+    it("devrait ajouter un compte dont l'adresse est confirmée", async () => {
+      const { users, programId } = await setup();
+      const colleague = await createUser("colleague");
+      await db().user.update({ where: { id: colleague.id }, data: { emailVerified: true } });
+      await expect(members.inviteMember(users.owner.id, programId, colleague.email, "editor")).resolves.toMatchObject({
+        member: { userId: colleague.id, role: "editor" },
+      });
+    });
+  });
+
+  it("devrait accepter une adresse non confirmée quand les e-mails sont désactivés (aucune preuve possible)", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("EMAIL_FROM", "");
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+    const { users, programId } = await setup();
+    const colleague = await createUser("colleague");
+    await expect(members.inviteMember(users.owner.id, programId, colleague.email, "viewer")).resolves.toMatchObject({
+      member: { userId: colleague.id },
+    });
   });
 
   it("devrait refuser le 21e membre, sans compter la ligne parasite du propriétaire", async () => {

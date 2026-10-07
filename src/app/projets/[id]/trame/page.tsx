@@ -25,6 +25,8 @@ export default async function TemplatePage({ params }: PageProps<"/projets/[id]/
         initialTemplate={program.template}
         savedAt={program.templateSavedAt}
         readOnly={program.role === "viewer"}
+        // Publier dans la bibliothèque : propriétaire seul (le serveur refuse un éditeur).
+        canPublish={program.role === "owner"}
       />
     </div>
   );

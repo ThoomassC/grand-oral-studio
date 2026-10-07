@@ -11,6 +11,7 @@ import { BrandPreview } from "./BrandPreview";
  *
  * `readOnly` (lecteur d'un projet partagé) : l'apparence en lecture seule, sans
  * éditeur ni bibliothèque (le serveur refuse de toute façon ses modifications).
+ * `canPublish` (propriétaire seul) : propose de publier dans la bibliothèque.
  */
 export function BrandWorkspace({
   programId,
@@ -18,6 +19,7 @@ export function BrandWorkspace({
   savedAt,
   format,
   readOnly = false,
+  canPublish = false,
 }: {
   programId: string;
   initialBrand: Brand;
@@ -25,6 +27,8 @@ export function BrandWorkspace({
   savedAt?: string | null;
   format: PromptTemplate["format"];
   readOnly?: boolean;
+  /** Propriétaire du projet : seul autorisé à publier l'apparence dans la bibliothèque. */
+  canPublish?: boolean;
 }) {
   if (readOnly) {
     return (
@@ -39,7 +43,7 @@ export function BrandWorkspace({
   return (
     <>
       <BrandEditor programId={programId} initialBrand={initialBrand} savedAt={savedAt} format={format} />
-      <ModelLibrary programId={programId} kind="brand" defaultName={initialBrand.name} />
+      <ModelLibrary programId={programId} kind="brand" defaultName={initialBrand.name} canPublish={canPublish} />
     </>
   );
 }

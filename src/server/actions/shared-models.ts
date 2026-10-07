@@ -8,11 +8,12 @@ import { runAction } from "./run";
 
 /**
  * Bibliothèque de modèles partagés (apparences et trames). Les droits sont vérifiés
- * dans le dépôt, sur la ressource : éditeur du projet source pour publier, éditeur
- * du projet cible pour appliquer, auteur seul pour retirer.
+ * dans le dépôt, sur la ressource : PROPRIÉTAIRE du projet source pour publier
+ * (un éditeur reçoit 403), éditeur du projet cible pour appliquer, auteur seul
+ * pour retirer.
  */
 
-/** Publie l'apparence (`kind: "brand"`) ou la trame (`"template"`) du projet sous `name`. */
+/** Publie l'apparence (`kind: "brand"`) ou la trame (`"template"`) du projet sous `name` (propriétaire seul). */
 export async function publishModel(
   programId: string,
   input: { kind: repo.SharedModelKind; name: string },

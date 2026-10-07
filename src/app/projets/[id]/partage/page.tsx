@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShareManager } from "@/components/projects/ShareManager";
+import { isEmailDeliveryEnabled } from "@/lib/auth-options";
 import { listMembers, NotFoundError, type ProgramMembers } from "@/server/queries";
 import { requireUser } from "@/server/session";
 import { loadProgram } from "../../_lib/load";
@@ -44,6 +45,7 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
         myRole={view.myRole}
         owner={view.owner}
         members={view.members}
+        emailDeliveryEnabled={isEmailDeliveryEnabled(process.env)}
       />
     </div>
   );

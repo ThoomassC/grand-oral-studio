@@ -1,5 +1,8 @@
+import { APIError } from "better-auth/api";
 import { describe, expect, it } from "vitest";
 import {
+  domainRestrictionWarning,
+  signUpGuard,
   googleButtonState,
   ACCOUNT_LINKING_OPTIONS,
   allowedEmailDomains,
@@ -186,5 +189,75 @@ describe("googleButtonState", () => {
 
   it("vaut hidden en production sans identifiants, pour ne pas afficher un bouton inutilisable", () => {
     expect(googleButtonState({ NODE_ENV: "production" })).toBe("hidden");
+  });
+});
+
+describe("domainRestrictionWarning", () => {
+  const MAIL = { RESEND_API_KEY: "re_x", EMAIL_FROM: "noreply@exemple.fr" };
+
+  it("devrait prévenir qu'une restriction de domaine sans e-mails ne prouve pas la possession de la boîte", () => {
+    const warning = domainRestrictionWarning({ ALLOWED_EMAIL_DOMAINS: "lycee-exemple.fr" });
+    expect(warning).toMatch(/sans vérification d'adresse \(RESEND\), la restriction de domaine ne prouve pas la possession de la boîte/);
+  });
+
+  it("ne devrait rien signaler sans restriction, ou quand les adresses sont vérifiées", () => {
+    expect(domainRestrictionWarning({})).toBeUndefined();
+    expect(domainRestrictionWarning(MAIL)).toBeUndefined();
+    expect(domainRestrictionWarning({ ...MAIL, ALLOWED_EMAIL_DOMAINS: "lycee-exemple.fr" })).toBeUndefined();
+  });
+});
+
+describe("signUpGuard (hooks.before de Better Auth)", () => {
+  const body = (over: Record<string, unknown> = {}) => ({
+    email: "alice@lycee-exemple.fr",
+    password: "motdepasse-solide",
+    name: "Alice Martin",
+    ...over,
+  });
+
+  function apiError(fn: () => unknown): APIError {
+    try {
+      fn();
+    } catch (error) {
+      if (error instanceof APIError) return error;
+      throw error;
+    }
+    throw new Error("APIError attendue");
+  }
+
+  it("devrait ignorer les autres points d'entrée", () => {
+    expect(signUpGuard("/sign-in/email", { email: "x@autre.fr", name: "\n" }, ["lycee-exemple.fr"])).toBeUndefined();
+  });
+
+  it("devrait renvoyer le corps avec le nom normalisé (espaces de bord retirés)", () => {
+    expect(signUpGuard("/sign-up/email", body({ name: "  Alice Martin  " }), undefined)).toEqual(body({ name: "Alice Martin" }));
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["non textuel", 42],
+    ["trop court", " A "],
+    ["trop long", "a".repeat(81)],
+    ["avec saut de ligne", "Alice\r\nBcc: eve@pirate.fr"],
+    ["avec caractère de contrôle", "Alice\u0007"],
+  ])("devrait refuser un nom %s (400), même sans restriction de domaine", (_label, name) => {
+    const error = apiError(() => signUpGuard("/sign-up/email", body({ name }), undefined));
+    expect(error.status).toBe("BAD_REQUEST");
+    expect(error.body?.code).toBe("INVALID_NAME");
+    expect(error.message).toMatch(/nom/);
+  });
+
+  it("devrait accepter un nom de 80 caractères", () => {
+    expect(signUpGuard("/sign-up/email", body({ name: "a".repeat(80) }), undefined)?.name).toHaveLength(80);
+  });
+
+  it("devrait refuser un domaine non autorisé (403) avant même le nom", () => {
+    const error = apiError(() => signUpGuard("/sign-up/email", body({ email: "eve@pirate.fr", name: "" }), ["lycee-exemple.fr"]));
+    expect(error.status).toBe("FORBIDDEN");
+    expect(error.body?.code).toBe("EMAIL_DOMAIN_NOT_ALLOWED");
+  });
+
+  it("devrait accepter un domaine autorisé", () => {
+    expect(signUpGuard("/sign-up/email", body(), ["lycee-exemple.fr"])).toEqual(body());
   });
 });

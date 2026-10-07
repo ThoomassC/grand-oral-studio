@@ -5,12 +5,22 @@ import type { Instrumentation } from "next";
  * Server Action, proxy) est journalisée en une ligne JSON avec son `digest`,
  * la référence affichée à l'utilisateur par error.tsx / global-error.tsx.
  *
- * Jamais la chaîne de requête (le lien de réinitialisation y porte un jeton)
- * ni les en-têtes (cookies de session).
+ * Jamais la chaîne de requête ni le fragment (le lien de réinitialisation y
+ * porte un jeton), ni ce qui suit /reset-password/ ou /verify-email/ dans le
+ * chemin (Better Auth y place le jeton : /api/auth/reset-password/:token), ni
+ * les en-têtes (cookies de session).
  */
 
 type RequestInfo = Parameters<Instrumentation.onRequestError>[1];
 type ErrorContext = Parameters<Instrumentation.onRequestError>[2];
+
+/** Segments porteurs de jeton : tout ce qui suit est masqué (séparateur encodé compris). */
+const TOKEN_SEGMENT = /(\/(?:reset-password|verify-email))[/;%].*$/i;
+
+/** Chemin journalisable : sans requête, sans fragment, jetons de chemin masqués. */
+export function loggablePath(path: string): string {
+  return path.split(/[?#]/, 1)[0]!.replace(TOKEN_SEGMENT, "$1/[masqué]");
+}
 
 export function requestErrorFields(error: unknown, request: RequestInfo, context: ErrorContext) {
   const digest =
@@ -19,7 +29,7 @@ export function requestErrorFields(error: unknown, request: RequestInfo, context
       : undefined;
   return {
     digest,
-    path: request.path.split("?")[0],
+    path: loggablePath(request.path),
     method: request.method,
     routePath: context.routePath,
     routeType: context.routeType,
