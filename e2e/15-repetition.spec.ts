@@ -33,7 +33,7 @@ test.describe("15. Répétition, questions du jury et fiches imprimables", () =>
     await openFromDeck(page, programId, deckId, "Répéter");
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${deckId}/repetition`);
     const main = page.getByRole("main");
-    await expect(main.getByRole("heading", { name: "Répétition", level: 2 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Répétition", level: 2, exact: true })).toBeVisible();
     await expect(main.getByText(/^Aucune répétition enregistrée pour ce diaporama/)).toBeVisible();
 
     const start = main.getByRole("button", { name: "Commencer la répétition" });

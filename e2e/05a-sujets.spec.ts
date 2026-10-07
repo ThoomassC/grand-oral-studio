@@ -223,12 +223,14 @@ test.describe("5. Trame — banque de problématiques", () => {
 
     // Une problématique trop courte est refusée, avec son rang.
     await item.getByRole("button", { name: "Modifier Énergie" }).click();
-    const edit = item.getByLabel(/^Problématiques possibles/);
+    // En édition, la ligne devient le formulaire « Modifier Énergie » (plus de titre de sujet).
+    const editor = main(page).getByRole("region", { name: "Modifier Énergie" });
+    const edit = editor.getByLabel(/^Problématiques possibles/);
     await expect(edit).toHaveValue("Faut-il taxer le kérosène ?\nLa sobriété énergétique suffit-elle ?");
     await edit.fill("Court ?");
-    await item.getByRole("button", { name: "Enregistrer le sujet" }).click();
+    await editor.getByRole("button", { name: "Enregistrer le sujet" }).click();
     await expect(edit).toHaveAttribute("aria-invalid", "true");
-    await expect(item.getByText(/Problématique 1 : Une problématique doit faire au moins 10 caractères/)).toBeVisible();
+    await expect(editor.getByText(/Problématique 1 : Une problématique doit faire au moins 10 caractères/)).toBeVisible();
     await page.keyboard.press("Escape");
 
     const sheet = item.getByRole("link", { name: "Fiche de révision de Énergie" });

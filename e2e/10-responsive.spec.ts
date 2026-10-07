@@ -140,7 +140,7 @@ test.describe("10. Thème sombre — lisibilité de base", () => {
   test("devrait appliquer un fond sombre et un texte clair en mode sombre", async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto(paths["Deck"]!);
+    await page.goto(paths["Diaporama"]!);
     const colors = await page.evaluate(() => {
       const s = getComputedStyle(document.body);
       return { bg: s.backgroundColor, fg: s.color };

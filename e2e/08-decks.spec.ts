@@ -46,7 +46,7 @@ test.describe("8. Decks — liste, ouverture, suppression", () => {
     await expect(item).toContainText("Sujet : Intelligence artificielle");
     await expect(item.getByText("Démo")).toBeVisible();
     await expect(main.getByRole("link", { name: "Diaporamas : 1 diaporama" })).toBeVisible();
-    await item.getByRole("link", { name: /^Ouvrir le deck/ }).click();
+    await item.getByRole("link", { name: /^Ouvrir le diaporama / }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${deckId}`);
     await expect(main.getByText("Diaporama final · Intelligence artificielle")).toBeVisible();
   });

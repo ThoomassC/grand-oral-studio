@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { test, expect, BASE_URL, expectNoHorizontalScroll } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
 import { createProject, dialog, importThemeList, openNewProjectDialog, projectRowAction, waitForHydration } from "./support/app";
@@ -201,7 +202,9 @@ test.describe("4. Projets — import, exemple et export", () => {
     await page.getByRole("menu", { name: "Paramètres du projet" }).getByRole("menuitem", { name: "Exporter le projet (JSON)" }).click();
     const download = await downloading;
     expect(download.suggestedFilename()).toMatch(/\.json$/);
-    const file = await download.path();
+    // Le fichier tel que le navigateur l'enregistre : sous son nom proposé (.json), pas sous le nom
+    // temporaire sans extension de Playwright, que l'import refuse à juste titre.
+    const file = { name: download.suggestedFilename(), mimeType: "application/json", buffer: fs.readFileSync(await download.path()) };
 
     await page.goto("/projets");
     const trigger = page.getByRole("button", { name: "Importer un projet (.json)" });

@@ -265,7 +265,8 @@ test.describe("7. Jour J — v1.2 : rédacteur, chronomètre, avant l'examen, en
 
   test("devrait afficher la liste « Avant l'examen » le jour J, et pas à l'entraînement", async ({ page, account }) => {
     void account;
-    const id = await setup(page, "free", 0, "Avant l'examen");
+    // Nom de projet distinct du libellé cherché : le titre du projet est aussi dans <main>.
+    const id = await setup(page, "free", 0, "Liste de vérification");
     const main = page.getByRole("main");
     await expect(main.getByText(/^Avant l'examen : \d+ points? à vérifier$/)).toBeVisible();
     await expect(main.getByText("Export essayé")).toBeVisible();

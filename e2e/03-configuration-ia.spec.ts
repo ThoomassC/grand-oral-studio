@@ -41,9 +41,12 @@ test.describe("3. Rédaction IA — page guidée", () => {
     await expect(card("Claude").getByText("Coût")).toBeVisible();
     await expect(card("Claude").getByText(/abonnement Claude\.ai/)).toBeVisible();
     await expect(card("Sans IA").getByText("Vos données")).toBeVisible();
-    // Côte à côte : même hauteur de départ.
-    const [a, b] = await Promise.all([card("Sans IA").boundingBox(), card("Claude").boundingBox()]);
+    // Côte à côte : deux cartes de la première rangée (Sans IA, puis Mistral, toujours proposé)
+    // partent de la même hauteur, l'une à droite de l'autre. La carte « Claude » (clé personnelle)
+    // passe à la rangée suivante depuis qu'il y a plus de quatre fournisseurs.
+    const [a, b] = await Promise.all([card("Sans IA").boundingBox(), card("Mistral").boundingBox()]);
     expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+    expect(b!.x).toBeGreaterThan(a!.x + a!.width);
     await card("Sans IA").getByText("Vos données").click();
     await expect(radio(page, "Sans IA")).toBeChecked();
     await expect(page.getByRole("main").getByRole("button", { name: /^En savoir plus : (Sans IA|Claude)$/ })).toHaveCount(0);
