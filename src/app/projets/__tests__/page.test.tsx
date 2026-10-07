@@ -19,7 +19,7 @@ vi.mock("@/server/actions/programs", () => ({
   deleteProgram: vi.fn(),
 }));
 
-const { default: ProgramsPage } = await import("@/app/projets/page");
+const { default: ProgramsPage } = await import("@/app/projets/(liste)/page");
 
 afterEach(() => {
   cleanup();
