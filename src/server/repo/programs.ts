@@ -41,15 +41,18 @@ interface ProgramListRow {
   updatedAt: Date;
   themeCount: number;
   finalDeckCount: number;
+  rehearsalCount: number;
 }
 
 /**
  * Projets actifs de l'utilisateur (possédés et partagés) avec leur avancement.
  * Deux requêtes, quel que soit le nombre de projets : les projets partagés
  * (accessibleProgramIds), puis la liste. Celle-ci filtre par deux prédicats
- * indexés (ownerId, clé primaire) et compte sujets et decks finaux actifs par
- * sous-requêtes corrélées sur les index (programId, …) : pas de N+1, et pas
- * d'agrégat de toute la table comme le `_count` de Prisma (GROUP BY sans filtre).
+ * indexés (ownerId, clé primaire) et compte sujets, decks finaux actifs
+ * (entraînement compris) et répétitions de l'utilisateur sur ces decks par
+ * sous-requêtes corrélées sur les index (programId, …) et (deckId, …) : pas de
+ * N+1, et pas d'agrégat de toute la table comme le `_count` de Prisma (GROUP BY
+ * sans filtre).
  */
 export async function listPrograms(userId: string, client: Db = db()): Promise<ProgramSummary[]> {
   const shared = await accessibleProgramIds(client, userId);
@@ -59,7 +62,9 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
            p."createdAt", p."updatedAt",
            (SELECT count(*)::int FROM "Theme" t WHERE t."programId" = p."id") AS "themeCount",
            (SELECT count(*)::int FROM "Deck" d
-             WHERE d."programId" = p."id" AND d."kind" = 'FINAL' AND d."deletedAt" IS NULL) AS "finalDeckCount"
+             WHERE d."programId" = p."id" AND d."kind" = 'FINAL' AND d."deletedAt" IS NULL) AS "finalDeckCount",
+           (SELECT count(*)::int FROM "Rehearsal" r JOIN "Deck" d ON d."id" = r."deckId"
+             WHERE d."programId" = p."id" AND d."deletedAt" IS NULL AND r."userId" = ${userId}) AS "rehearsalCount"
     FROM "Program" p
     WHERE p."deletedAt" IS NULL
       AND (p."ownerId" = ${userId} OR p."id" = ANY(${sharedIds}::text[]))
@@ -70,11 +75,12 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
     // Propriétaire d'abord ; sinon le partage lu juste avant (absent : partage retiré entre-temps).
     const share = r.ownerId === userId ? null : shared.get(r.id);
     if (share === undefined) return [];
-    const { doneCount, total, nextStep } = computeProjectProgress({
+    const { doneCount, total, nextStep, rehearsalCount } = computeProjectProgress({
       subjectCount: r.themeCount,
       brandSavedAt: r.brandSavedAt?.toISOString() ?? null,
       templateSavedAt: r.templateSavedAt?.toISOString() ?? null,
       finalDeckCount: r.finalDeckCount,
+      rehearsalCount: r.rehearsalCount,
     });
     return [
       {
@@ -84,7 +90,7 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         themeCount: r.themeCount,
-        progress: { doneCount, total, nextStep },
+        progress: { doneCount, total, nextStep, rehearsalCount },
         role: share?.role ?? "owner",
         ownerName: share?.ownerName ?? null,
       },
@@ -114,7 +120,9 @@ function readOrDefault<T>(read: () => T, fallback: () => T, onInvalid: (error: D
 
 /**
  * Programme avec ses sujets ordonnés et l'ancien squelette (version 1.0) de chacun,
- * listé dans Decks (une seule requête).
+ * listé dans Decks, et, en parallèle, le nombre de répétitions de l'utilisateur sur
+ * les decks actifs du projet (progression « prêt pour le jour J ») : deux requêtes.
+ * Le compte, lancé avant le contrôle d'accès, n'est lu que si le projet est visible.
  *
  * Lecture tolérante : une apparence ou une trame invalide en base est remplacée
  * par la valeur par défaut (signalée dans `degraded`), un squelette invalide par
@@ -126,21 +134,25 @@ export async function getProgram(
   programId: string,
   log: Logger = createLogger({ scope: "repo.programs" }),
 ): Promise<ProgramDetailRead> {
-  const row = await db().program.findFirst({
-    where: { id: programId, ...programAccess(userId, "viewer") },
-    include: {
-      members: memberRoleOf(userId),
-      themes: {
-        orderBy: { position: "asc" },
-        include: {
-          decks: { where: { kind: "SKELETON", ...liveDeck }, take: 1 },
-          _count: { select: { decks: { where: { kind: "FINAL", ...liveDeck } } } },
+  const [row, rehearsalCount] = await Promise.all([
+    db().program.findFirst({
+      where: { id: programId, ...programAccess(userId, "viewer") },
+      include: {
+        members: memberRoleOf(userId),
+        themes: {
+          orderBy: { position: "asc" },
+          include: {
+            decks: { where: { kind: "SKELETON", ...liveDeck }, take: 1 },
+            _count: { select: { decks: { where: { kind: "FINAL", ...liveDeck } } } },
+          },
         },
+        // Total du programme : compte aussi les decks finaux sans sujet, que les compteurs par sujet ignorent.
+        _count: { select: { decks: { where: { kind: "FINAL", ...liveDeck } } } },
       },
-      // Total du programme : compte aussi les decks finaux sans sujet, que les compteurs par sujet ignorent.
-      _count: { select: { decks: { where: { kind: "FINAL", ...liveDeck } } } },
-    },
-  });
+    }),
+    // Répétitions de l'utilisateur seul (chacun prépare son oral), decks actifs.
+    db().rehearsal.count({ where: { userId, deck: { programId, ...liveDeck } } }),
+  ]);
   const role = row ? roleOf(userId, row.ownerId, row.members[0]?.role) : null;
   if (!row || !role) throw new NotFoundError("programme");
   const degraded: DegradedPart[] = [];
@@ -181,6 +193,7 @@ export async function getProgram(
       brandSavedAt,
       templateSavedAt,
       finalDeckCount,
+      rehearsalCount,
       template: { slides: totalSlides(template), durationMinutes: template.durationMinutes },
     }),
     role,

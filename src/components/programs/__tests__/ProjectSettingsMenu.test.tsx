@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const update = vi.fn();
 vi.mock("@/server/actions/programs", () => ({ updateProgram: (...args: unknown[]) => update(...args) }));
@@ -28,7 +28,7 @@ async function openEntry(user: ReturnType<typeof userEvent.setup>, label: string
 }
 
 describe("Menu des paramètres du projet", () => {
-  it("devrait proposer Renommer, Modifier la description et Partager derrière l'engrenage", async () => {
+  it("devrait proposer Renommer, Modifier la description, Partager et l'export derrière l'engrenage", async () => {
     const user = userEvent.setup();
     render(<ProjectSettingsMenu {...PROPS} />);
     expect(gear()).toHaveAttribute("aria-haspopup", "menu");
@@ -37,6 +37,7 @@ describe("Menu des paramètres du projet", () => {
       "Renommer",
       "Modifier la description",
       "Partager",
+      "Exporter le projet (JSON)",
     ]);
   });
 
@@ -142,5 +143,65 @@ describe("Menu des paramètres du projet", () => {
     await user.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
     expect(update).toHaveBeenCalledWith("p1", { name: "BTS SIO 2026", description: "Jury de 3 personnes" });
     expect(await screen.findByText("Description enregistrée.")).toBeInTheDocument();
+  });
+});
+
+describe("Menu des paramètres du projet — export et lecteur", () => {
+  const fetchMock = vi.fn<typeof fetch>();
+  const click = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    URL.createObjectURL = vi.fn(() => "blob:export");
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(click);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    fetchMock.mockReset();
+    click.mockReset();
+  });
+
+  it("ne devrait proposer à un lecteur ni Renommer ni Modifier la description", async () => {
+    const user = userEvent.setup();
+    render(<ProjectSettingsMenu {...PROPS} role="viewer" />);
+    await user.click(gear());
+    expect(within(screen.getByRole("menu")).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "Membres du projet",
+      "Exporter le projet (JSON)",
+    ]);
+  });
+
+  it("devrait télécharger l'export JSON du projet sous le nom donné par le serveur", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("{}", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": "attachment; filename=\"BTS-SIO.json\"; filename*=UTF-8''BTS%20SIO.json",
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ProjectSettingsMenu {...PROPS} />);
+    await user.click(gear());
+    await user.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Exporter le projet (JSON)" }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith("/api/projets/p1/export", expect.objectContaining({ credentials: "same-origin" }));
+    expect(await screen.findByText("Export du projet téléchargé.")).toBeInTheDocument();
+  });
+
+  it("devrait annoncer l'erreur renvoyée par la route (quota), sans télécharger", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ error: "Trop d'exports en peu de temps. Réessayez dans 5 min." }, { status: 429 }),
+    );
+    const user = userEvent.setup();
+    render(<ProjectSettingsMenu {...PROPS} role="viewer" />);
+    await user.click(gear());
+    await user.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Exporter le projet (JSON)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("L'export a échoué : Trop d'exports en peu de temps. Réessayez dans 5 min.");
+    expect(click).not.toHaveBeenCalled();
   });
 });

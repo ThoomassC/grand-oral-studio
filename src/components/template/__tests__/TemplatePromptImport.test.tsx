@@ -14,6 +14,14 @@ vi.mock("@/server/actions/programs", () => ({
   updateBrand: vi.fn(),
   updateTemplate: (...args: unknown[]) => update(...args),
 }));
+// Bibliothèque de l'équipe, sous l'éditeur (TemplateWorkspace) : hors du sujet de ces tests.
+vi.mock("@/server/actions/shared-models", () => ({
+  publishModel: vi.fn(),
+  listSharedModels: vi.fn(),
+  applyModel: vi.fn(),
+  deleteModel: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/trame", useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 const { TemplateWorkspace } = await import("@/components/template/TemplateWorkspace");
 

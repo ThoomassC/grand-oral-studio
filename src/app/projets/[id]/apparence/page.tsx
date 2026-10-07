@@ -11,6 +11,8 @@ export async function generateMetadata({ params }: PageProps<"/projets/[id]/appa
 /** Étape 1 · Apparence : partir d'un exemple (facultatif), puis l'éditeur. Sans IA. */
 export default async function AppearancePage({ params }: PageProps<"/projets/[id]/apparence">) {
   const program = await loadProgram((await params).id);
+  // Lecteur : ni import ni éditeur (le serveur refuse de toute façon ses modifications).
+  const readOnly = program.role === "viewer";
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -20,17 +22,20 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
           passer directement à la suite.
         </p>
       </div>
-      <BrandImport
-        programId={program.id}
-        currentBrand={{ logoDataUrl: program.brand.logoDataUrl }}
-        format={program.template.format}
-      />
+      {readOnly ? null : (
+        <BrandImport
+          programId={program.id}
+          currentBrand={{ logoDataUrl: program.brand.logoDataUrl }}
+          format={program.template.format}
+        />
+      )}
       {/* Un import appliqué est repris par l'éditeur sans le remonter (voir BrandEditor). */}
       <BrandWorkspace
         programId={program.id}
         initialBrand={program.brand}
         savedAt={program.brandSavedAt}
         format={program.template.format}
+        readOnly={readOnly}
       />
     </div>
   );

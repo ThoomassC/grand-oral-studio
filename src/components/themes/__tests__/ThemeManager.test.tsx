@@ -55,7 +55,7 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     expect(screen.getByRole("heading", { name: "Vos sujets", level: 3 })).toBeInTheDocument();
@@ -118,6 +118,7 @@ describe("Gestionnaire de sujets — notes", () => {
       description: "",
       keywords: [],
       notes: "42 % d'EnR en 2030\nSource : ADEME",
+      problems: [],
     });
     expect(await screen.findByText("Sujet ajouté. Vous pouvez en saisir un autre.")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Notes/)).toHaveValue("");
@@ -129,7 +130,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", finalDeckCount: 2, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", problems: [], finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     const item = screen.getByRole("heading", { name: /Énergie/ }).closest("li") as HTMLElement;
@@ -145,6 +146,7 @@ describe("Gestionnaire de sujets — notes", () => {
       description: "",
       keywords: ["climat"],
       notes: "Chiffre ADEME 2024",
+      problems: [],
     }, V0);
   });
 
@@ -154,7 +156,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -173,7 +175,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -188,7 +190,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), finalDeckCount: 0, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -216,7 +218,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), finalDeckCount: 0, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -232,7 +234,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 2, updatedAt: V0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Supprimer Énergie" }));
@@ -248,6 +250,7 @@ const THEMES = ["Alpha", "Bravo", "Charlie"].map((name) => ({
   description: "",
   keywords: [],
   notes: "",
+  problems: [],
   finalDeckCount: 0,
   updatedAt: V0,
 }));
@@ -325,5 +328,50 @@ describe("Gestionnaire de sujets — enregistrement de l'ordre", () => {
     expect(await screen.findByText(/Le nouvel ordre n'a pas été enregistré : Projet introuvable\./)).toBeInTheDocument();
     expect(screen.queryByText("Ordre enregistré.")).not.toBeInTheDocument();
     expect(unloadPrevented()).toBe(false);
+  });
+});
+
+describe("Gestionnaire de sujets — problématiques, fiche de révision et lecteur", () => {
+  const theme = {
+    id: "e",
+    name: "Énergie",
+    description: "",
+    keywords: [],
+    notes: "",
+    problems: ["Faut-il taxer le kérosène ?", "La sobriété suffit-elle ?"],
+    finalDeckCount: 1,
+    updatedAt: V0,
+  };
+
+  it("devrait afficher le nombre de problématiques et mener à la fiche de révision du sujet", () => {
+    render(<ThemeManager programId="p1" themes={[theme, { ...theme, id: "f", name: "Santé", problems: [] }]} />);
+    const [first, second] = screen.getAllByRole("listitem").filter((li) => li.querySelector("h4")) as [HTMLElement, HTMLElement];
+    expect(first).toHaveTextContent("2 problématiques possibles");
+    expect(second).toHaveTextContent("Aucune problématique enregistrée");
+    const sheet = screen.getByRole("link", { name: "Fiche de révision de Énergie" });
+    expect(sheet).toHaveAttribute("href", "/projets/p1/sujets/e/fiche");
+    expect(sheet).toHaveClass("opale-button--ghost");
+  });
+
+  it("devrait reprendre les problématiques dans le formulaire de modification", async () => {
+    const user = userEvent.setup();
+    render(<ThemeManager programId="p1" themes={[theme]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    expect(screen.getByLabelText(/^Problématiques possibles/)).toHaveValue("Faut-il taxer le kérosène ?\nLa sobriété suffit-elle ?");
+  });
+
+  it("ne devrait proposer à un lecteur aucune action d'édition, seulement la fiche de révision", () => {
+    render(<ThemeManager programId="p1" themes={[theme]} readOnly />);
+    for (const name of ["Ajouter un sujet", "Importer une liste", "Modifier Énergie", "Supprimer Énergie", "Monter Énergie", "Descendre Énergie"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "Fiche de révision de Énergie" })).toBeInTheDocument();
+    expect(screen.getByText(/lecture seule/)).toBeInTheDocument();
+  });
+
+  it("devrait dire à un lecteur qu'il n'y a aucun sujet sans l'inviter à en ajouter", () => {
+    render(<ThemeManager programId="p1" themes={[]} readOnly />);
+    expect(screen.getByText("Aucun sujet")).toBeInTheDocument();
+    expect(screen.queryByText(/Ajouter un sujet/)).not.toBeInTheDocument();
   });
 });

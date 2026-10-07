@@ -7,12 +7,16 @@
  *                  elle est utilisable ; le résumé dit laquelle.
  *   2. Trame     — toujours faite, par défaut ou personnalisée, pour la même
  *                  raison. Les sujets, facultatifs, en sont un onglet.
- *   3. Jour J    — fait dès 1 diaporama final : la seule étape « à faire ».
+ *   3. Jour J    — fait quand le projet est « prêt » (cf. ./readiness.ts) : au
+ *                  moins 2 diaporamas, entraînement compris, ET au moins 2
+ *                  répétitions chronométrées. La seule étape « à faire ».
  *
  * Rien ne bloque : l'apparence et la trame par défaut sont utilisables, les
  * sujets sont facultatifs et le moteur « Sans IA » est toujours disponible.
  * Garder les réglages par défaut ne doit donc jamais paraître « à faire ».
  */
+
+import { isExamReady } from "./readiness";
 
 export type StepId = "appearance" | "template" | "day";
 export type StepStatus = "done" | "todo";
@@ -35,6 +39,8 @@ export interface ProjectStep {
 
 export interface ProjectProgress {
   steps: ProjectStep[];
+  /** Répétitions chronométrées de l'utilisateur sur les diaporamas actifs du projet. */
+  rehearsalCount: number;
   /** Détail de l'étape « Trame » : ses diapos et ses sujets. */
   templateTabs: TemplateTab[];
   doneCount: number;
@@ -48,6 +54,7 @@ export interface ProjectProgressSummary {
   doneCount: number;
   total: 3;
   nextStep: StepId | null;
+  rehearsalCount: number;
 }
 
 export interface ProjectProgressInput {
@@ -55,7 +62,10 @@ export interface ProjectProgressInput {
   /** Date ISO du dernier enregistrement de l'apparence ; null = jamais (apparence par défaut). */
   brandSavedAt: string | null;
   templateSavedAt: string | null;
+  /** Diaporamas actifs du projet (jour J et entraînement), hors anciens squelettes. */
   finalDeckCount: number;
+  /** Répétitions de l'utilisateur sur ces diaporamas (chacun ne compte que les siennes). */
+  rehearsalCount: number;
   /** Détail de la trame pour le résumé (« 13 diapos · 20 min ») ; facultatif (absent dans la liste des projets). */
   template?: { slides: number; durationMinutes: number };
 }
@@ -79,6 +89,13 @@ function slidesDetail(template: ProjectProgressInput["template"]): string | null
   return `${plural(count(template.slides), "diapo")} · ${count(template.durationMinutes)} min`;
 }
 
+/** « Aucun diaporama », sinon « 2 diaporamas · 1 répétition ». */
+function daySummary(decks: number, rehearsals: number): string {
+  if (decks === 0) return "Aucun diaporama";
+  const done = rehearsals > 0 ? plural(rehearsals, "répétition") : "aucune répétition";
+  return `${plural(decks, "diaporama")} · ${done}`;
+}
+
 function templateSummary(saved: boolean, detail: string | null, subjects: number): string {
   const base = detail ? (saved ? detail : `${DEFAULT} · ${detail}`) : saved ? CUSTOM : DEFAULT;
   return subjects > 0 ? `${base} · ${plural(subjects, "sujet")}` : base;
@@ -87,6 +104,7 @@ function templateSummary(saved: boolean, detail: string | null, subjects: number
 export function computeProjectProgress(input: ProjectProgressInput): ProjectProgress {
   const subjects = count(input.subjectCount);
   const finals = count(input.finalDeckCount);
+  const rehearsals = count(input.rehearsalCount);
   const brandSaved = input.brandSavedAt !== null;
   const templateSaved = input.templateSavedAt !== null;
   const detail = slidesDetail(input.template);
@@ -115,11 +133,18 @@ export function computeProjectProgress(input: ProjectProgressInput): ProjectProg
     {
       id: "day",
       index: 3,
-      status: finals >= 1 ? "done" : "todo",
-      summary: finals > 0 ? plural(finals, "diaporama") : "Aucun diaporama",
+      status: isExamReady({ decks: finals, rehearsals }) ? "done" : "todo",
+      summary: daySummary(finals, rehearsals),
     },
   ];
 
   const doneCount = steps.filter((s) => s.status === "done").length;
-  return { steps, templateTabs, doneCount, total: 3, nextStep: steps.find((s) => s.status === "todo")?.id ?? null };
+  return {
+    steps,
+    rehearsalCount: rehearsals,
+    templateTabs,
+    doneCount,
+    total: 3,
+    nextStep: steps.find((s) => s.status === "todo")?.id ?? null,
+  };
 }

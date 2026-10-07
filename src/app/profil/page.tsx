@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ChangePasswordForm } from "@/components/profile/ChangePasswordForm";
 import { DeleteAccountForm } from "@/components/profile/DeleteAccountForm";
 import { ProfileNameForm } from "@/components/profile/ProfileNameForm";
+import { DownloadButton } from "@/components/projects/DownloadButton";
 import { formatDate, plural } from "@/components/ui/format";
 import { getProfile, type SignInMethod } from "@/server/queries";
 import { isEmailDeliveryEnabled } from "@/lib/auth-options";
@@ -81,6 +82,21 @@ export default async function ProfilePage() {
                   : null}
               </p>
             )}
+          </Card>
+        </section>
+
+        <section aria-labelledby="profil-donnees">
+          <Card elevation={1} className="p-5 sm:p-6">
+            <h2 id="profil-donnees" className="text-2xl">
+              Vos données
+            </h2>
+            <p className="mt-1 text-muted">
+              Un fichier JSON avec votre profil, vos réglages d&apos;IA (sans aucune clé), les projets dont vous êtes
+              propriétaire et les modèles que vous avez publiés dans la bibliothèque.
+            </p>
+            <div className="mt-5">
+              <DownloadButton href="/api/compte/export" label="Télécharger mes données" fallbackName="mes-donnees.json" />
+            </div>
           </Card>
         </section>
 

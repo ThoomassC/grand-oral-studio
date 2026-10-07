@@ -13,6 +13,8 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { updateProgram } from "@/server/actions/programs";
 import type { ProgramRole } from "@/server/repo/access";
 import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
+import { downloadJson } from "@/components/projects/download";
+import { shareHref } from "@/components/projects/steps";
 import { errorProps, firstError, validateWith, type FieldErrors } from "@/components/forms/validation";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { TextArea, TextInput } from "@/components/ui/Field";
@@ -41,6 +43,9 @@ const DIALOG: Record<Field, { title: string; success: string }> = {
  *
  * « Partager » (propriétaire) ou « Membres du projet » (éditeur, lecteur) mène à
  * la page Partage, par la garde « modifications non enregistrées ».
+ * « Exporter le projet (JSON) » (tout membre) télécharge le fichier d'export.
+ * Un lecteur n'a ni « Renommer » ni « Modifier la description » (le serveur
+ * refuse de toute façon).
  */
 export function ProjectSettingsMenu({
   programId,
@@ -60,9 +65,24 @@ export function ProjectSettingsMenu({
   /** Change à chaque ouverture : le formulaire repart des valeurs en cours. */
   const [session, setSession] = useState(0);
   const [done, setDone] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [exporting, startExport] = useTransition();
+  const canEdit = role !== "viewer";
+
+  function exportProject() {
+    if (exporting) return;
+    setDone(null);
+    setFailure(null);
+    startExport(async () => {
+      const result = await downloadJson(`/api/projets/${programId}/export`, "projet.json");
+      if (result.ok) setDone("Export du projet téléchargé.");
+      else setFailure(`L'export a échoué : ${result.message}`);
+    });
+  }
 
   function open(field: Field) {
     setDone(null);
+    setFailure(null);
     setSession((n) => n + 1);
     setEditing(field);
   }
@@ -89,18 +109,25 @@ export function ProjectSettingsMenu({
           align="start"
           className="header-menu min-w-[14rem] max-w-[min(20rem,calc(100vw-2rem))]"
         >
-          <DropdownMenuItem className="header-menu__item" value="renommer" onSelect={() => open("name")}>
-            Renommer
-          </DropdownMenuItem>
-          <DropdownMenuItem className="header-menu__item" value="description" onSelect={() => open("description")}>
-            Modifier la description
-          </DropdownMenuItem>
+          {canEdit ? (
+            <>
+              <DropdownMenuItem className="header-menu__item" value="renommer" onSelect={() => open("name")}>
+                Renommer
+              </DropdownMenuItem>
+              <DropdownMenuItem className="header-menu__item" value="description" onSelect={() => open("description")}>
+                Modifier la description
+              </DropdownMenuItem>
+            </>
+          ) : null}
           <DropdownMenuItem
             className="header-menu__item"
             value="partage"
-            onSelect={() => go(`/projets/${programId}/partage`, triggerRef.current)}
+            onSelect={() => go(shareHref(programId), triggerRef.current)}
           >
             {role === "owner" ? "Partager" : "Membres du projet"}
+          </DropdownMenuItem>
+          <DropdownMenuItem className="header-menu__item" value="exporter" onSelect={exportProject}>
+            Exporter le projet (JSON)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -112,7 +139,11 @@ export function ProjectSettingsMenu({
           </>
         ) : null}
       </LiveRegion>
-      {editing ? (
+      <LiveRegion className="text-sm font-medium">{exporting ? "Préparation de l'export…" : null}</LiveRegion>
+      <LiveRegion role="alert" className="text-sm font-medium text-danger">
+        {failure}
+      </LiveRegion>
+      {editing && canEdit ? (
         <ProgramMetaDialog
           key={session}
           field={editing}

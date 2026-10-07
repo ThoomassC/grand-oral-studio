@@ -1,25 +1,42 @@
 import type { ProjectProgress } from "@/domain/progress";
+import type { ProgramRole } from "@/server/repo/access";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { stepHref, stepMeta } from "./steps";
+import { practiceHref, projectHomeHref, stepHref, stepMeta } from "./steps";
+
+/** « Prêt pour le jour J · 4 répétitions faites ». */
+function readyLabel(rehearsals: number): string {
+  return `Prêt pour le jour J · ${rehearsals} ${rehearsals > 1 ? "répétitions faites" : "répétition faite"}`;
+}
 
 /**
  * Avancement d'un projet sur sa carte : « n/3 étapes » (pastilles, nommées
- * comme une image) et le bouton pour commencer le Jour J quand apparence et
- * trame sont faites — toujours le cas, par défaut ou personnalisées (cf.
- * `computeProjectProgress`) —, sinon reprendre à l'étape suivante.
+ * comme une image), ou « Prêt pour le jour J · N répétitions faites » une fois
+ * le projet prêt (cf. `computeProjectProgress`) ; puis les accès au Jour J :
+ * « S'entraîner » et « Jour J » quand apparence et trame sont faites — toujours
+ * le cas, par défaut ou personnalisées —, sinon reprendre à l'étape suivante.
+ *
+ * La génération est réservée aux éditeurs : un lecteur n'a que « Ouvrir », et
+ * pas la mention du rédacteur (« Rédaction : … », celui de l'utilisateur).
  */
 export function ProjectProgressSummary({
   programId,
   programName,
   progress,
+  role,
+  writerLabel = null,
 }: {
   programId: string;
   programName: string;
-  progress: Pick<ProjectProgress, "doneCount" | "total" | "nextStep">;
+  progress: Pick<ProjectProgress, "doneCount" | "total" | "nextStep" | "rehearsalCount">;
+  role: ProgramRole;
+  /** Libellé du rédacteur actuel de l'utilisateur (« Mistral », « Sans IA »…) ; null : non affiché. */
+  writerLabel?: string | null;
 }) {
-  const { doneCount, total, nextStep } = progress;
-  const toDay = nextStep === null || nextStep === "day";
-  const target = toDay ? "day" : nextStep;
+  const { doneCount, total, nextStep, rehearsalCount } = progress;
+  const ready = nextStep === null;
+  const toDay = ready || nextStep === "day";
+  const canGenerate = role !== "viewer";
+  const name = <span className="sr-only"> — {programName}</span>;
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
       <p className="flex items-center gap-2 text-sm">
@@ -31,14 +48,37 @@ export function ProjectProgressSummary({
             />
           ))}
         </span>
-        <span aria-hidden="true" className="num font-semibold">
-          {doneCount}/{total} étapes
-        </span>
+        {ready ? (
+          <span className="num font-semibold">{readyLabel(rehearsalCount)}</span>
+        ) : (
+          <span aria-hidden="true" className="num font-semibold">
+            {doneCount}/{total} étapes
+          </span>
+        )}
       </p>
-      <ButtonLink href={stepHref(programId, target)} variant={toDay ? "primary" : "ghost"} size="small">
-        {toDay ? "Commencer le Jour J" : `Reprendre : ${stepMeta(target).label}`}
-        <span className="sr-only"> — {programName}</span>
-      </ButtonLink>
+      {canGenerate && writerLabel ? <p className="text-sm text-muted">Rédaction : {writerLabel}</p> : null}
+      {!canGenerate ? (
+        <ButtonLink href={projectHomeHref(programId)} variant="ghost" size="small">
+          Ouvrir
+          {name}
+        </ButtonLink>
+      ) : toDay ? (
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <ButtonLink href={practiceHref(programId)} variant="primary" size="small">
+            S&apos;entraîner
+            {name}
+          </ButtonLink>
+          <ButtonLink href={stepHref(programId, "day")} variant="ghost" size="small">
+            Jour J
+            {name}
+          </ButtonLink>
+        </div>
+      ) : (
+        <ButtonLink href={stepHref(programId, nextStep)} variant="ghost" size="small">
+          {`Reprendre : ${stepMeta(nextStep).label}`}
+          {name}
+        </ButtonLink>
+      )}
     </div>
   );
 }

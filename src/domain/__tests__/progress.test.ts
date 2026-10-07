@@ -7,10 +7,10 @@ import {
   type TemplateTabId,
 } from "@/domain/progress";
 
-const EMPTY = { subjectCount: 0, brandSavedAt: null, templateSavedAt: null, finalDeckCount: 0 };
+const EMPTY = { subjectCount: 0, brandSavedAt: null, templateSavedAt: null, finalDeckCount: 0, rehearsalCount: 0 };
 const SAVED = "2026-10-01T10:00:00.000Z";
 const TPL = { slides: 13, durationMinutes: 20 };
-const FULL = { subjectCount: 9, brandSavedAt: SAVED, templateSavedAt: SAVED, finalDeckCount: 2, template: TPL };
+const FULL = { subjectCount: 9, brandSavedAt: SAVED, templateSavedAt: SAVED, finalDeckCount: 2, rehearsalCount: 2, template: TPL };
 
 function step(p: ProjectProgress, id: StepId) {
   const s = p.steps.find((x) => x.id === id);
@@ -127,18 +127,35 @@ describe("computeProjectProgress — trame", () => {
   });
 });
 
-describe("computeProjectProgress — jour J", () => {
-  it("devrait être fait dès 1 diaporama, sans sujet ni personnalisation", () => {
-    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount: 1 }), "day").status).toBe("done");
-    expect(step(computeProjectProgress(EMPTY), "day").status).toBe("todo");
+describe("computeProjectProgress — jour J (prêt : 2 diaporamas et 2 répétitions)", () => {
+  it.each([
+    [0, 0, "todo"],
+    [1, 0, "todo"],
+    [1, 5, "todo"],
+    [2, 1, "todo"],
+    [5, 0, "todo"],
+    [2, 2, "done"],
+    [3, 7, "done"],
+  ])("%i diaporama(s) et %i répétition(s) → %s", (finalDeckCount, rehearsalCount, status) => {
+    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount, rehearsalCount }), "day").status).toBe(status);
+  });
+
+  it("ne devrait plus être fait avec un seul diaporama (ancienne règle)", () => {
+    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount: 1 }), "day").status).toBe("todo");
   });
 
   it.each([
-    [0, "Aucun diaporama"],
-    [1, "1 diaporama"],
-    [2, "2 diaporamas"],
-  ])("résumé du jour J : %i → %s", (finalDeckCount, summary) => {
-    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount }), "day").summary).toBe(summary);
+    [0, 0, "Aucun diaporama"],
+    [1, 0, "1 diaporama · aucune répétition"],
+    [2, 1, "2 diaporamas · 1 répétition"],
+    [2, 3, "2 diaporamas · 3 répétitions"],
+  ])("résumé du jour J : %i diaporama(s), %i répétition(s) → %s", (finalDeckCount, rehearsalCount, summary) => {
+    expect(step(computeProjectProgress({ ...EMPTY, finalDeckCount, rehearsalCount }), "day").summary).toBe(summary);
+  });
+
+  it("devrait exposer le nombre de répétitions (libellé « N répétitions faites »)", () => {
+    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 2, rehearsalCount: 4 }).rehearsalCount).toBe(4);
+    expect(computeProjectProgress({ ...EMPTY, rehearsalCount: -3 }).rehearsalCount).toBe(0);
   });
 });
 
@@ -147,20 +164,29 @@ describe("computeProjectProgress — nextStep et doneCount", () => {
     ["projet neuf", EMPTY],
     ["apparence enregistrée", { ...EMPTY, brandSavedAt: SAVED }],
     ["apparence et trame enregistrées", { ...FULL, finalDeckCount: 0 }],
-  ])("devrait désigner le jour J, à 2/3, tant qu'aucun diaporama n'existe (%s)", (_, input) => {
+    ["diaporamas sans répétition", { ...FULL, rehearsalCount: 0 }],
+    ["un seul diaporama", { ...FULL, finalDeckCount: 1 }],
+  ])("devrait désigner le jour J, à 2/3, tant que le projet n'est pas prêt (%s)", (_, input) => {
     expect(computeProjectProgress(input)).toMatchObject({ nextStep: "day", doneCount: 2 });
   });
 
-  it("devrait tout compter fait dès un diaporama, même sans personnalisation", () => {
-    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 3 })).toMatchObject({ nextStep: null, doneCount: 3 });
+  it("devrait tout compter fait dès que le projet est prêt, même sans personnalisation", () => {
+    expect(computeProjectProgress({ ...EMPTY, finalDeckCount: 2, rehearsalCount: 2 })).toMatchObject({ nextStep: null, doneCount: 3 });
   });
 });
 
 describe("computeProjectProgress — entrées hors bornes", () => {
   it("devrait traiter des compteurs négatifs ou NaN comme 0", () => {
-    const p = computeProjectProgress({ ...EMPTY, subjectCount: -2, finalDeckCount: Number.NaN, template: { slides: -1, durationMinutes: Number.NaN } });
+    const p = computeProjectProgress({
+      ...EMPTY,
+      subjectCount: -2,
+      finalDeckCount: Number.NaN,
+      rehearsalCount: Number.POSITIVE_INFINITY,
+      template: { slides: -1, durationMinutes: Number.NaN },
+    });
     expect(step(p, "template").summary).toBe("Par défaut · 0 diapo · 0 min");
     expect(tab(p, "subjects").summary).toBe("Facultatif");
     expect(step(p, "day")).toMatchObject({ status: "todo", summary: "Aucun diaporama" });
+    expect(p.rehearsalCount).toBe(0);
   });
 });

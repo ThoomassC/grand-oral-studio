@@ -11,6 +11,7 @@ export async function generateMetadata({ params }: PageProps<"/projets/[id]/tram
 /** Étape 2 · Trame, onglet Sujets (facultatif) : import depuis un texte, puis la liste. Sans IA. */
 export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/trame/sujets">) {
   const program = await loadProgram((await params).id);
+  const readOnly = program.role === "viewer";
   // DTO explicite : l'ancien squelette (version 1.0) et la position ne traversent pas la frontière.
   const subjects: ThemeItem[] = program.themes.map((t) => ({
     id: t.id,
@@ -18,6 +19,7 @@ export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/
     description: t.description,
     keywords: t.keywords,
     notes: t.notes,
+    problems: t.problems,
     finalDeckCount: t.finalDeckCount,
     updatedAt: t.updatedAt,
   }));
@@ -31,8 +33,9 @@ export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/
           sujet de la problématique est reconnu et le diaporama s&apos;appuie sur ses notes.
         </p>
       </div>
-      <SubjectImport programId={program.id} format={program.template.format} />
-      <ThemeManager programId={program.id} themes={subjects} />
+      {/* Lecteur : ni import ni édition (le serveur les refuse de toute façon). */}
+      {readOnly ? null : <SubjectImport programId={program.id} format={program.template.format} />}
+      <ThemeManager programId={program.id} themes={subjects} readOnly={readOnly} />
     </div>
   );
 }
