@@ -16,17 +16,24 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String          @id
+  id            String               @id
   name          String
-  email         String          @unique
-  emailVerified Boolean         @default(false)
+  email         String               @unique
+  emailVerified Boolean              @default(false)
   image         String?
-  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
   programs      Program[]
   aiSettings    UserAiSettings?
+  aiCredentials UserAiCredential[]
+  memberships   ProgramMember[]
+  /// Decks dont l'utilisateur est le rédacteur (Deck.createdById, SET NULL à sa suppression).
+  createdDecks  Deck[]
+  reviews       DeckQuestionReview[]
+  rehearsals    Rehearsal[]
+  sharedModels  SharedModel[]
 
   @@map("user")
 }
@@ -93,24 +100,32 @@ model RateLimit {
 // ---------------------------------------------------------------------------
 
 model Program {
-  id              String    @id @default(cuid())
+  id              String          @id @default(cuid())
   ownerId         String
-  owner           User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner           User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name            String
-  description     String    @default("")
+  description     String          @default("")
   /// BrandSchema (validé par zod à la lecture et à l'écriture)
   brand           Json
   /// PromptTemplateSchema (validé par zod à la lecture et à l'écriture)
   template        Json
   /// Dernier enregistrement explicite de la charte (étape 2 du parcours) ; NULL = jamais
   /// enregistrée (charte par défaut). Pas de rétro-remplissage des projets existants.
-  brandSavedAt    DateTime? @db.Timestamptz(3)
+  brandSavedAt    DateTime?       @db.Timestamptz(3)
   /// Dernier enregistrement explicite du gabarit (étape 3 du parcours) ; NULL = jamais.
-  templateSavedAt DateTime? @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  templateSavedAt DateTime?       @db.Timestamptz(3)
+  /// Corbeille (v1.2) : NULL = projet actif. Toute lecture filtre `deletedAt: null` ;
+  /// restauration possible 30 s, purge opportuniste au-delà d'une heure.
+  deletedAt       DateTime?       @db.Timestamptz(3)
+  /// Dernière tentative d'export (PPTX/JSON) ; NULL = jamais tenté.
+  exportTriedAt   DateTime?       @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
   themes          Theme[]
   decks           Deck[]
+  /// Membres invités. Le propriétaire (ownerId) n'est jamais une ligne membre ; une ligne
+  /// parasite du propriétaire est ignorée par le contrôle d'accès.
+  members         ProgramMember[]
 
   @@index([ownerId, updatedAt(sort: Desc)])
 }
@@ -126,6 +141,11 @@ model Theme {
   keywords    String[] @default([])
   /// Notes de l'utilisateur (chiffres, exemples, sources), 4000 caractères au plus (CHECK Theme_notes_length).
   notes       String   @default("")
+  /// Problématiques candidates du sujet : 30 au plus, chacune de 10 à 1500 caractères
+  /// (CHECK Theme_problems_valid, fonction SQL IMMUTABLE theme_problems_valid).
+  problems    String[] @default([])
+  /// Concurrence optimiste sur le sujet. DEFAULT now() : le code v1.1 insère sans cette colonne.
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
   decks       Deck[]
 
   @@unique([programId, position])
@@ -140,22 +160,35 @@ enum DeckKind {
 }
 
 model Deck {
-  id        String   @id @default(cuid())
-  programId String
-  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  programId     String
+  program       Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
   /// NULL = deck final produit sans sujet. Un SKELETON a toujours un thème (CHECK Deck_skeleton_has_theme).
-  themeId   String?
-  theme     Theme?   @relation(fields: [themeId, programId], references: [id, programId], onDelete: Cascade)
-  kind      DeckKind
+  themeId       String?
+  theme         Theme?         @relation(fields: [themeId, programId], references: [id, programId], onDelete: Cascade)
+  kind          DeckKind
   /// Problématique du jour J (decks FINAL uniquement).
-  problem   String?
+  problem       String?
   /// DeckSpecSchema (validé par zod à la lecture et à l'écriture)
-  spec      Json
-  /// Moteur qui a produit le deck : "claude" | "ollama" | "free" | "mock".
-  /// NULL = deck antérieur au suivi du moteur (inconnu).
-  engine    String?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  spec          Json
+  /// Moteur qui a produit le deck : "claude" | "mistral" | "gemini" | "openai" | "ollama" |
+  /// "free" | "mock" (CHECK Deck_engine_known). NULL = deck antérieur au suivi du moteur.
+  engine        String?
+  /// Deck d'entraînement (true) ou du jour J (false, y compris tous les FINAL antérieurs à 1.2).
+  /// Réservé aux decks FINAL (CHECK Deck_practice_final_only).
+  practice      Boolean        @default(false)
+  /// Départ du chrono de préparation (collage de la problématique). FINAL uniquement
+  /// (CHECK Deck_prep_started_final_only).
+  prepStartedAt DateTime?      @db.Timestamptz(3)
+  /// Rédacteur du deck ; NULL = inconnu (antérieur à 1.2) ou utilisateur supprimé.
+  createdById   String?
+  createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// Corbeille (v1.2) : NULL = deck actif.
+  deletedAt     DateTime?      @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  questions     DeckQuestion[]
+  rehearsals    Rehearsal[]
 
   /// Au plus un squelette par thème : garanti par la base, pas par le code.
   @@unique([themeId], map: "Deck_one_skeleton_per_theme", where: { kind: "SKELETON" })
@@ -178,14 +211,127 @@ model UserAiSettings {
   anthropicKeyLast4      String?  @db.VarChar(4)
   /// Version de la clé maître SETTINGS_ENCRYPTION_KEY utilisée (rotation).
   keyVersion             Int?
-  /// "claude" | "ollama" | "free" ; NULL = pas de préférence (choix par défaut).
+  /// "claude" | "mistral" | "gemini" | "openai" | "ollama" | "free" (CHECK
+  /// user_ai_settings_engine_known) ; NULL = pas de préférence (choix par défaut).
   engine                 String?
   /// Modèle Ollama (validé contre GET /api/tags à l'enregistrement). Requis si engine = 'ollama'.
   ollamaModel            String?
+  /// Origine de la clé du moteur cloud : 'user' | 'server' (CHECK user_ai_settings_key_source_known).
+  /// NULL = règle 1.1 (clé personnelle si elle existe, sinon clé serveur).
+  keySource              String?
   createdAt              DateTime @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("user_ai_settings")
+}
+
+/// Clé API d'un fournisseur cloud, CHIFFRÉE (AES-256-GCM, cf. src/server/crypto/secret-box.ts),
+/// une par (utilisateur, fournisseur). Remplace les colonnes anthropicKey* de user_ai_settings
+/// (recopiées par la migration v120_expand, supprimées en 1.3).
+/// CHECK : user_ai_credential_provider_known ('claude' | 'mistral' | 'gemini' | 'openai'),
+/// user_ai_credential_aad_scheme_known (1 | 2), user_ai_credential_ciphertext_format (`v1:…`),
+/// user_ai_credential_last4_length (= 4), user_ai_credential_key_version_positive (≥ 1),
+/// user_ai_credential_model_length (NULL ou 1..200).
+model UserAiCredential {
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String
+  /// `v1:<iv>:<tag>:<ciphertext>` (base64url). Jamais la clé en clair.
+  ciphertext String
+  /// Version de la clé maître SETTINGS_ENCRYPTION_KEY utilisée (rotation).
+  keyVersion Int
+  /// AAD du chiffrement : 1 = userId (clés recopiées de 1.1), 2 = `userId:provider`.
+  /// Pas de défaut : le code déclare toujours le schéma qu'il a utilisé.
+  aadScheme  Int
+  last4      String    @db.VarChar(4)
+  /// Modèle choisi chez ce fournisseur ; NULL = modèle par défaut du catalogue.
+  model      String?
+  /// Dernière vérification réussie de la clé auprès du fournisseur ; NULL = jamais
+  /// vérifiée depuis 1.2 (le cas des clés recopiées de 1.1).
+  verifiedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@id([userId, provider])
+  @@map("user_ai_credential")
+}
+
+/// Membre invité d'un projet. CHECK ProgramMember_role_known : 'EDITOR' | 'VIEWER'
+/// (le propriétaire est Program.ownerId, jamais une ligne ici).
+model ProgramMember {
+  programId String
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([programId, userId])
+  /// Liste des projets partagés avec un utilisateur (accessibleProgramIds).
+  @@index([userId])
+}
+
+/// Question du jury rattachée à un deck. CHECK DeckQuestion_question_length (1..1000),
+/// DeckQuestion_answer_length (≤ 4000), DeckQuestion_position_range (-1000 < position < 1000,
+/// positions négatives transitoires pendant un réordonnancement).
+model DeckQuestion {
+  id        String               @id @default(cuid())
+  deckId    String
+  deck      Deck                 @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  /// Ordre d'affichage, 0..n-1, unique par deck.
+  position  Int
+  question  String
+  answer    String
+  createdAt DateTime             @default(now()) @db.Timestamptz(3)
+  reviews   DeckQuestionReview[]
+
+  @@unique([deckId, position])
+}
+
+/// Statut d'une question pour un utilisateur (un deck partagé se révise chacun pour soi).
+/// CHECK DeckQuestionReview_status_known : 'KNOWN' | 'TO_REVIEW'.
+model DeckQuestionReview {
+  questionId String
+  question   DeckQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     String
+  updatedAt  DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@id([questionId, userId])
+}
+
+/// Répétition chronométrée d'un deck. CHECK Rehearsal_total_seconds_range (1..7200),
+/// Rehearsal_per_slide_is_array (JSON tableau des secondes par diapositive).
+model Rehearsal {
+  id           String   @id @default(cuid())
+  deckId       String
+  deck         Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalSeconds Int
+  /// Secondes passées sur chaque diapositive (validé par zod à l'écriture).
+  perSlide     Json
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([deckId, createdAt(sort: Desc)])
+}
+
+/// Trame ou apparence publiée dans la bibliothèque de l'instance (visible de tous).
+/// CHECK SharedModel_kind_known ('TEMPLATE' | 'BRAND'), SharedModel_name_length (1..120),
+/// SharedModel_payload_is_object.
+model SharedModel {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  kind      String
+  name      String
+  /// PromptTemplateSchema ou BrandSchema selon kind (validé par zod).
+  payload   Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([authorId])
 }
 
 /// Limitation de débit applicative (appels IA), fenêtre fixe par clé.

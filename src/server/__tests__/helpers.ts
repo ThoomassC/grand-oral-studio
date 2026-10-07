@@ -53,3 +53,8 @@ export async function seedDeck(
   });
   return row.id;
 }
+
+/** Invite directement un membre dans un projet (préparation des tests de partage, sans le domaine). */
+export async function seedMember(programId: string, userId: string, role: "EDITOR" | "VIEWER" = "EDITOR"): Promise<void> {
+  await db().programMember.create({ data: { programId, userId, role }, select: { programId: true } });
+}
