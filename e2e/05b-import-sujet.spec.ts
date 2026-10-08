@@ -38,14 +38,14 @@ async function uploadExampleFile(page: Page, file: string) {
   await filePanel(page).locator('input[type="file"]').setInputFiles(file);
 }
 
-/** Mode « Depuis un prompt » de l'Apparence : analyse le texte et renvoie l'aperçu. */
+/** Mode « Depuis vos consignes » de l'Apparence : analyse le texte et renvoie l'aperçu. */
 async function analyzeAppearancePrompt(page: Page, text: string) {
-  const tab = example(page).getByRole("tab", { name: "Depuis un prompt" });
+  const tab = example(page).getByRole("tab", { name: "Depuis vos consignes" });
   await waitForHydration(tab);
   await tab.click();
-  const panel = example(page).getByRole("tabpanel", { name: "Depuis un prompt" });
+  const panel = example(page).getByRole("tabpanel", { name: "Depuis vos consignes" });
   await panel.getByLabel("Description de l'apparence").fill(text);
-  await panel.getByRole("button", { name: "Analyser le prompt" }).click();
+  await panel.getByRole("button", { name: "Lire le texte" }).click();
   return panel;
 }
 
@@ -60,7 +60,7 @@ async function analyzeSubjectsPrompt(page: Page, programId: string, text: string
   const field = block.getByLabel("Vos sujets ou vos consignes");
   await waitForHydration(field);
   await field.fill(text);
-  await block.getByRole("button", { name: "Analyser le prompt" }).click();
+  await block.getByRole("button", { name: "Lire le texte" }).click();
   const preview = block.getByRole("region", { name: "Sujets proposés" });
   await expect(preview).toBeVisible();
   return preview;
@@ -251,7 +251,7 @@ test.describe("5. Sujets — importer des sujets depuis un texte", () => {
     const field = block.getByLabel("Vos sujets ou vos consignes");
     await waitForHydration(field);
     await field.fill("Bonjour, ceci est un texte sans aucune information utile pour l'oral.");
-    await block.getByRole("button", { name: "Analyser le prompt" }).click();
+    await block.getByRole("button", { name: "Lire le texte" }).click();
     await expect(block.getByText("Aucun sujet reconnu dans ce texte.")).toBeVisible();
   });
 });

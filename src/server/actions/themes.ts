@@ -1,6 +1,6 @@
 "use server";
 
-import type { z } from "zod";
+import { z } from "zod";
 import { ThemeInputSchema } from "@/domain/schemas";
 import { ValidationError } from "../errors";
 import * as repo from "../repo/themes";
@@ -13,6 +13,9 @@ import { runAction } from "./run";
 
 type ThemeFormInput = z.input<typeof ThemeInputSchema>;
 
+/** Jeton de concurrence optimiste : `updatedAt` (ISO) du sujet reçu au chargement ; absent = pas de contrôle. */
+const UpdatedAtTokenSchema = z.iso.datetime({ offset: true }).optional();
+
 export async function addTheme(programId: string, input: ThemeFormInput): Promise<ActionResult<ThemeView>> {
   return runAction("addTheme", async ({ user }) => {
     const id = parseInput(IdSchema, programId);
@@ -23,11 +26,22 @@ export async function addTheme(programId: string, input: ThemeFormInput): Promis
   });
 }
 
-export async function updateTheme(themeId: string, input: ThemeFormInput): Promise<ActionResult<ThemeView>> {
+/**
+ * Enregistre un sujet. `expectedUpdatedAt` périmé (sujet enregistré entre-temps) → échec
+ * CONFLICT qui invite à recharger. Le sujet renvoyé porte la nouvelle version (`updatedAt`).
+ */
+export async function updateTheme(
+  themeId: string,
+  input: ThemeFormInput,
+  expectedUpdatedAt?: string,
+): Promise<ActionResult<ThemeView>> {
   return runAction("updateTheme", async ({ user }) => {
     const id = parseInput(IdSchema, themeId);
     const theme = parseInput(ThemeInputSchema, input);
-    const updated = await repo.updateTheme(user.id, id, theme);
+    const expected = UpdatedAtTokenSchema.safeParse(expectedUpdatedAt);
+    // Jeton forgé ou abîmé : on n'écrit pas à l'aveugle.
+    if (!expected.success) throw new ValidationError("La version de la page est illisible. Rechargez la page.");
+    const updated = await repo.updateTheme(user.id, id, theme, expected.data);
     revalidatePrograms(updated.programId);
     return updated;
   });

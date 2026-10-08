@@ -19,7 +19,15 @@ export default async function TemplatePage({ params }: PageProps<"/projets/[id]/
           problématique tirée au sort.
         </p>
       </div>
-      <TemplateWorkspace programId={program.id} initialTemplate={program.template} />
+      {/* Lecteur : la trame en lecture seule (le serveur refuse de toute façon ses modifications). */}
+      <TemplateWorkspace
+        programId={program.id}
+        initialTemplate={program.template}
+        savedAt={program.templateSavedAt}
+        readOnly={program.role === "viewer"}
+        // Publier dans la bibliothèque : propriétaire seul (le serveur refuse un éditeur).
+        canPublish={program.role === "owner"}
+      />
     </div>
   );
 }

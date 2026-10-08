@@ -71,8 +71,23 @@ export function pageHref(programId: string, id: PageId): string {
   return hrefOf(programId, PAGE_ORDER.find((p) => p.id === id)!.segment);
 }
 
+/** Le Jour J en mode entraînement (diaporama d'entraînement, hors jour J). */
+export function practiceHref(programId: string): string {
+  return `${stepHref(programId, "day")}?mode=entrainement`;
+}
+
 export function decksHref(programId: string): string {
   return hrefOf(programId, "decks");
+}
+
+/** Fiche de révision imprimable d'un sujet. */
+export function revisionSheetHref(programId: string, themeId: string): string {
+  return hrefOf(programId, `sujets/${themeId}/fiche`);
+}
+
+/** Page Partage (membres du projet). */
+export function shareHref(programId: string): string {
+  return hrefOf(programId, "partage");
 }
 
 function under(pathname: string, href: string): boolean {

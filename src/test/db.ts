@@ -24,7 +24,7 @@ export function assertTestDatabase(): void {
 export async function resetDatabase(): Promise<void> {
   assertTestDatabase();
   await db().$executeRawUnsafe(
-    `TRUNCATE TABLE "Deck", "Theme", "Program", "usage_window", "user_ai_settings", "session", "account", "verification", "rateLimit", "user" RESTART IDENTITY CASCADE`,
+    `TRUNCATE TABLE "DeckQuestionReview", "DeckQuestion", "Rehearsal", "ProgramMember", "SharedModel", "Deck", "Theme", "Program", "usage_window", "user_ai_credential", "user_ai_settings", "session", "account", "verification", "rateLimit", "user" RESTART IDENTITY CASCADE`,
   );
 }
 

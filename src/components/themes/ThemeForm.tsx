@@ -16,6 +16,7 @@ import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
 import { KeywordInput } from "./KeywordInput";
 
 const NOTES_MAX = LIMITS.subjectNotes;
+const PROBLEMS_MAX = LIMITS.subjectProblems;
 /** Seuil d'avertissement des notes : 90 % de la limite. */
 const NOTES_NEAR = Math.ceil(NOTES_MAX * 0.9);
 
@@ -47,7 +48,25 @@ interface ThemeFormProps {
   nameId?: string;
 }
 
-const EMPTY: ThemeInput = { name: "", description: "", keywords: [], notes: "" };
+const EMPTY: ThemeInput = { name: "", description: "", keywords: [], notes: "", problems: [] };
+
+/** Une problématique par ligne non vide, espaces de bord retirés. */
+function parseProblems(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/** Erreur de la liste (`problems`) ou d'une problématique précise (`problems.3`), avec son rang. */
+function problemsError(errors: FieldErrors): string | undefined {
+  const list = firstError(errors, "problems");
+  if (list) return list;
+  const entry = Object.entries(errors).find(([k]) => /^problems\.\d+$/.test(k));
+  if (!entry) return undefined;
+  const index = Number(entry[0].split(".")[1]);
+  return `Problématique ${index + 1} : ${entry[1][0] ?? "valeur invalide"}`;
+}
 
 /** Première erreur portant sur un mot-clé précis (`keywords.3`), avec son rang. */
 function keywordItemError(errors: FieldErrors): string | undefined {
@@ -76,6 +95,9 @@ export function ThemeForm({
     notes: `${generatedId}-notes`,
     notesHint: `${generatedId}-notes-hint`,
     notesCount: `${generatedId}-notes-count`,
+    problems: `${generatedId}-problems`,
+    problemsHint: `${generatedId}-problems-hint`,
+    problemsCount: `${generatedId}-problems-count`,
   };
   const formRef = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -83,25 +105,31 @@ export function ThemeForm({
   const [description, setDescription] = useState(initial.description);
   const [keywords, setKeywords] = useState<string[]>(initial.keywords);
   const [notes, setNotes] = useState(initial.notes);
+  /** Saisie brute (une problématique par ligne), découpée à l'envoi seulement. */
+  const [problemsText, setProblemsText] = useState((initial.problems ?? []).join("\n"));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<FormStatusState>(IDLE);
   const [pending, startTransition] = useTransition();
   /** Dernière saisie enregistrée (ou l'état initial) : la référence des modifications non enregistrées. */
   const [baseline, setBaseline] = useState<ThemeInput>(initial);
+  const problems = parseProblems(problemsText);
   const dirty =
     name !== baseline.name ||
     description !== baseline.description ||
     notes !== baseline.notes ||
-    JSON.stringify(keywords) !== JSON.stringify(baseline.keywords);
+    JSON.stringify(keywords) !== JSON.stringify(baseline.keywords) ||
+    JSON.stringify(problems) !== JSON.stringify(baseline.problems ?? []);
   useUnsavedChanges(dirty);
 
   const keywordError = firstError(fieldErrors, "keywords") ?? keywordItemError(fieldErrors);
+  const problemError = problemsError(fieldErrors);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (pending) return;
     setStatus(IDLE);
-    const checked = validateWith(ThemeInputSchema, { name, description, keywords, notes });
+    // Toujours envoyées, même vides : une liste vidée efface les problématiques enregistrées.
+    const checked = validateWith(ThemeInputSchema, { name, description, keywords, notes, problems });
     if (!checked.ok) {
       setFieldErrors(checked.fieldErrors);
       setStatus({ kind: "error", message: invalidCountMessage(countFieldErrors(checked.fieldErrors)) });
@@ -109,7 +137,7 @@ export function ThemeForm({
       return;
     }
     setFieldErrors({});
-    const submitted: ThemeInput = { name, description, keywords, notes };
+    const submitted: ThemeInput = { name, description, keywords, notes, problems };
     startTransition(async () => {
       let result: ActionResult<unknown>;
       try {
@@ -132,6 +160,7 @@ export function ThemeForm({
         setDescription("");
         setKeywords([]);
         setNotes("");
+        setProblemsText("");
         nameRef.current?.focus();
       }
       onSaved?.(checked.data.name);
@@ -213,6 +242,29 @@ export function ThemeForm({
         </p>
         <LiveRegion className="opale-field__helper font-semibold">{notesLimitMessage(notes.length)}</LiveRegion>
         <FieldError id={`${ids.notes}-err`} message={firstError(fieldErrors, "notes")} />
+      </div>
+      <div>
+        <label htmlFor={ids.problems} className="opale-field__label">
+          Problématiques possibles <span className="font-normal text-muted">(facultatif)</span>
+        </label>
+        <TextArea
+          id={ids.problems}
+          rows={4}
+          value={problemsText}
+          onChange={(e) => setProblemsText(e.target.value)}
+          aria-invalid={Boolean(problemError)}
+          aria-describedby={[ids.problemsHint, ids.problemsCount, problemError ? `${ids.problems}-err` : null]
+            .filter(Boolean)
+            .join(" ")}
+        />
+        <p id={ids.problemsHint} className="opale-field__helper">
+          Une par ligne : {PROBLEMS_MAX} au plus, de {formatCount(LIMITS.subjectProblemMin)} à{" "}
+          {formatCount(LIMITS.subjectProblemMax)} caractères chacune. Elles servent à vous entraîner sur ce sujet.
+        </p>
+        <p id={ids.problemsCount} className="opale-field__helper num">
+          {`${problems.length} / ${PROBLEMS_MAX} problématiques`}
+        </p>
+        <FieldError id={`${ids.problems}-err`} message={problemError} />
       </div>
       <FormStatus state={status} />
       <div className="flex flex-wrap gap-2">

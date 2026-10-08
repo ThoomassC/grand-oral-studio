@@ -3,6 +3,7 @@ import {
   assessFinalDeck,
   enforceProblem,
   finalDeckReview,
+  finalDeckReviewItems,
   findUnsourcedFigures,
   pickBetterDeck,
   qualityFeedback,
@@ -347,5 +348,61 @@ describe("finalDeckReview — avertissements affichés à la relecture du deck f
 
   it("ne devrait rien signaler pour un deck conforme", () => {
     expect(finalDeckReview(goodGreenItDeck(), CTX)).toEqual([]);
+  });
+});
+
+describe("finalDeckReviewItems — avertissements reliés à leurs diapos", () => {
+  const ctx = { template: makeTemplate(), problem: "Comment concilier mobilité et sobriété en ville" };
+  /** Notes d'orateur rédigées (plus de huit mots) : aucune alerte « notes à réécrire ». */
+  const spoken = (deck: DeckSpec): DeckSpec => ({
+    ...deck,
+    slides: deck.slides.map((s, i) => ({
+      ...s,
+      notes: `[0:${String(i).padStart(2, "0")}] Je développe ici une idée propre à la diapo numéro ${i + 1}, pour la mobilité et la sobriété en ville.`,
+    })),
+  });
+
+  it("devrait renvoyer les mêmes messages que finalDeckReview, dans le même ordre", () => {
+    const items = finalDeckReviewItems(GREEN_IT_FINAL, CTX);
+    expect(items.map((i) => i.message)).toEqual(finalDeckReview(GREEN_IT_FINAL, CTX));
+  });
+
+  it("devrait relier une section au mauvais nombre de diapos aux diapos de cette section", () => {
+    const deck = spoken(makeConformingDeck());
+    deck.slides = deck.slides.filter((_, i) => i !== 7); // une diapo du second axe en moins (diapos 6 à 8)
+    const items = finalDeckReviewItems(deck, ctx);
+    expect(items).toContainEqual({ message: "La section « Second axe » compte 2 diapo(s) au lieu de 3.", slides: [6, 7] });
+  });
+
+  it("devrait relier une section absente à aucune diapo", () => {
+    const deck = spoken(makeConformingDeck());
+    deck.slides = deck.slides.filter((s) => s.sectionId !== "problem");
+    expect(finalDeckReviewItems(deck, ctx)).toContainEqual({ message: "La section « Problématique » est absente du diaporama.", slides: [] });
+  });
+
+  it("devrait relier un chiffre sans source à sa diapo", () => {
+    const deck = spoken(makeConformingDeck());
+    deck.slides[3] = { ...deck.slides[3]!, bullets: ["La voiture pèse 63 % des trajets"] };
+    const item = finalDeckReviewItems(deck, ctx).find((i) => i.message.startsWith("Chiffre sans source"));
+    expect(item?.slides).toEqual([4]);
+  });
+
+  it("devrait relier les notes trop courtes aux diapos à réécrire", () => {
+    const deck = makeConformingDeck(); // notes de consigne : « Partir d'une situation vécue. »
+    const item = finalDeckReviewItems(deck, ctx).find((i) => i.message.startsWith("Notes d'orateur"));
+    expect(item?.slides).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("devrait relier une conclusion hors problématique aux diapos de conclusion", () => {
+    const deck = spoken(makeConformingDeck());
+    deck.slides[8] = { ...deck.slides[8]!, title: "Merci", bullets: ["Questions"], notes: "[19:00] Merci pour votre attention, je suis prêt à répondre à vos questions maintenant." };
+    const item = finalDeckReviewItems(deck, { ...ctx, problem: "Faut-il taxer le kérosène des avions long-courriers" }).find((i) =>
+      i.message.startsWith("La conclusion"),
+    );
+    expect(item?.slides).toEqual([9]);
+  });
+
+  it("ne devrait rien renvoyer pour un deck conforme", () => {
+    expect(finalDeckReviewItems(goodGreenItDeck(), CTX)).toEqual([]);
   });
 });

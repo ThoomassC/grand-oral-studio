@@ -1,0 +1,34 @@
+/*
+ * Impression des fiches (fiche de révision d'un sujet, notes d'orateur d'un
+ * diaporama) : seule la fiche part à l'imprimante, en noir sur blanc quel que
+ * soit le thème du site. Toutes les règles sont conditionnées à la présence de
+ * `.print-sheet` dans la page (:has) : sans effet sur les autres écrans, même
+ * une fois la feuille chargée par le routeur.
+ */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  /* Tout ce qui n'est ni la fiche, ni un de ses ancêtres, ni dans la fiche : en-tête du site, fil d'Ariane, étapes… */
+  body:has(.print-sheet) :not(:has(.print-sheet)):not(.print-sheet):not(.print-sheet *) {
+    display: none !important;
+  }
+
+  /* Les ancêtres de la fiche ne gardent ni marge, ni cadre, ni fond. */
+  body:has(.print-sheet) :has(.print-sheet) {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    max-width: none !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}

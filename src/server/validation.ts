@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { KeySourceSchema, SELECTABLE_PROVIDERS } from "@/domain/ai-providers";
+import { MAX_PREP_STATE_AGE_MS } from "@/domain/prep-clock";
 import { stripControlChars, ThemeInputSchema } from "@/domain/schemas";
 import { DataIntegrityError, ValidationError } from "./errors";
 
@@ -105,3 +107,51 @@ export const ThemeListImportSchema = z.object({
 export const ThemeIdListSchema = z.array(IdSchema).min(1).max(MAX_THEMES_PER_PROGRAM);
 
 export const SlideIndexSchema = z.number().int().min(0).max(59);
+
+// ---------------------------------------------------------------------------
+// Génération du jour J : options de l'action
+// ---------------------------------------------------------------------------
+
+/**
+ * Choix ponctuel du rédacteur pour UNE génération (repli en un clic) : « Sans
+ * IA », ou un fournisseur PROPOSÉ (Mistral, Gemini) avec l'origine de sa clé.
+ * Ni Ollama (il se choisit dans la Rédaction IA), ni Claude ou OpenAI (plus
+ * proposés depuis la 1.2). Même forme que EngineOverride.
+ */
+export const EngineOverrideSchema = z.discriminatedUnion(
+  "engine",
+  [
+    z.object({ engine: z.literal("free") }).strict(),
+    z.object({ engine: z.enum(SELECTABLE_PROVIDERS), keySource: KeySourceSchema }).strict(),
+  ],
+  { error: "Rédacteur inconnu." },
+);
+
+/** Départ du chrono de préparation : au plus 6 h avant maintenant (cf. MAX_PREP_STATE_AGE_MS). */
+export const PREP_STARTED_MAX_AGE_MS = MAX_PREP_STATE_AGE_MS;
+/** Avance tolérée de l'horloge du navigateur sur celle du serveur : ramenée à maintenant. */
+export const PREP_STARTED_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export const GenerationOptionsSchema = z
+  .object({
+    practice: z.boolean().default(false),
+    /** ISO 8601 (avec fuseau) ou null. */
+    prepStartedAt: z.iso.datetime({ offset: true, error: "Heure de départ du chrono illisible." }).nullable().default(null),
+    override: EngineOverrideSchema.nullable().default(null),
+  })
+  .strict();
+export type GenerationOptionsInput = z.input<typeof GenerationOptionsSchema>;
+
+/**
+ * Borne le départ du chrono : dans le futur au-delà de l'avance tolérée, ou plus
+ * vieux que 6 h → ignoré (null) ; légèrement en avance → maintenant. Une
+ * horloge de navigateur décalée ne doit jamais bloquer la génération du jour J.
+ */
+export function boundPrepStartedAt(iso: string | null, now: Date): Date | null {
+  if (iso === null) return null;
+  const at = new Date(iso);
+  const t = at.getTime();
+  const n = now.getTime();
+  if (!Number.isFinite(t) || t < n - PREP_STARTED_MAX_AGE_MS || t > n + PREP_STARTED_CLOCK_SKEW_MS) return null;
+  return t > n ? new Date(n) : at;
+}

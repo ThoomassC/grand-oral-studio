@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultBrand, defaultTemplate } from "@/domain/defaults";
 import { RETIRED_FORMAT_MESSAGE } from "@/domain/import/file-kind";
+import { BRAND_FILE_TOO_LARGE_MESSAGE } from "@/domain/import/limits";
 import type { PromptTemplate } from "@/domain/schemas";
 import { buildPptx, buildThmx, FAKE_PDF, JPEG_HEADER, PNG_1PX } from "@/domain/import/__tests__/fixtures";
 import { NotFoundError, RateLimitedError, ValidationError } from "@/server/errors";
@@ -118,9 +119,12 @@ describe("analyzeBrandFile — refus", () => {
     expect(calls).toEqual(["import"]);
   });
 
-  it("devrait refuser un fichier de plus de 20 Mo sans le lire", async () => {
-    const f = { name: "gros.pptx", size: 20 * 1024 * 1024 + 1, reads: 0, bytes: vi.fn() };
-    await expect(analyzeBrandFile("user-a", "p", f, deps(fakeQuotas().quotas).deps)).rejects.toBeInstanceOf(ValidationError);
+  it("devrait refuser un fichier de plus de 4 Mo sans le lire, avec le message partagé", async () => {
+    const f = { name: "gros.pptx", size: 4 * 1024 * 1024 + 1, reads: 0, bytes: vi.fn() };
+    const error = await analyzeBrandFile("user-a", "p", f, deps(fakeQuotas().quotas).deps).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).userMessage).toBe(BRAND_FILE_TOO_LARGE_MESSAGE);
+    expect((error as ValidationError).fieldErrors).toEqual({ file: [BRAND_FILE_TOO_LARGE_MESSAGE] });
     expect(f.bytes).not.toHaveBeenCalled();
   });
 

@@ -14,6 +14,14 @@ vi.mock("@/server/actions/programs", () => ({
   updateBrand: vi.fn(),
   updateTemplate: (...args: unknown[]) => update(...args),
 }));
+// Bibliothèque de l'équipe, sous l'éditeur (TemplateWorkspace) : hors du sujet de ces tests.
+vi.mock("@/server/actions/shared-models", () => ({
+  publishModel: vi.fn(),
+  listSharedModels: vi.fn(),
+  applyModel: vi.fn(),
+  deleteModel: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/trame", useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 const { TemplateWorkspace } = await import("@/components/template/TemplateWorkspace");
 
@@ -36,7 +44,7 @@ function renderWorkspace() {
   return render(<TemplateWorkspace programId="p1" initialTemplate={defaultTemplate()} />);
 }
 
-const textarea = () => screen.getByLabelText("Consignes ou prompt");
+const textarea = () => screen.getByLabelText("Vos consignes (texte collé)");
 
 afterEach(() => {
   cleanup();
@@ -59,7 +67,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
     renderWorkspace();
     await user.click(textarea());
     await user.paste(PROMPT);
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
 
     expect(analyze).toHaveBeenCalledWith("p1", { text: PROMPT });
     const heading = await screen.findByRole("heading", { name: "Trame proposée" });
@@ -86,7 +94,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
     renderWorkspace();
     await user.click(textarea());
     await user.paste(PROMPT);
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     const preview = await screen.findByRole("region", { name: "Trame proposée" });
 
     const recognized = within(preview).getByRole("list", { name: "Trouvé dans le texte" });
@@ -116,7 +124,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
       renderWorkspace();
       await user.click(textarea());
       await user.paste(PROMPT);
-      await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+      await user.click(screen.getByRole("button", { name: "Lire le texte" }));
       const preview = await screen.findByRole("region", { name: "Trame proposée" });
       expect(within(preview).getAllByText(twice)).toHaveLength(1);
       expect(within(preview).getByText("Autre avertissement.")).toBeInTheDocument();
@@ -140,7 +148,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
     renderWorkspace();
     await user.click(textarea());
     await user.paste(PROMPT);
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     await user.click(await screen.findByRole("button", { name: "Appliquer à la trame" }));
 
     expect(screen.getByLabelText("Durée de l'oral (minutes)")).toHaveValue(25);
@@ -176,7 +184,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
   it("devrait refuser un champ vide sans appeler le serveur", async () => {
     const user = userEvent.setup();
     renderWorkspace();
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     expect(await screen.findByText("Collez les consignes à analyser.")).toBeInTheDocument();
     expect(textarea()).toHaveAttribute("aria-invalid", "true");
     expect(analyze).not.toHaveBeenCalled();
@@ -191,7 +199,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
     renderWorkspace();
     await user.click(textarea());
     await user.paste("Bonjour");
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     expect(await screen.findByText("Aucun réglage reconnu dans ce texte.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Appliquer à la trame" })).not.toBeInTheDocument();
   });
@@ -203,11 +211,11 @@ describe("Préremplissage de la trame avec un prompt", () => {
     });
     const user = userEvent.setup();
     renderWorkspace();
-    const region = screen.getByRole("region", { name: "Préremplir avec un prompt" });
+    const region = screen.getByRole("region", { name: "Préremplir depuis vos consignes" });
     expect(region).toHaveTextContent("Rien n'est envoyé à une IA.");
     await user.click(textarea());
     await user.paste(PROMPT);
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     const preview = await screen.findByRole("region", { name: "Trame proposée" });
     expect(preview.textContent).not.toMatch(/IA|mots-clés/);
     expect(region.textContent).not.toMatch(/Analysé par l'IA|moteur|Claude/);
@@ -229,7 +237,7 @@ describe("Préremplissage de la trame avec un prompt", () => {
     renderWorkspace();
     await user.click(textarea());
     await user.paste(PROMPT);
-    await user.click(screen.getByRole("button", { name: "Analyser le prompt" }));
+    await user.click(screen.getByRole("button", { name: "Lire le texte" }));
     const preview = await screen.findByRole("region", { name: "Trame proposée" });
     const lines = within(preview).getByRole("list", { name: /Lignes/ });
     const items = within(lines).getAllByRole("listitem");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import nextConfig, { SERVER_ACTION_BODY_LIMIT } from "../../../next.config";
-import { BRAND_FILE_MAX_BYTES } from "@/server/services/imports";
+import { BRAND_FILE_MAX_BYTES } from "@/domain/import/limits";
 import { assertAiProviderEnv } from "@/server/ai/resolve";
 
 describe("next.config", () => {
@@ -9,12 +9,13 @@ describe("next.config", () => {
     expect(nextConfig.logging).toMatchObject({ serverFunctions: false });
   });
 
-  it("devrait accepter un fichier importé de 20 Mo dans une Server Action, avec une marge d'au plus 1 Mo", () => {
+  it("devrait accepter un fichier importé de 4 Mo dans une Server Action, avec une marge d'au plus 1 Mo", () => {
     const mb = /^(\d+)mb$/.exec(SERVER_ACTION_BODY_LIMIT);
     expect(mb).not.toBeNull();
     const limit = Number(mb![1]) * 1024 * 1024;
     expect(limit).toBeGreaterThan(BRAND_FILE_MAX_BYTES);
     expect(limit - BRAND_FILE_MAX_BYTES).toBeLessThanOrEqual(1024 * 1024);
+    expect(BRAND_FILE_MAX_BYTES).toBe(4 * 1024 * 1024);
     expect(nextConfig.experimental?.serverActions?.bodySizeLimit).toBe(SERVER_ACTION_BODY_LIMIT);
     // Le proxy (/projets/**) tamponne le corps : sa limite doit suivre, sinon le fichier arrive tronqué.
     expect(nextConfig.experimental?.proxyClientMaxBodySize).toBe(SERVER_ACTION_BODY_LIMIT);

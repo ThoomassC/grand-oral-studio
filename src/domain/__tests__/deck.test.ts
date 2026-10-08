@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { checkDeckAgainstTemplate, isThinNotes, replaceSlide } from "@/domain/deck";
+import {
+  checkDeckAgainstTemplate,
+  DeckEditError,
+  duplicateDeckSpec,
+  insertSlide,
+  isThinNotes,
+  MAX_DECK_SLIDES,
+  MIN_DECK_SLIDES,
+  moveSlide,
+  removeSlide,
+  replaceSlide,
+} from "@/domain/deck";
 import type { DeckSpec, Slide } from "@/domain/schemas";
 import { makeConformingDeck, makeTemplate } from "@/test/fixtures";
 
@@ -106,5 +117,142 @@ describe("checkDeckAgainstTemplate — vocabulaire", () => {
     const issues = checkDeckAgainstTemplate(shuffled, makeTemplate()).join(" ");
     expect(issues).toMatch(/trame/);
     expect(issues).not.toMatch(/gabarit/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Édition structurelle (v1.2)
+// ---------------------------------------------------------------------------
+
+function deckOf(count: number, withCover = true): DeckSpec {
+  return {
+    title: "Deck d'essai",
+    subtitle: "",
+    slides: Array.from({ length: count }, (_, i) => ({
+      ...newSlide,
+      layout: withCover && i === 0 ? ("title" as const) : ("content" as const),
+      sectionId: withCover && i === 0 ? "cover" : "part1",
+      title: `Diapo ${i + 1}`,
+    })),
+  };
+}
+
+function titles(deck: DeckSpec): string[] {
+  return deck.slides.map((s) => s.title);
+}
+
+describe("bornes du diaporama", () => {
+  it("devrait exposer 2 et 60 diapos comme bornes", () => {
+    expect(MIN_DECK_SLIDES).toBe(2);
+    expect(MAX_DECK_SLIDES).toBe(60);
+  });
+});
+
+describe("insertSlide", () => {
+  it("devrait insérer la diapo à l'index donné et décaler la suite", () => {
+    const result = insertSlide(deckOf(3), 1, { ...newSlide, title: "Insérée" });
+    expect(titles(result)).toEqual(["Diapo 1", "Insérée", "Diapo 2", "Diapo 3"]);
+  });
+
+  it("devrait accepter l'insertion en fin de diaporama quand l'index vaut la longueur", () => {
+    const result = insertSlide(deckOf(3), 3, { ...newSlide, title: "Fin" });
+    expect(titles(result)).toEqual(["Diapo 1", "Diapo 2", "Diapo 3", "Fin"]);
+  });
+
+  it("ne devrait pas muter le deck reçu", () => {
+    const deck = makeConformingDeck();
+    insertSlide(deck, 2, newSlide);
+    expect(deck).toEqual(makeConformingDeck());
+  });
+
+  it("devrait refuser une 61e diapo avec le code TOO_MANY_SLIDES", () => {
+    expect(() => insertSlide(deckOf(60), 5, newSlide)).toThrow(expect.objectContaining({ code: "TOO_MANY_SLIDES" }));
+  });
+
+  it("devrait refuser l'insertion avant la couverture avec le code COVER_LOCKED", () => {
+    expect(() => insertSlide(deckOf(3), 0, newSlide)).toThrow(expect.objectContaining({ code: "COVER_LOCKED" }));
+  });
+
+  it("devrait accepter l'index 0 quand le deck n'a pas de couverture", () => {
+    expect(titles(insertSlide(deckOf(2, false), 0, { ...newSlide, title: "Tête" }))[0]).toBe("Tête");
+  });
+
+  it.each([-1, 4, 1.5, Number.NaN])("devrait lever une DeckEditError INDEX_OUT_OF_RANGE quand l'index vaut %s", (index) => {
+    const act = () => insertSlide(deckOf(3), index, newSlide);
+    expect(act).toThrow(DeckEditError);
+    expect(act).toThrow(RangeError);
+    expect(act).toThrow(expect.objectContaining({ code: "INDEX_OUT_OF_RANGE" }));
+  });
+});
+
+describe("removeSlide", () => {
+  it("devrait retirer la diapo à l'index donné", () => {
+    expect(titles(removeSlide(deckOf(4), 2))).toEqual(["Diapo 1", "Diapo 2", "Diapo 4"]);
+  });
+
+  it("ne devrait pas muter le deck reçu", () => {
+    const deck = makeConformingDeck();
+    removeSlide(deck, 4);
+    expect(deck).toEqual(makeConformingDeck());
+  });
+
+  it("devrait refuser de descendre sous 2 diapos avec le code TOO_FEW_SLIDES", () => {
+    expect(() => removeSlide(deckOf(2), 1)).toThrow(expect.objectContaining({ code: "TOO_FEW_SLIDES" }));
+  });
+
+  it("devrait refuser de retirer la couverture avec le code COVER_LOCKED", () => {
+    expect(() => removeSlide(deckOf(4), 0)).toThrow(expect.objectContaining({ code: "COVER_LOCKED" }));
+  });
+
+  it.each([-1, 4])("devrait lever INDEX_OUT_OF_RANGE quand l'index vaut %s", (index) => {
+    expect(() => removeSlide(deckOf(4), index)).toThrow(expect.objectContaining({ code: "INDEX_OUT_OF_RANGE" }));
+  });
+});
+
+describe("moveSlide", () => {
+  it("devrait déplacer une diapo vers l'arrière", () => {
+    expect(titles(moveSlide(deckOf(5), 1, 3))).toEqual(["Diapo 1", "Diapo 3", "Diapo 4", "Diapo 2", "Diapo 5"]);
+  });
+
+  it("devrait déplacer une diapo vers l'avant", () => {
+    expect(titles(moveSlide(deckOf(5), 4, 1))).toEqual(["Diapo 1", "Diapo 5", "Diapo 2", "Diapo 3", "Diapo 4"]);
+  });
+
+  it("devrait renvoyer un deck identique quand l'origine égale la destination", () => {
+    expect(moveSlide(deckOf(3), 2, 2)).toEqual(deckOf(3));
+  });
+
+  it("ne devrait pas muter le deck reçu", () => {
+    const deck = makeConformingDeck();
+    moveSlide(deck, 1, 5);
+    expect(deck).toEqual(makeConformingDeck());
+  });
+
+  it.each([
+    { from: 0, to: 2 },
+    { from: 2, to: 0 },
+  ])("devrait refuser de déplacer autour de la couverture ($from → $to) avec COVER_LOCKED", ({ from, to }) => {
+    expect(() => moveSlide(deckOf(4), from, to)).toThrow(expect.objectContaining({ code: "COVER_LOCKED" }));
+  });
+
+  it.each([
+    { from: -1, to: 1 },
+    { from: 1, to: 4 },
+  ])("devrait lever INDEX_OUT_OF_RANGE quand $from → $to sort des bornes", ({ from, to }) => {
+    expect(() => moveSlide(deckOf(4), from, to)).toThrow(expect.objectContaining({ code: "INDEX_OUT_OF_RANGE" }));
+  });
+});
+
+describe("duplicateDeckSpec", () => {
+  it("devrait renvoyer une copie égale au deck d'origine", () => {
+    expect(duplicateDeckSpec(makeConformingDeck())).toEqual(makeConformingDeck());
+  });
+
+  it("ne devrait partager aucun tableau ni objet avec l'original", () => {
+    const deck = makeConformingDeck();
+    const copy = duplicateDeckSpec(deck);
+    expect(copy.slides).not.toBe(deck.slides);
+    expect(copy.slides[1]).not.toBe(deck.slides[1]);
+    expect(copy.slides[1]!.bullets).not.toBe(deck.slides[1]!.bullets);
   });
 });

@@ -12,6 +12,11 @@ vi.mock("@/server/actions/programs", () => ({
 
 const { TemplateEditor } = await import("@/components/template/TemplateEditor");
 
+/** Versions (templateSavedAt) de la trame : chargée avec la page, puis renvoyées par les enregistrements. */
+const V0 = "2026-10-01T08:00:00.000Z";
+const V1 = "2026-10-01T08:05:00.000Z";
+const V2 = "2026-10-01T08:06:00.000Z";
+
 const TIMED: PromptTemplate = {
   ...defaultTemplate(),
   durationMinutes: 20,
@@ -97,7 +102,7 @@ describe("Éditeur de trame — lignes et contenu type", () => {
 
 describe("Éditeur de trame — durée par ligne", () => {
   it("devrait enregistrer « 3:30 » comme 210 secondes, sans durée pour les lignes vides", async () => {
-    update.mockResolvedValue({ ok: true, data: null });
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
     const user = userEvent.setup();
     renderEditor(TIMED);
     const duration = within(line(1)).getByLabelText("Durée de la ligne 1");
@@ -117,7 +122,7 @@ describe("Éditeur de trame — durée par ligne", () => {
   });
 
   it("devrait réécrire « 3 min » en « 3:00 » après l'enregistrement", async () => {
-    update.mockResolvedValue({ ok: true, data: null });
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
     const user = userEvent.setup();
     renderEditor(TIMED);
     const duration = within(line(2)).getByLabelText("Durée de la ligne 2");
@@ -129,7 +134,7 @@ describe("Éditeur de trame — durée par ligne", () => {
   });
 
   it("devrait retirer la durée d'une ligne dont le champ est vidé", async () => {
-    update.mockResolvedValue({ ok: true, data: null });
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
     const user = userEvent.setup();
     renderEditor(TIMED);
     await user.clear(within(line(1)).getByLabelText("Durée de la ligne 1"));
@@ -191,7 +196,7 @@ describe("Éditeur de trame — ajout, suppression, ordre", () => {
   });
 
   it("devrait déplacer une ligne avec sa durée et l'annoncer", async () => {
-    update.mockResolvedValue({ ok: true, data: null });
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
     const user = userEvent.setup();
     renderEditor(TIMED);
     await user.click(screen.getByRole("button", { name: "Descendre la ligne 1 (Contexte)" }));
@@ -228,6 +233,97 @@ describe("Éditeur de trame — ajout, suppression, ordre", () => {
     expect(within(line(1)).getByLabelText("Titre de la ligne 1")).toHaveValue("Introduction");
     expect(within(line(1)).getByLabelText("Durée de la ligne 1")).toHaveValue("");
     expect(screen.getByText("Trame par défaut chargée. Enregistrez pour l'appliquer.")).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("Éditeur de trame — concurrence optimiste", () => {
+  it("devrait renvoyer la version reçue au chargement, puis celle du dernier enregistrement", async () => {
+    update
+      .mockResolvedValueOnce({ ok: true, data: { templateSavedAt: V1 } })
+      .mockResolvedValueOnce({ ok: true, data: { templateSavedAt: V2 } });
+    const user = userEvent.setup();
+    render(<TemplateEditor programId="p1" initialTemplate={TIMED} savedAt={V0} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await screen.findByText("Trame enregistrée.");
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
+  });
+
+  it("devrait envoyer null pour une trame jamais enregistrée", async () => {
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
+    const user = userEvent.setup();
+    render(<TemplateEditor programId="p1" initialTemplate={TIMED} savedAt={null} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await screen.findByText("Trame enregistrée.");
+    expect(update.mock.calls[0]?.[2]).toBeNull();
+  });
+
+  it("devrait afficher le conflit et garder la saisie quand la trame a changé entre-temps", async () => {
+    const conflict = "La trame a été modifiée entre-temps (autre onglet ou autre membre du projet). Rechargez la page.";
+    update.mockResolvedValue({ ok: false, error: conflict, code: "CONFLICT" });
+    const user = userEvent.setup();
+    render(<TemplateEditor programId="p1" initialTemplate={TIMED} savedAt={V0} />);
+    const title = within(line(1)).getByLabelText("Titre de la ligne 1");
+    await user.clear(title);
+    await user.type(title, "Ma ligne");
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    expect(await screen.findByText(conflict)).toBeInTheDocument();
+    expect(title).toHaveValue("Ma ligne");
+  });
+
+  it("ne devrait pas reprendre une version serveur dont la trame diffère de celle tenue pour enregistrée", async () => {
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V2 } });
+    const user = userEvent.setup();
+    const { rerender } = render(<TemplateEditor programId="p1" initialTemplate={TIMED} savedAt={V0} />);
+    // Une autre trame enregistrée ailleurs arrive avec la page rafraîchie : l'éditeur garde sa version.
+    rerender(<TemplateEditor programId="p1" initialTemplate={{ ...TIMED, tone: "Autre ton" }} savedAt={V1} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0]?.[2]).toBe(V0);
+  });
+});
+
+describe("Éditeur de trame — temps de préparation", () => {
+  const field = () => screen.getByLabelText("Temps de préparation (minutes)");
+
+  it("devrait laisser le champ vide par défaut, avec 90 min annoncées", () => {
+    renderEditor();
+    expect(field()).toHaveValue(null);
+    expect(field()).toHaveAttribute("placeholder", "90");
+    expect(field()).toHaveAccessibleDescription("Chronomètre du jour J ; vide : 90 min.");
+  });
+
+  it("devrait enregistrer le temps saisi avec la trame", async () => {
+    const user = userEvent.setup();
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
+    renderEditor();
+    await user.type(field(), "60");
+    expect(screen.getByText("Modifications non enregistrées")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect((update.mock.calls[0]?.[1] as PromptTemplate).prepMinutes).toBe(60);
+  });
+
+  it("devrait revenir à la valeur par défaut quand le champ est vidé", async () => {
+    const user = userEvent.setup();
+    update.mockResolvedValue({ ok: true, data: { templateSavedAt: V1 } });
+    renderEditor({ ...defaultTemplate(), prepMinutes: 120 });
+    expect(field()).toHaveValue(120);
+    await user.clear(field());
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect((update.mock.calls[0]?.[1] as PromptTemplate).prepMinutes).toBeUndefined();
+  });
+
+  it("devrait refuser un temps hors bornes sans rien envoyer", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.type(field(), "5");
+    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    expect(await screen.findByText("La préparation dure au moins 10 minutes.")).toBeInTheDocument();
+    expect(field()).toHaveAttribute("aria-invalid", "true");
     expect(update).not.toHaveBeenCalled();
   });
 });

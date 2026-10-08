@@ -18,7 +18,8 @@ export async function getProfile(userId: string): Promise<ProfileView | null> {
       email: true,
       createdAt: true,
       accounts: { select: { providerId: true } },
-      _count: { select: { programs: true } },
+      // Projets possédés et actifs : ni les projets partagés, ni la corbeille.
+      _count: { select: { programs: { where: { deletedAt: null } } } },
     },
   });
   if (!user) return null;

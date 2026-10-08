@@ -1,3 +1,4 @@
+/** Squelette des pages d'un projet, réexporté par le loading.tsx de chaque dossier d'étape (pas de sujets/…). */
 export default function Loading() {
   return (
     <div aria-busy="true">

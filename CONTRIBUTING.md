@@ -44,10 +44,28 @@ Le dépôt est connecté à Vercel :
 - un merge dans **`main`** déploie la production : https://grand-oral-studio.vercel.app ;
 - les migrations Prisma sont appliquées au build (`vercel-build`).
 
-Les variables de production sont dans le projet Vercel ; ne pas les recopier ailleurs.
+Les variables de production sont dans le projet Vercel ; ne pas les recopier ailleurs. Les nouvelles variables d'une version (pour la 1.2.0 : `RESEND_API_KEY` et `EMAIL_FROM` ensemble ou aucune, `ALLOWED_EMAIL_DOMAINS`, `MISTRAL_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_GENERATION_DEADLINE_MS`) sont toutes facultatives : les ajouter dans Vercel **avant** le déploiement si on veut les fonctions correspondantes.
+
+### Migrations sans interruption (expand → validate → code)
+
+Un changement de schéma se livre en trois temps, jamais en une migration qui casse le code encore en ligne :
+
+1. **expand** : tables et colonnes nouvelles, nullables ou avec défaut, contraintes `CHECK … NOT VALID` (le code de la version précédente continue de fonctionner) ;
+2. **validate** : `VALIDATE CONSTRAINT` dans une migration séparée ;
+3. **code** : le nouveau code, qui lit et écrit le nouveau schéma. Le « contract » (suppression des anciennes colonnes) attend la version suivante.
+
+Sur Vercel, `vercel-build` applique les migrations dans l'ordre (`20261008090000_v120_expand` puis `20261008090100_v120_validate`) avant de construire le code : l'ordre est respecté par un seul déploiement.
+
+**Après le déploiement de la 1.2.0**, exécuter `scripts/sync-claude-keys.sql` : entre l'application de la migration et la mise en ligne du code 1.2, le code 1.1 a pu ajouter, remplacer ou supprimer une clé Claude dans les colonnes historiques ; le script aligne sur elles les clés recopiées (`aadScheme` 1) de `user_ai_credential`, sans toucher à celles que le code 1.2 a déjà réécrites (`aadScheme` 2). Il est rejouable (un second passage ne change rien). Ne pas rejouer le bloc `copy_claude_keys` de la migration : il ne voit que les ajouts.
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/sync-claude-keys.sql
+```
+
+À rejouer encore une fois avant le « contract » de la 1.3 (suppression des colonnes `anthropicKey*` de `user_ai_settings`).
 
 ## Publier une version
 
-1. PR vers `develop` qui passe `package.json` à la nouvelle version (semver) et ajoute la version en tête de `src/domain/releases.ts` (date, résumé, ajouts / modifications / retraits, en mots d'utilisateur). Puis `npm run changelog` régénère `CHANGELOG.md` : ne pas le modifier à la main, un test vérifie qu'il est à jour et que la première version est celle de `package.json`.
+1. PR vers `develop` qui passe `package.json` à la nouvelle version (semver) et ajoute la version en tête de `src/domain/releases.ts` (date, résumé, ajouts / modifications / retraits / corrections, en mots d'utilisateur ; vocabulaire de l'interface : « diaporama », « Sans IA », « Rédaction IA », « vos consignes »). `npm version X.Y.Z --no-git-tag-version` met à jour `package.json` et `package-lock.json` sans rien installer. Puis `npm run changelog` régénère `CHANGELOG.md` : ne pas le modifier à la main, un test vérifie qu'il est à jour et que la première version est celle de `package.json`.
 2. PR `develop` → `main`.
 3. Tag annoté `vX.Y.Z` sur `main` et release GitHub.

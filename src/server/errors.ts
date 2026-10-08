@@ -8,8 +8,13 @@
  *   renvoyée brute au client.
  */
 
+// Chemin relatif : next.config.ts importe ce fichier (via ai/resolve.ts) et le
+// transpileur de la config ne résout pas l'alias « @/ ».
+import { PROVIDER_INFO, type CloudProvider } from "../domain/ai-providers";
+
 export type AppErrorCode =
   | "NOT_FOUND"
+  | "FORBIDDEN"
   | "VALIDATION"
   | "CONFLICT"
   | "LIMIT_EXCEEDED"
@@ -21,6 +26,7 @@ export type AppErrorCode =
   | "AI_KEY_REJECTED"
   | "AI_KEY_UNREADABLE"
   | "AI_CREDIT_EXHAUSTED"
+  | "AI_RATE_LIMITED"
   | "ENGINE_UNAVAILABLE"
   | "CONFIGURATION"
   | "UNAUTHENTICATED";
@@ -43,14 +49,27 @@ export abstract class AppError extends Error {
  * Ressource absente OU appartenant à un autre utilisateur : on ne distingue pas
  * les deux cas pour ne pas révéler l'existence d'un objet.
  */
-const RESOURCE_LABELS = { programme: "projet", thème: "sujet", deck: "deck" } as const;
+const RESOURCE_LABELS = { programme: "projet", thème: "sujet", deck: "diaporama" } as const;
 
 export class NotFoundError extends AppError {
   readonly code = "NOT_FOUND" as const;
   readonly status = 404;
   constructor(resource: "programme" | "thème" | "deck" = "programme") {
-    // Clés internes « programme » et « thème » ; l'interface parle de « projet » et de « sujet ».
+    // Clés internes « programme », « thème » et « deck » ; l'interface parle de « projet », « sujet » et « diaporama ».
     super(`Ce ${RESOURCE_LABELS[resource]} est introuvable.`);
+  }
+}
+
+/**
+ * L'appelant voit le projet (il en est membre) mais son rôle ne permet pas
+ * l'action (ex. un lecteur qui modifie l'apparence). Jamais levée pour un
+ * inconnu : celui-ci reçoit NotFoundError, l'existence du projet n'est pas révélée.
+ */
+export class ForbiddenError extends AppError {
+  readonly code = "FORBIDDEN" as const;
+  readonly status = 403;
+  constructor() {
+    super("Vous n'avez pas les droits pour cette action sur ce projet.");
   }
 }
 
@@ -155,34 +174,78 @@ export class AiUnavailableError extends AppError {
   }
 }
 
-/** Aucune clé API utilisable (ni celle de l'utilisateur, ni celle du serveur) hors mode simulé. */
+/** Hôte de la console d'un fournisseur (« console.anthropic.com »), pour les messages. */
+function consoleHost(provider: CloudProvider): string {
+  return new URL(PROVIDER_INFO[provider].consoleUrl).host;
+}
+
+/** Aucune clé API utilisable pour le fournisseur choisi (ni personnelle, ni d'équipe selon le choix) hors mode simulé. */
 export class AiKeyRequiredError extends AppError {
   readonly code = "AI_KEY_REQUIRED" as const;
   readonly status = 422;
-  constructor() {
-    super("Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.");
+  readonly provider: CloudProvider;
+  constructor(provider: CloudProvider = "claude") {
+    super(`Ajoutez votre clé API ${PROVIDER_INFO[provider].apiName} dans la Rédaction IA pour lancer une génération.`);
+    this.provider = provider;
   }
 }
 
-/** La clé API de l'UTILISATEUR est refusée par Anthropic (401/403). */
+/** La clé API de l'UTILISATEUR est refusée par le fournisseur (401/403). */
 export class AiKeyRejectedError extends AppError {
   readonly code = "AI_KEY_REJECTED" as const;
   readonly status = 422;
-  constructor(options?: { cause?: unknown }) {
-    super("Votre clé API Anthropic est refusée. Mettez-la à jour dans la Configuration IA.", options);
+  readonly provider: CloudProvider;
+  constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
+    const provider = options?.provider ?? "claude";
+    super(`Votre clé API ${PROVIDER_INFO[provider].apiName} est refusée. Mettez-la à jour dans la Rédaction IA.`, options);
+    this.provider = provider;
   }
 }
 
-/** Le compte Anthropic de l'UTILISATEUR n'a plus de crédit (400 « credit balance too low »). */
+/** Le compte de l'UTILISATEUR chez le fournisseur n'a plus de crédit (Anthropic « credit balance », 402, insufficient_quota). */
 export class AiCreditExhaustedError extends AppError {
   readonly code = "AI_CREDIT_EXHAUSTED" as const;
   readonly status = 422;
-  constructor(options?: { cause?: unknown }) {
+  readonly provider: CloudProvider;
+  constructor(options?: { cause?: unknown; provider?: CloudProvider }) {
+    const provider = options?.provider ?? "claude";
     super(
-      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans la Configuration IA.",
+      `Votre compte ${PROVIDER_INFO[provider].apiName} n'a plus de crédit. Rechargez-le sur ${consoleHost(provider)} ou choisissez Sans IA dans la Rédaction IA.`,
+      options,
+    );
+    this.provider = provider;
+  }
+}
+
+/** Durée lisible : « 30 s », « 2 min ». */
+function waitLabel(seconds: number): string {
+  return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;
+}
+
+/**
+ * Le FOURNISSEUR limite le débit (HTTP 429) : rien n'a été produit, l'unité de
+ * quota interne consommée est restituée (cf. isRefundableAiError). Aucune
+ * nouvelle tentative automatique ni bascule vers un autre fournisseur.
+ */
+export class AiProviderRateLimitedError extends AppError {
+  readonly code = "AI_RATE_LIMITED" as const;
+  readonly status = 429;
+  readonly refundable = true;
+  constructor(
+    readonly provider: CloudProvider,
+    readonly retryAfterSeconds: number,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `${PROVIDER_INFO[provider].label} limite le nombre de requêtes en ce moment. Réessayez dans ${waitLabel(retryAfterSeconds)}, ou choisissez un autre rédacteur.`,
       options,
     );
   }
+}
+
+/** L'échec d'un appel IA n'a rien coûté : l'unité de quota interne peut être restituée. */
+export function isRefundableAiError(error: unknown): boolean {
+  return (error instanceof AiUnavailableError && error.refundable) || error instanceof AiProviderRateLimitedError;
 }
 
 /**
@@ -204,7 +267,7 @@ export class AiKeyUnreadableError extends AppError {
   readonly code = "AI_KEY_UNREADABLE" as const;
   readonly status = 503;
   constructor(options?: { cause?: unknown }) {
-    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans la Configuration IA.", options);
+    super("Votre clé API enregistrée ne peut pas être lue. Enregistrez-la à nouveau dans la Rédaction IA.", options);
   }
 }
 

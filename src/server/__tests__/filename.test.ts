@@ -41,12 +41,12 @@ describe("deckFileTitle — une seule règle pour tous les moteurs", () => {
   const createdAt = new Date("2026-10-02T09:30:00Z");
 
   it.each([
-    [{ themeName: "Green IT", kind: "FINAL", engine: "free", createdAt }, "Green IT - deck final - Gratuit - 2026-10-02"],
-    [{ themeName: "Green IT", kind: "FINAL", engine: "ollama", createdAt }, "Green IT - deck final - Ollama - 2026-10-02"],
+    [{ themeName: "Green IT", kind: "FINAL", engine: "free", createdAt }, "Green IT - diaporama - Sans IA - 2026-10-02"],
+    [{ themeName: "Green IT", kind: "FINAL", engine: "ollama", createdAt }, "Green IT - diaporama - Ollama - 2026-10-02"],
     [{ themeName: "Énergie et société", kind: "SKELETON", engine: "claude", createdAt }, "Énergie et société - squelette - Claude"],
-    [{ themeName: "Green IT", kind: "FINAL", engine: null, createdAt }, "Green IT - deck final - 2026-10-02"],
-    [{ themeName: null, kind: "FINAL", engine: "claude", createdAt }, "deck final - Claude - 2026-10-02"],
-    [{ themeName: "   ", kind: "FINAL", engine: "free", createdAt }, "deck final - Gratuit - 2026-10-02"],
+    [{ themeName: "Green IT", kind: "FINAL", engine: null, createdAt }, "Green IT - diaporama - 2026-10-02"],
+    [{ themeName: null, kind: "FINAL", engine: "claude", createdAt }, "diaporama - Claude - 2026-10-02"],
+    [{ themeName: "   ", kind: "FINAL", engine: "free", createdAt }, "diaporama - Sans IA - 2026-10-02"],
   ] as const)("%o → %s", (info, expected) => {
     expect(deckFileTitle(info)).toBe(expected);
   });
@@ -56,15 +56,15 @@ describe("deckFileTitle — date du fuseau Europe/Paris", () => {
   const final = (createdAt: Date) => deckFileTitle({ themeName: "Green IT", kind: "FINAL", engine: null, createdAt });
 
   it("devrait dater du lendemain un deck créé à 0 h 30 à Paris (22 h 30 UTC la veille, heure d'été)", () => {
-    expect(final(new Date("2026-07-14T22:30:00Z"))).toBe("Green IT - deck final - 2026-07-15");
+    expect(final(new Date("2026-07-14T22:30:00Z"))).toBe("Green IT - diaporama - 2026-07-15");
   });
 
   it("devrait dater du lendemain un deck créé à 0 h 30 à Paris en hiver (23 h 30 UTC la veille)", () => {
-    expect(final(new Date("2026-12-31T23:30:00Z"))).toBe("Green IT - deck final - 2027-01-01");
+    expect(final(new Date("2026-12-31T23:30:00Z"))).toBe("Green IT - diaporama - 2027-01-01");
   });
 
   it("devrait garder le jour à 23 h 59 à Paris", () => {
-    expect(final(new Date("2026-07-15T21:59:00Z"))).toBe("Green IT - deck final - 2026-07-15");
+    expect(final(new Date("2026-07-15T21:59:00Z"))).toBe("Green IT - diaporama - 2026-07-15");
   });
 });
 

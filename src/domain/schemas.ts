@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SAFE_FONTS } from "./fonts";
+import { PREP_MINUTES_MAX, PREP_MINUTES_MIN } from "./prep-clock";
 
 /**
  * Contrats du domaine. Toute donnée qui traverse une frontière (formulaire,
@@ -48,6 +49,10 @@ export const LIMITS = {
   candidates: 10,
   /** Notes d'un sujet (chiffres, exemples, sources). Aligné sur le CHECK "Theme_notes_length". */
   subjectNotes: 4000,
+  /** Problématiques candidates d'un sujet. Alignées sur le CHECK "Theme_problems_valid". */
+  subjectProblems: 30,
+  subjectProblemMin: 10,
+  subjectProblemMax: 1500,
   /** Durée d'une ligne de trame, en secondes. */
   minSectionSeconds: 10,
   maxSectionSeconds: 5400,
@@ -78,6 +83,25 @@ export const ThemeInputSchema = z.object({
   notes: text()
     .max(LIMITS.subjectNotes, `Les notes ne doivent pas dépasser ${LIMITS.subjectNotes} caractères.`)
     .default(""),
+  /**
+   * Problématiques candidates du sujet (v1.2). FACULTATIF, sans valeur par défaut :
+   * absent = [] à la création, problématiques INCHANGÉES à la mise à jour. Une valeur
+   * par défaut [] ferait effacer les problématiques par tout formulaire antérieur à la
+   * 1.2 qui ne les renvoie pas.
+   */
+  problems: z
+    .array(
+      // Longueur en points de code, comme char_length() dans le CHECK (un émoji compte pour un).
+      text()
+        .refine((v) => Array.from(v).length >= LIMITS.subjectProblemMin, {
+          message: `Une problématique doit faire au moins ${LIMITS.subjectProblemMin} caractères.`,
+        })
+        .refine((v) => Array.from(v).length <= LIMITS.subjectProblemMax, {
+          message: `Une problématique ne doit pas dépasser ${LIMITS.subjectProblemMax} caractères.`,
+        }),
+    )
+    .max(LIMITS.subjectProblems, `${LIMITS.subjectProblems} problématiques au plus.`)
+    .optional(),
 });
 export type ThemeInput = z.infer<typeof ThemeInputSchema>;
 
@@ -158,6 +182,13 @@ export const PromptTemplateSchema = z
       .int("La durée doit être un nombre entier de minutes.")
       .min(3, "L'oral dure au moins 3 minutes.")
       .max(90, "L'oral dure au plus 90 minutes."),
+    /** Temps de préparation du jour J (chronomètre) ; absent = 90 min (cf. prepMinutesOf). */
+    prepMinutes: z
+      .number("Indiquez un temps de préparation en minutes.")
+      .int("Le temps de préparation doit être un nombre entier de minutes.")
+      .min(PREP_MINUTES_MIN, `La préparation dure au moins ${PREP_MINUTES_MIN} minutes.`)
+      .max(PREP_MINUTES_MAX, `La préparation dure au plus ${PREP_MINUTES_MAX} minutes.`)
+      .optional(),
     sections: z
       .array(SectionSchema)
       .min(1, "La trame compte au moins une ligne.")

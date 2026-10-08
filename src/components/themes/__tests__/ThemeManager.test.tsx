@@ -16,6 +16,22 @@ vi.mock("@/server/actions/themes", () => ({
 }));
 
 const { ThemeManager } = await import("@/components/themes/ThemeManager");
+
+/** Versions (updatedAt) d'un sujet : chargée avec la page, puis renvoyées par les enregistrements. */
+const V0 = "2026-10-01T08:00:00.000Z";
+const V1 = "2026-10-01T08:05:00.000Z";
+const V2 = "2026-10-01T08:06:00.000Z";
+const savedTheme = (updatedAt: string) => ({
+  id: "e",
+  programId: "p1",
+  position: 0,
+  name: "Énergie",
+  description: "",
+  keywords: ["climat"],
+  notes: "Chiffre ADEME 2024",
+  problems: [],
+  updatedAt,
+});
 const { UnsavedChangesBanner, UnsavedChangesProvider } = await import("@/components/layout/UnsavedChanges");
 
 afterEach(async () => {
@@ -39,7 +55,7 @@ describe("Gestionnaire de sujets (sous le bloc d'import)", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     expect(screen.getByRole("heading", { name: "Vos sujets", level: 3 })).toBeInTheDocument();
@@ -102,18 +118,19 @@ describe("Gestionnaire de sujets — notes", () => {
       description: "",
       keywords: [],
       notes: "42 % d'EnR en 2030\nSource : ADEME",
+      problems: [],
     });
     expect(await screen.findByText("Sujet ajouté. Vous pouvez en saisir un autre.")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Notes/)).toHaveValue("");
   });
 
   it("devrait montrer les notes d'un sujet et les renvoyer modifiées à l'enregistrement", async () => {
-    updateTheme.mockResolvedValue({ ok: true, data: null });
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V1) });
     const user = userEvent.setup();
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", finalDeckCount: 2 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: ["climat"], notes: "Chiffre ADEME", problems: [], finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     const item = screen.getByRole("heading", { name: /Énergie/ }).closest("li") as HTMLElement;
@@ -129,7 +146,69 @@ describe("Gestionnaire de sujets — notes", () => {
       description: "",
       keywords: ["climat"],
       notes: "Chiffre ADEME 2024",
-    });
+      problems: [],
+    }, V0);
+  });
+
+  it("devrait renvoyer à chaque enregistrement la version reçue, puis celle du dernier enregistrement", async () => {
+    updateTheme.mockResolvedValueOnce({ ok: true, data: savedTheme(V1) }).mockResolvedValueOnce({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    expect(updateTheme.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
+  });
+
+  it("devrait partir de la version de la page rafraîchie quand le sujet a changé avant l'ouverture du formulaire", async () => {
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    const theme = { id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0 };
+    const { rerender } = render(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V0 }]} />);
+    rerender(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V1 }]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await screen.findByRole("button", { name: "Modifier Énergie" });
+    expect(updateTheme.mock.calls.map((call) => call[2])).toEqual([V1]);
+  });
+
+  it("ne devrait pas écraser une modification arrivée par la page rafraîchie pendant l'édition (version de l'ouverture)", async () => {
+    updateTheme.mockResolvedValue({ ok: true, data: savedTheme(V2) });
+    const user = userEvent.setup();
+    const theme = { id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0 };
+    const { rerender } = render(<ThemeManager programId="p1" themes={[{ ...theme, updatedAt: V0 }]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    // Un autre membre a enregistré le sujet ; la page est rafraîchie (autre action de l'onglet)
+    // mais le formulaire affiche toujours le contenu lu à l'ouverture.
+    rerender(<ThemeManager programId="p1" themes={[{ ...theme, notes: "Saisie d'un autre membre", updatedAt: V1 }]} />);
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    await waitFor(() => expect(updateTheme).toHaveBeenCalledTimes(1));
+    expect(updateTheme.mock.calls[0]?.[2]).toBe(V0);
+  });
+
+  it("devrait afficher le conflit dans le formulaire, ouvert et saisie conservée, quand le sujet a changé entre-temps", async () => {
+    const conflict = "Ce sujet a été modifié entre-temps (autre onglet ou autre membre du projet). Rechargez la page.";
+    updateTheme.mockResolvedValue({ ok: false, error: conflict, code: "CONFLICT" });
+    const user = userEvent.setup();
+    render(
+      <ThemeManager
+        programId="p1"
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 0, updatedAt: V0 }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    await user.type(screen.getByLabelText(/^Notes/), "Ma saisie");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le sujet" }));
+    expect(await screen.findByText(conflict)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Notes/)).toHaveValue("Ma saisie");
   });
 
   it("devrait annoncer poliment l'approche puis l'atteinte de la limite des notes", async () => {
@@ -137,7 +216,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(3599), problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -165,7 +244,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), finalDeckCount: 0 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "x".repeat(4001), problems: [], finalDeckCount: 0, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
@@ -181,7 +260,7 @@ describe("Gestionnaire de sujets — notes", () => {
     render(
       <ThemeManager
         programId="p1"
-        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", finalDeckCount: 2 }]}
+        themes={[{ id: "e", name: "Énergie", description: "", keywords: [], notes: "", problems: [], finalDeckCount: 2, updatedAt: V0 }]}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Supprimer Énergie" }));
@@ -197,7 +276,9 @@ const THEMES = ["Alpha", "Bravo", "Charlie"].map((name) => ({
   description: "",
   keywords: [],
   notes: "",
+  problems: [],
   finalDeckCount: 0,
+  updatedAt: V0,
 }));
 
 /** Une requête d'enregistrement d'ordre que le test termine quand il veut. */
@@ -273,5 +354,50 @@ describe("Gestionnaire de sujets — enregistrement de l'ordre", () => {
     expect(await screen.findByText(/Le nouvel ordre n'a pas été enregistré : Projet introuvable\./)).toBeInTheDocument();
     expect(screen.queryByText("Ordre enregistré.")).not.toBeInTheDocument();
     expect(unloadPrevented()).toBe(false);
+  });
+});
+
+describe("Gestionnaire de sujets — problématiques, fiche de révision et lecteur", () => {
+  const theme = {
+    id: "e",
+    name: "Énergie",
+    description: "",
+    keywords: [],
+    notes: "",
+    problems: ["Faut-il taxer le kérosène ?", "La sobriété suffit-elle ?"],
+    finalDeckCount: 1,
+    updatedAt: V0,
+  };
+
+  it("devrait afficher le nombre de problématiques et mener à la fiche de révision du sujet", () => {
+    render(<ThemeManager programId="p1" themes={[theme, { ...theme, id: "f", name: "Santé", problems: [] }]} />);
+    const [first, second] = screen.getAllByRole("listitem").filter((li) => li.querySelector("h4")) as [HTMLElement, HTMLElement];
+    expect(first).toHaveTextContent("2 problématiques possibles");
+    expect(second).toHaveTextContent("Aucune problématique enregistrée");
+    const sheet = screen.getByRole("link", { name: "Fiche de révision de Énergie" });
+    expect(sheet).toHaveAttribute("href", "/projets/p1/sujets/e/fiche");
+    expect(sheet).toHaveClass("opale-button--ghost");
+  });
+
+  it("devrait reprendre les problématiques dans le formulaire de modification", async () => {
+    const user = userEvent.setup();
+    render(<ThemeManager programId="p1" themes={[theme]} />);
+    await user.click(screen.getByRole("button", { name: "Modifier Énergie" }));
+    expect(screen.getByLabelText(/^Problématiques possibles/)).toHaveValue("Faut-il taxer le kérosène ?\nLa sobriété suffit-elle ?");
+  });
+
+  it("ne devrait proposer à un lecteur aucune action d'édition, seulement la fiche de révision", () => {
+    render(<ThemeManager programId="p1" themes={[theme]} readOnly />);
+    for (const name of ["Ajouter un sujet", "Importer une liste", "Modifier Énergie", "Supprimer Énergie", "Monter Énergie", "Descendre Énergie"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "Fiche de révision de Énergie" })).toBeInTheDocument();
+    expect(screen.getByText(/lecture seule/)).toBeInTheDocument();
+  });
+
+  it("devrait dire à un lecteur qu'il n'y a aucun sujet sans l'inviter à en ajouter", () => {
+    render(<ThemeManager programId="p1" themes={[]} readOnly />);
+    expect(screen.getByText("Aucun sujet")).toBeInTheDocument();
+    expect(screen.queryByText(/Ajouter un sujet/)).not.toBeInTheDocument();
   });
 });

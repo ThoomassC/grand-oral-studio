@@ -25,3 +25,26 @@ export const SERIF_FONTS: ReadonlySet<SafeFont> = new Set<SafeFont>(["Georgia", 
 export function isSafeFont(value: string): value is SafeFont {
   return (SAFE_FONTS as readonly string[]).includes(value);
 }
+
+/**
+ * Polices présentes sur tout ordinateur qui ouvre le .pptx dans PowerPoint :
+ * livrées avec Windows et macOS, ou installées avec Office (Calibri). Les
+ * autres (Montserrat, Open Sans…) viennent de Canva ou de Google Fonts : le
+ * fichier exporté ne les embarque pas.
+ */
+export const SYSTEM_FONTS: ReadonlySet<SafeFont> = new Set<SafeFont>([
+  "Arial",
+  "Calibri",
+  "Verdana",
+  "Trebuchet MS",
+  "Georgia",
+  "Times New Roman",
+]);
+
+export const FONT_NOT_EMBEDDED_WARNING =
+  "Cette police n'est pas incluse dans le fichier PowerPoint : sur un ordinateur qui ne l'a pas, elle sera remplacée et le texte peut déborder.";
+
+/** Avertissement à afficher sous le choix d'une police, ou null si elle est sûre partout. */
+export function fontWarning(fontName: string): string | null {
+  return isSafeFont(fontName) && SYSTEM_FONTS.has(fontName) ? null : FONT_NOT_EMBEDDED_WARNING;
+}

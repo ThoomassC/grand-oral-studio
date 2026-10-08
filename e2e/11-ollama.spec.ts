@@ -45,7 +45,7 @@ test.describe("11. Jour J — Ollama réel", () => {
     test.info().annotations.push({ type: "durée Ollama", description: `${seconds} s` });
 
     const main = page.getByRole("main");
-    await expect(main.getByText("Deck final · Cybersécurité")).toBeVisible();
+    await expect(main.getByText("Diaporama final · Cybersécurité")).toBeVisible();
     await expect(main.getByText("Modèle local")).toBeVisible();
     const deckIssues = (await main.locator(".bg-warning-soft").allTextContents()).join(" ").trim();
     const total = await main.getByRole("heading", { level: 2, name: /^\d+ diapos$/ }).textContent();

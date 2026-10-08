@@ -5,6 +5,8 @@ import { Button } from "@thomascaron/opale-ui";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import type { ThemeInput } from "@/domain/schemas";
 import { addTheme, deleteTheme, reorderThemes, updateTheme } from "@/server/actions/themes";
+import { revisionSheetHref } from "@/components/projects/steps";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { focusLater } from "@/components/ui/focus";
 import { useUnsavedChanges } from "@/components/layout/UnsavedChanges";
@@ -21,8 +23,18 @@ export interface ThemeItem {
   keywords: string[];
   /** Chiffres, exemples, sources de l'utilisateur ("" si aucune). */
   notes: string;
+  /** Problématiques possibles du sujet (banque d'entraînement, 30 au plus). */
+  problems: string[];
   /** Nombre de diaporamas du jour J rattachés au sujet (supprimés avec lui). */
   finalDeckCount: number;
+  /** Version enregistrée (ISO) : jeton de concurrence renvoyé à l'enregistrement du sujet. */
+  updatedAt: string;
+}
+
+/** La plus récente de deux versions ISO (la page rafraîchie peut être en retard ou en avance sur notre dernier enregistrement). */
+function latestVersion(fromPage: string, fromSave: string | undefined): string {
+  if (fromSave === undefined) return fromPage;
+  return new Date(fromSave).getTime() > new Date(fromPage).getTime() ? fromSave : fromPage;
 }
 
 const IDS = {
@@ -65,9 +77,34 @@ function ArrowIcon({ dir }: { dir: "up" | "down" }) {
   );
 }
 
-export function ThemeManager({ programId, themes }: { programId: string; themes: ThemeItem[] }) {
+/** « Aucune problématique enregistrée », « 1 problématique possible », « 3 problématiques possibles ». */
+function problemsLabel(n: number): string {
+  if (n === 0) return "Aucune problématique enregistrée";
+  return n === 1 ? "1 problématique possible" : `${n} problématiques possibles`;
+}
+
+/**
+ * Liste des sujets du projet. `readOnly` (lecteur d'un projet partagé) : ni ajout,
+ * ni import, ni réordonnancement, ni modification, ni suppression — le serveur les
+ * refuse de toute façon ; la fiche de révision reste accessible.
+ */
+export function ThemeManager({
+  programId,
+  themes,
+  readOnly = false,
+}: {
+  programId: string;
+  themes: ThemeItem[];
+  readOnly?: boolean;
+}) {
   const [optimisticThemes, setOptimisticThemes] = useOptimistic(themes);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /**
+   * Version du sujet lue à l'ouverture du formulaire, qui affiche le contenu de
+   * cet instant : une page rafraîchie pendant l'édition (modification d'un autre
+   * membre) ne doit pas l'avancer, sinon l'enregistrement écraserait sans conflit.
+   */
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
   // Le bloc « Importer des sujets depuis un texte », au-dessus, est la voie
   // principale : la saisie manuelle et l'import de liste restent à un clic.
   const [panel, setPanel] = useState<"none" | "add" | "import">("none");
@@ -77,6 +114,8 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
   const [savingOrder, setSavingOrder] = useState(false);
   const [orderSaved, setOrderSaved] = useState(false);
   const [, startTransition] = useTransition();
+  /** Version renvoyée par notre dernier enregistrement de chaque sujet (concurrence optimiste). */
+  const [savedVersions, setSavedVersions] = useState<Record<string, string>>({});
   /**
    * Enregistrement de l'ordre, sérialisé côté client : une seule requête à la
    * fois, et des déplacements rapides n'envoient ensuite que le DERNIER ordre.
@@ -174,34 +213,37 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             Vos sujets
           </h3>
           <p className="max-w-3xl text-sm text-muted">
-            Saisissez-les un par un ou collez une liste. L&apos;ordre des sujets est celui de votre projet ; les
-            mots-clés aident à reconnaître le sujet d&apos;une problématique.
+            {readOnly
+              ? "Les sujets du projet, en lecture seule : leur fiche de révision reste imprimable."
+              : "Saisissez-les un par un ou collez une liste. L'ordre des sujets est celui de votre projet ; les mots-clés aident à reconnaître le sujet d'une problématique."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            id={IDS.addButton}
-            variant={panel === "add" ? "ghost" : "secondary"}
-            aria-expanded={panel === "add"}
-            aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
-            onClick={() => openPanel("add")}
-          >
-            Ajouter un sujet
-          </Button>
-          <Button
-            id={IDS.importButton}
-            type="button"
-            variant="ghost"
-            aria-expanded={panel === "import"}
-            aria-controls={panel === "import" ? "panel-import-themes" : undefined}
-            onClick={() => openPanel("import")}
-          >
-            Importer une liste
-          </Button>
-        </div>
+        {readOnly ? null : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              id={IDS.addButton}
+              variant={panel === "add" ? "ghost" : "secondary"}
+              aria-expanded={panel === "add"}
+              aria-controls={panel === "add" ? "panel-ajout-theme" : undefined}
+              onClick={() => openPanel("add")}
+            >
+              Ajouter un sujet
+            </Button>
+            <Button
+              id={IDS.importButton}
+              type="button"
+              variant="ghost"
+              aria-expanded={panel === "import"}
+              aria-controls={panel === "import" ? "panel-import-themes" : undefined}
+              onClick={() => openPanel("import")}
+            >
+              Importer une liste
+            </Button>
+          </div>
+        )}
       </div>
 
-      {panel === "add" ? (
+      {panel === "add" && !readOnly ? (
         <section id="panel-ajout-theme" aria-labelledby="titre-ajout-theme" className="opale-card opale-card--e1 block p-5">
           <h4 id="titre-ajout-theme" className="text-lg font-semibold">
             Nouveau sujet
@@ -220,7 +262,7 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
         </section>
       ) : null}
 
-      {panel === "import" ? (
+      {panel === "import" && !readOnly ? (
         <section id="panel-import-themes" aria-labelledby="titre-import-themes" className="opale-card opale-card--e1 block p-5">
           <h4 id="titre-import-themes" className="text-lg font-semibold">
             Importer des sujets
@@ -248,11 +290,15 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
       {optimisticThemes.length === 0 ? (
         <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
           <p className="font-display text-lg font-semibold">Aucun sujet</p>
-          <p className="mt-1 text-muted">
-            Les sujets sont facultatifs : sans sujet, le diaporama du jour J part de la problématique et de la trame.
-            Si votre oral porte sur des sujets connus d&apos;avance, importez-les depuis un texte ci-dessus, ajoutez-les
-            un par un (« Ajouter un sujet ») ou collez une liste (« Importer une liste »).
-          </p>
+          {readOnly ? (
+            <p className="mt-1 text-muted">Ce projet n&apos;a pas de sujet : le diaporama part de la problématique et de la trame.</p>
+          ) : (
+            <p className="mt-1 text-muted">
+              Les sujets sont facultatifs : sans sujet, le diaporama du jour J part de la problématique et de la trame.
+              Si votre oral porte sur des sujets connus d&apos;avance, importez-les depuis un texte ci-dessus, ajoutez-les
+              un par un (« Ajouter un sujet ») ou collez une liste (« Importer une liste »).
+            </p>
+          )}
         </div>
       ) : (
         <ol className="flex flex-col gap-3" aria-label="Sujets du projet">
@@ -261,14 +307,27 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
             const { question, confirm } = deleteQuestion(theme);
             return (
               <li key={theme.id} className="opale-card opale-card--e1 block p-4 pt-6 sm:p-5 sm:pt-7">
-                {editingId === theme.id ? (
+                {editingId === theme.id && !readOnly ? (
                   <section aria-label={`Modifier ${theme.name}`}>
                     <ThemeForm
                       nameId={`edit-name-${theme.id}`}
-                      initial={{ name: theme.name, description: theme.description, keywords: theme.keywords, notes: theme.notes }}
+                      initial={{
+                        name: theme.name,
+                        description: theme.description,
+                        keywords: theme.keywords,
+                        notes: theme.notes,
+                        problems: theme.problems,
+                      }}
                       submitLabel="Enregistrer le sujet"
                       pendingLabel="Enregistrement…"
-                      onSubmit={(value) => updateTheme(theme.id, value)}
+                      onSubmit={async (value) => {
+                        // Sujet enregistré entre-temps (autre onglet, autre membre) : échec CONFLICT,
+                        // affiché par le formulaire, qui invite à recharger la page.
+                        const version = editingVersion ?? latestVersion(theme.updatedAt, savedVersions[theme.id]);
+                        const result = await updateTheme(theme.id, value, version);
+                        if (result.ok) setSavedVersions((prev) => ({ ...prev, [theme.id]: result.data.updatedAt }));
+                        return result;
+                      }}
                       onSaved={(name) => {
                         setAnnounce(`Sujet « ${name} » enregistré.`);
                         closeEditor(theme.id);
@@ -306,7 +365,8 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                             <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">{theme.notes}</p>
                           </div>
                         ) : null}
-                        <p className="mt-2 text-sm text-muted">
+                        <p className="mt-2 text-sm text-muted">{problemsLabel(theme.problems.length)}</p>
+                        <p className="text-sm text-muted">
                           {theme.finalDeckCount === 0
                             ? "Aucun diaporama du jour J"
                             : `${plural(theme.finalDeckCount, "diaporama")} du jour J`}
@@ -314,55 +374,68 @@ export function ThemeManager({ programId, themes }: { programId: string; themes:
                       </div>
                     </div>
                     <div className="flex flex-wrap items-start gap-2 sm:justify-end">
-                      <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
-                        <Button
-                          id={moveButtonId(theme.id, "up")}
-                          type="button"
-                          variant="ghost" className="opale-icon-action-button"
-                          onClick={() => move(index, "up")}
-                          disabled={index === 0}
-                          aria-label={`Monter ${theme.name}`}
-                        >
-                          <ArrowIcon dir="up" />
-                        </Button>
-                        <Button
-                          id={moveButtonId(theme.id, "down")}
-                          type="button"
-                          variant="ghost" className="opale-icon-action-button"
-                          onClick={() => move(index, "down")}
-                          disabled={index === optimisticThemes.length - 1}
-                          aria-label={`Descendre ${theme.name}`}
-                        >
-                          <ArrowIcon dir="down" />
-                        </Button>
-                      </div>
-                      <Button
-                        id={editButtonId(theme.id)}
-                        type="button"
-                        variant="ghost" size="small"
-                        onClick={() => {
-                          setEditingId(theme.id);
-                          focusLater([`edit-name-${theme.id}`]);
-                        }}
-                        aria-label={`Modifier ${theme.name}`}
+                      <ButtonLink
+                        href={revisionSheetHref(programId, theme.id)}
+                        variant="ghost"
+                        size="small"
+                        aria-label={`Fiche de révision de ${theme.name}`}
                       >
-                        Modifier
-                      </Button>
-                      <ConfirmAction
-                        triggerLabel="Supprimer"
-                        triggerAccessibleLabel={`Supprimer ${theme.name}`}
-                        title="Supprimer le sujet ?"
-                        question={question}
-                        confirmLabel={confirm}
-                        onConfirm={async () => {
-                          const result = await deleteTheme(theme.id);
-                          if (result.ok) setAnnounce(`Sujet « ${theme.name} » supprimé.`);
-                          return result.ok ? null : result.error;
-                        }}
-                        onDone={() =>
-                          focusLater([neighbour ? editButtonId(neighbour.id) : null, IDS.listTitle])
-                        }
-                      />
+                        Fiche de révision
+                      </ButtonLink>
+                      {readOnly ? null : (
+                        <>
+                          <div className="flex gap-1" role="group" aria-label={`Ordre de ${theme.name}`}>
+                            <Button
+                              id={moveButtonId(theme.id, "up")}
+                              type="button"
+                              variant="ghost" className="opale-icon-action-button"
+                              onClick={() => move(index, "up")}
+                              disabled={index === 0}
+                              aria-label={`Monter ${theme.name}`}
+                            >
+                              <ArrowIcon dir="up" />
+                            </Button>
+                            <Button
+                              id={moveButtonId(theme.id, "down")}
+                              type="button"
+                              variant="ghost" className="opale-icon-action-button"
+                              onClick={() => move(index, "down")}
+                              disabled={index === optimisticThemes.length - 1}
+                              aria-label={`Descendre ${theme.name}`}
+                            >
+                              <ArrowIcon dir="down" />
+                            </Button>
+                          </div>
+                          <Button
+                            id={editButtonId(theme.id)}
+                            type="button"
+                            variant="ghost" size="small"
+                            onClick={() => {
+                              setEditingId(theme.id);
+                              setEditingVersion(latestVersion(theme.updatedAt, savedVersions[theme.id]));
+                              focusLater([`edit-name-${theme.id}`]);
+                            }}
+                            aria-label={`Modifier ${theme.name}`}
+                          >
+                            Modifier
+                          </Button>
+                          <ConfirmAction
+                            triggerLabel="Supprimer"
+                            triggerAccessibleLabel={`Supprimer ${theme.name}`}
+                            title="Supprimer le sujet ?"
+                            question={question}
+                            confirmLabel={confirm}
+                            onConfirm={async () => {
+                              const result = await deleteTheme(theme.id);
+                              if (result.ok) setAnnounce(`Sujet « ${theme.name} » supprimé.`);
+                              return result.ok ? null : result.error;
+                            }}
+                            onDone={() =>
+                              focusLater([neighbour ? editButtonId(neighbour.id) : null, IDS.listTitle])
+                            }
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

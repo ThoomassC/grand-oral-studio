@@ -95,13 +95,47 @@ describe("ProjectBreadcrumb", () => {
   it("devrait finir par « Decks / {titre} » pour tout deck ouvert, ancien squelette compris", () => {
     pathname = "/projets/p1/decks/d1";
     render(<ProjectBreadcrumb programId="p1" programName="Master" deck={{ title: "Le climat" }} />);
-    expect(screen.getByRole("link", { name: "Decks" })).toHaveAttribute("href", "/projets/p1/decks");
+    expect(screen.getByRole("link", { name: "Diaporamas" })).toHaveAttribute("href", "/projets/p1/decks");
     expect(screen.getByText("Le climat")).toHaveAttribute("aria-current", "page");
   });
 
   it("devrait finir par « Decks » sur la liste des decks", () => {
     pathname = "/projets/p1/decks";
     render(<ProjectBreadcrumb programId="p1" programName="Master" />);
-    expect(screen.getByText("Decks")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Diaporamas")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("devrait finir par « Partage » sur la page Partage", () => {
+    pathname = "/projets/p1/partage";
+    render(<ProjectBreadcrumb programId="p1" programName="Master" />);
+    expect(screen.getByText("Partage")).toHaveAttribute("aria-current", "page");
+    expect(hrefs()).toEqual(["/projets", "/projets/p1/apparence"]);
+  });
+
+  it.each([
+    ["repetition", "Répétition"],
+    ["questions", "Questions du jury"],
+    ["notes", "Notes d'orateur"],
+  ])("devrait finir par « Decks / {titre} / %s » sur une page de diaporama, le diaporama lié", (segment, label) => {
+    pathname = `/projets/p1/decks/d1/${segment}`;
+    render(<ProjectBreadcrumb programId="p1" programName="Master" deck={{ id: "d1", title: "Le climat" }} />);
+    expect(screen.getByRole("link", { name: "Diaporamas" })).toHaveAttribute("href", "/projets/p1/decks");
+    expect(screen.getByRole("link", { name: "Le climat" })).toHaveAttribute("href", "/projets/p1/decks/d1");
+    expect(screen.getByText(label)).toHaveAttribute("aria-current", "page");
+  });
+
+  it("devrait garder le diaporama ouvert comme page courante sur sa page principale", () => {
+    pathname = "/projets/p1/decks/d1";
+    render(<ProjectBreadcrumb programId="p1" programName="Master" deck={{ id: "d1", title: "Le climat" }} />);
+    expect(screen.getByText("Le climat")).toHaveAttribute("aria-current", "page");
+    expect(hrefs()).not.toContain("/projets/p1/decks/d1");
+  });
+
+  it("devrait finir par « Étape 2 · Trame / Sujets / Fiche de révision » sur la fiche d'un sujet", () => {
+    pathname = "/projets/p1/sujets/t1/fiche";
+    render(<ProjectBreadcrumb programId="p1" programName="Master" />);
+    expect(screen.getByRole("link", { name: "Étape 2 · Trame" })).toHaveAttribute("href", "/projets/p1/trame");
+    expect(screen.getByRole("link", { name: "Sujets" })).toHaveAttribute("href", "/projets/p1/trame/sujets");
+    expect(screen.getByText("Fiche de révision")).toHaveAttribute("aria-current", "page");
   });
 });

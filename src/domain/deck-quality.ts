@@ -282,26 +282,47 @@ export function qualityFeedback(q: FinalDeckQuality, template: PromptTemplate): 
   return lines.join("\n");
 }
 
-/** Avertissements affichables (le nombre de diapos par ligne est signalé par `checkDeckAgainstTemplate`). */
-export function qualityWarnings(q: FinalDeckQuality): string[] {
-  const warnings: string[] = [];
+/** Avertissement de relecture relié aux diapos concernées (numéros, 1 = couverture ; vide = le deck entier). */
+export interface ReviewItem {
+  message: string;
+  slides: number[];
+}
+
+/** Numéros (1 = couverture) des diapos de ces lignes de trame. */
+function slidesOfSections(deck: DeckSpec, ids: ReadonlySet<string>): number[] {
+  return deck.slides.flatMap((s, i) => (ids.has(s.sectionId) ? [i + 1] : []));
+}
+
+/** Avertissements de qualité, chacun relié à ses diapos ; `conclusionSlides` : diapos de la conclusion. */
+function qualityReviewItems(q: FinalDeckQuality, conclusionSlides: number[] = []): ReviewItem[] {
+  const items: ReviewItem[] = [];
   // Seul l'écart au seuil est signalé : quelques reprises isolées ne justifient pas une alerte.
   if (q.notesToRewriteRate > QUALITY_THRESHOLDS.notesToRewriteRate) {
     const n = q.notesToRewrite.length;
-    warnings.push(
-      `Notes d'orateur recopiées du contenu type de la trame ou trop courtes sur ${n} ${plural(n, "diapo")} (${slideList(q.notesToRewrite)}) : réécrivez-les pour votre problématique.`,
-    );
+    items.push({
+      message: `Notes d'orateur recopiées du contenu type de la trame ou trop courtes sur ${n} ${plural(n, "diapo")} (${slideList(q.notesToRewrite)}) : réécrivez-les pour votre problématique.`,
+      slides: [...q.notesToRewrite],
+    });
   }
   if (q.bulletsCopyRate > QUALITY_THRESHOLDS.bulletsCopyRate) {
     const n = q.copiedBullets.length;
-    warnings.push(
-      `Puces reprises telles quelles du contenu type de la trame sur ${n} ${plural(n, "diapo")} (${slideList(q.copiedBullets)}) : adaptez-les à votre problématique.`,
-    );
+    items.push({
+      message: `Puces reprises telles quelles du contenu type de la trame sur ${n} ${plural(n, "diapo")} (${slideList(q.copiedBullets)}) : adaptez-les à votre problématique.`,
+      slides: [...q.copiedBullets],
+    });
   }
   if (!q.problemAddressed) {
-    warnings.push("La conclusion ne semble pas répondre à votre problématique : reformulez-la pour y répondre explicitement.");
+    items.push({
+      message: "La conclusion ne semble pas répondre à votre problématique : reformulez-la pour y répondre explicitement.",
+      slides: conclusionSlides,
+    });
   }
-  return warnings;
+  return items;
+}
+
+/** Avertissements affichables (le nombre de diapos par ligne est signalé par `checkDeckAgainstTemplate`). */
+export function qualityWarnings(q: FinalDeckQuality): string[] {
+  return qualityReviewItems(q).map((i) => i.message);
 }
 
 // ---------------------------------------------------------------------------
@@ -432,17 +453,42 @@ export function unsourcedFigureWarning(figures: readonly UnsourcedFigure[]): str
 }
 
 /**
- * Avertissements de relecture d'un deck final IA, recalculés à l'affichage
- * depuis le deck enregistré (aucune colonne de plus) : lignes dont le nombre
- * de diapos diffère de la trame, recopie du contenu type, conclusion hors
- * problématique, chiffres affichés sans source. Une correction de l'utilisateur
- * fait disparaître l'avertissement correspondant.
+ * Diapos visées par un écart à la trame (message de `checkDeckAgainstTemplate`) :
+ * celles de la section citée entre guillemets (titre, ou identifiant d'une
+ * section inconnue), ou les couvertures pour un écart de couverture. Une
+ * section absente n'a pas de diapo.
  */
-export function finalDeckReview(deck: DeckSpec, ctx: QualityContext): string[] {
-  const unsourced = unsourcedFigureWarning(findUnsourcedFigures(deck));
+function templateIssueSlides(issue: string, deck: DeckSpec, template: PromptTemplate): number[] {
+  const cited = template.sections.filter((s) => issue.includes(`« ${s.title} »`)).map((s) => s.id);
+  const unknown = deck.slides.map((s) => s.sectionId).filter((id) => issue.includes(`« ${id} »`));
+  const ids = new Set([...cited, ...unknown]);
+  if (ids.size > 0) return slidesOfSections(deck, ids);
+  if (/couverture/i.test(issue)) return deck.slides.flatMap((s, i) => (s.layout === "title" ? [i + 1] : []));
+  return [];
+}
+
+/**
+ * Avertissements de relecture d'un deck final IA, recalculés à l'affichage
+ * depuis le deck (aucune colonne de plus), chacun relié aux diapos concernées
+ * (liens « Diapo N » de la relecture) : lignes dont le nombre de diapos diffère
+ * de la trame, recopie du contenu type, conclusion hors problématique, chiffres
+ * affichés sans source. Une correction de l'utilisateur fait disparaître
+ * l'avertissement correspondant.
+ */
+export function finalDeckReviewItems(deck: DeckSpec, ctx: QualityContext): ReviewItem[] {
+  const figures = findUnsourcedFigures(deck);
+  const unsourced = unsourcedFigureWarning(figures);
   return [
-    ...checkDeckAgainstTemplate(deck, ctx.template),
-    ...qualityWarnings(assessFinalDeck(deck, ctx)),
-    ...(unsourced ? [unsourced] : []),
+    ...checkDeckAgainstTemplate(deck, ctx.template).map((message) => ({
+      message,
+      slides: templateIssueSlides(message, deck, ctx.template),
+    })),
+    ...qualityReviewItems(assessFinalDeck(deck, ctx), slidesOfSections(deck, conclusionSectionIds(ctx.template))),
+    ...(unsourced ? [{ message: unsourced, slides: figures.map((f) => f.slide) }] : []),
   ];
+}
+
+/** Messages seuls de `finalDeckReviewItems` (compatibilité). */
+export function finalDeckReview(deck: DeckSpec, ctx: QualityContext): string[] {
+  return finalDeckReviewItems(deck, ctx).map((i) => i.message);
 }

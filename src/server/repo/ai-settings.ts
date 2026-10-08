@@ -1,22 +1,26 @@
 import { z } from "zod";
-import { ENGINES, type Engine } from "../ai/engine";
+import { ENGINE_IDS, KEY_SOURCES, type EngineId, type KeySource } from "@/domain/ai-providers";
+import type { EngineSelection } from "../ai/engine";
+import type { SecretBox } from "../crypto/secret-box";
 import { db } from "../db/client";
-import { loadSecretBoxFromEnv, SecretBoxError, type SecretBox } from "../crypto/secret-box";
-import { AiKeyUnreadableError, ConfigurationError } from "../errors";
 import type { Logger } from "../logger";
 import { parseStored } from "../validation";
+import { deleteCredential, listCredentials, loadCredential, type CredentialMeta } from "./ai-credentials";
 
 /**
- * Stockage de la clé API Anthropic et du moteur de rédaction d'un utilisateur. Toutes les requêtes sont
- * filtrées par `userId` (clé primaire) : un utilisateur n'atteint jamais la ligne
- * d'un autre. Le chiffré est lié à `userId` par l'AAD : copié sur une autre
- * ligne, il ne se déchiffre pas.
+ * Préférences IA d'un utilisateur (user_ai_settings : rédacteur choisi, origine
+ * de la clé, modèle Ollama) et vue d'ensemble de ses connexions (clés par
+ * fournisseur : src/server/repo/ai-credentials.ts). Toutes les requêtes sont
+ * filtrées par `userId` (clé primaire) : un utilisateur n'atteint jamais la
+ * ligne d'un autre.
  *
- * Seul ce module manipule la clé en clair, et uniquement en mémoire.
+ * Les colonnes historiques anthropicKey* ne sont plus lues ni écrites ici (cf.
+ * ai-credentials.ts, qui les vide à la suppression de la connexion Claude).
  */
 
 type Env = Partial<Record<string, string | undefined>>;
 
+/** @deprecated Vue 1.1 de la clé Claude ; utiliser `connections`. */
 export interface UserAiKeyMeta {
   last4: string;
   keyVersion: number;
@@ -24,136 +28,73 @@ export interface UserAiKeyMeta {
 }
 
 export interface UserAiPrefs {
-  /** Métadonnées de la clé, null si aucune clé enregistrée. */
-  key: UserAiKeyMeta | null;
-  engine: Engine | null;
+  selection: EngineSelection;
   ollamaModel: string | null;
+  /** Clés personnelles enregistrées (métadonnées seules), triées par fournisseur. */
+  connections: CredentialMeta[];
+  /** @deprecated Connexion Claude au format 1.1 ; utiliser `connections`. */
+  key: UserAiKeyMeta | null;
+  /** @deprecated Utiliser `selection.engine`. */
+  engine: EngineId | null;
 }
 
-const EngineColumnSchema = z.enum(ENGINES).nullable();
+const EngineColumnSchema = z.enum(ENGINE_IDS).nullable();
+const KeySourceColumnSchema = z.enum(KEY_SOURCES).nullable();
 
-function readEngine(value: string | null, userId: string): Engine | null {
-  return parseStored(EngineColumnSchema, value, "UserAiSettings.engine", userId);
-}
-
-function keyMeta(row: { anthropicKeyLast4: string | null; keyVersion: number | null; updatedAt: Date }): UserAiKeyMeta | null {
-  return row.anthropicKeyLast4 !== null && row.keyVersion !== null
-    ? { last4: row.anthropicKeyLast4, keyVersion: row.keyVersion, updatedAt: row.updatedAt }
-    : null;
-}
-
-/** Préférences et métadonnées affichables (jamais le chiffré). */
+/** Préférences et métadonnées affichables (jamais le chiffré). Deux lectures indépendantes, en parallèle. */
 export async function findUserAiPrefs(userId: string): Promise<UserAiPrefs> {
-  const row = await db().userAiSettings.findUnique({
-    where: { userId },
-    select: { anthropicKeyLast4: true, keyVersion: true, updatedAt: true, engine: true, ollamaModel: true },
-  });
-  if (!row) return { key: null, engine: null, ollamaModel: null };
-  return { key: keyMeta(row), engine: readEngine(row.engine, userId), ollamaModel: row.ollamaModel };
+  const [row, connections] = await Promise.all([
+    db().userAiSettings.findUnique({ where: { userId }, select: { engine: true, keySource: true, ollamaModel: true } }),
+    listCredentials(userId),
+  ]);
+  const engine = parseStored(EngineColumnSchema, row?.engine ?? null, "UserAiSettings.engine", userId);
+  const keySource = parseStored(KeySourceColumnSchema, row?.keySource ?? null, "UserAiSettings.keySource", userId);
+  const claude = connections.find((c) => c.provider === "claude");
+  return {
+    selection: { engine, keySource },
+    ollamaModel: row?.ollamaModel ?? null,
+    connections,
+    key: claude ? { last4: claude.last4, keyVersion: claude.keyVersion, updatedAt: claude.updatedAt } : null,
+    engine,
+  };
 }
 
-/** Métadonnées de la clé (jamais le chiffré), null si aucune clé. */
+/** @deprecated Métadonnées de la clé Claude (jamais le chiffré), null si aucune clé. */
 export async function findUserAiKeyMeta(userId: string): Promise<UserAiKeyMeta | null> {
   return (await findUserAiPrefs(userId)).key;
 }
 
 /**
- * Enregistre le moteur choisi (upsert : la ligne peut ne pas exister). Le modèle
- * Ollama n'est remplacé que s'il est fourni : revenir à Ollama plus tard retrouve
- * le dernier modèle choisi.
+ * Enregistre le rédacteur choisi (upsert : la ligne peut ne pas exister). Le
+ * modèle Ollama n'est remplacé que s'il est fourni : revenir à Ollama plus tard
+ * retrouve le dernier modèle choisi. `keySource` est remis à NULL hors fournisseur cloud.
  */
-export async function saveUserEngine(userId: string, engine: Engine, ollamaModel?: string): Promise<void> {
-  const data = { engine, ...(ollamaModel !== undefined ? { ollamaModel } : {}) };
+export async function saveUserSelection(
+  userId: string,
+  /** engine null : pas de préférence (rédacteur par défaut, cf. src/server/ai/engine.ts). */
+  selection: { engine: EngineId | null; keySource: KeySource | null },
+  ollamaModel?: string,
+): Promise<void> {
+  const keySource =
+    selection.engine === null || selection.engine === "ollama" || selection.engine === "free" ? null : selection.keySource;
+  const data = { engine: selection.engine, keySource, ...(ollamaModel !== undefined ? { ollamaModel } : {}) };
   await db().userAiSettings.upsert({ where: { userId }, create: { userId, ...data }, update: data, select: { userId: true } });
 }
 
-/**
- * Chiffre la clé et choisit Claude en UNE écriture (INSERT … ON CONFLICT DO
- * UPDATE) : rejouable, dernier gagnant, jamais d'état intermédiaire « clé
- * enregistrée mais Claude non choisi ». Le modèle Ollama enregistré est
- * conservé (revenir à Ollama retrouve le dernier modèle choisi).
- */
-export async function activateUserClaudeKey(
-  userId: string,
-  apiKey: string,
-  last4: string,
-  box: SecretBox,
-): Promise<UserAiKeyMeta> {
-  const sealed = box.seal(apiKey, userId);
-  const engine: Engine = "claude";
-  const data = { anthropicKeyCiphertext: sealed.ciphertext, anthropicKeyLast4: last4, keyVersion: sealed.keyVersion, engine };
-  const row = await db().userAiSettings.upsert({
-    where: { userId },
-    create: { userId, ...data },
-    update: data,
-    select: { anthropicKeyLast4: true, keyVersion: true, updatedAt: true },
-  });
-  const meta = keyMeta(row);
-  if (!meta) throw new Error("activateUserClaudeKey: ligne sans clé après écriture"); // inatteignable (CHECK)
-  return meta;
+/** @deprecated Choix 1.1 (keySource NULL : clé personnelle sinon clé d'équipe). Utiliser saveUserSelection. */
+export async function saveUserEngine(userId: string, engine: EngineId, ollamaModel?: string): Promise<void> {
+  await saveUserSelection(userId, { engine, keySource: null }, ollamaModel);
 }
 
-/**
- * Idempotent : supprimer une clé absente n'est pas une erreur. La ligne est
- * conservée ; les colonnes de clé sont effacées et, si Claude était choisi, le
- * moteur revient au choix par défaut (NULL : Sans IA sans clé serveur), dans
- * la même transaction. Un autre moteur choisi (Ollama, Sans IA) est conservé.
- * Sans clé enregistrée, rien ne change (Claude via la clé serveur reste choisi).
- */
+/** @deprecated Suppression de la connexion Claude (cf. deleteCredential). */
 export async function deleteUserAiKey(userId: string): Promise<boolean> {
-  const client = db();
-  const withKey = { userId, anthropicKeyCiphertext: { not: null } };
-  const [, { count }] = await client.$transaction([
-    client.userAiSettings.updateMany({ where: { ...withKey, engine: "claude" }, data: { engine: null } }),
-    client.userAiSettings.updateMany({
-      where: withKey,
-      data: { anthropicKeyCiphertext: null, anthropicKeyLast4: null, keyVersion: null },
-    }),
-  ]);
-  return count > 0;
+  return deleteCredential(userId, "claude");
 }
 
-/**
- * Clé en clair de l'utilisateur, ou null s'il n'en a pas enregistré.
- *
- * - Ligne présente mais indéchiffrable (clé maître absente, changée sans
- *   rotation, valeur altérée) → AiKeyUnreadableError, journalisée : on ne
- *   bascule pas en silence sur la clé serveur.
- * - Valeur chiffrée avec l'ancienne clé maître → rechiffrée avec la courante
- *   (mise à jour conditionnelle : si la ligne a changé entre-temps, on ne
- *   l'écrase pas).
- */
+/** @deprecated Clé Claude en clair de l'utilisateur, ou null (cf. loadCredential). */
 export async function loadUserApiKey(
   userId: string,
   options: { env?: Env; log: Logger; box?: SecretBox },
 ): Promise<string | null> {
-  const row = await db().userAiSettings.findUnique({
-    where: { userId },
-    select: { anthropicKeyCiphertext: true, keyVersion: true },
-  });
-  if (!row || row.anthropicKeyCiphertext === null || row.keyVersion === null) return null;
-  const stored = { ciphertext: row.anthropicKeyCiphertext, keyVersion: row.keyVersion };
-
-  let box: SecretBox;
-  let apiKey: string;
-  try {
-    box = options.box ?? loadSecretBoxFromEnv(options.env ?? process.env);
-    apiKey = box.open(stored.ciphertext, userId, stored.keyVersion);
-  } catch (error) {
-    if (error instanceof SecretBoxError || error instanceof ConfigurationError) {
-      options.log.error("ai_key.unreadable", { reason: error.message, keyVersion: stored.keyVersion });
-      throw new AiKeyUnreadableError();
-    }
-    throw error;
-  }
-
-  if (box.isStale(stored.keyVersion)) {
-    const sealed = box.seal(apiKey, userId);
-    const { count } = await db().userAiSettings.updateMany({
-      where: { userId, keyVersion: stored.keyVersion, anthropicKeyCiphertext: stored.ciphertext },
-      data: { anthropicKeyCiphertext: sealed.ciphertext, keyVersion: sealed.keyVersion },
-    });
-    options.log.info("ai_key.rewrapped", { from: stored.keyVersion, to: sealed.keyVersion, applied: count > 0 });
-  }
-  return apiKey;
+  return (await loadCredential(userId, "claude", options))?.apiKey ?? null;
 }

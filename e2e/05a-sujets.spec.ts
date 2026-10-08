@@ -204,6 +204,42 @@ test.describe("5. Trame — sujets saisis à la main", () => {
   });
 });
 
+test.describe("5. Trame — banque de problématiques", () => {
+  test("devrait enregistrer les problématiques d'un sujet, une par ligne, et mener à sa fiche de révision", async ({ page, account }) => {
+    void account;
+    const id = await openSubjects(page, "Sujets et problématiques");
+    const panel = await openAddPanel(page);
+    await panel.getByLabel("Nom du sujet").fill("Énergie");
+    const problems = panel.getByLabel(/^Problématiques possibles/);
+    await problems.fill("Faut-il taxer le kérosène ?\n\nLa sobriété énergétique suffit-elle ?");
+    await expect(panel.getByText("2 / 30 problématiques")).toBeVisible();
+    await panel.getByRole("button", { name: "Ajouter le sujet" }).click();
+    await expect(panel.getByText("Sujet ajouté. Vous pouvez en saisir un autre.")).toBeVisible();
+
+    const item = subjectList(page).getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Énergie/ }) });
+    await expect(item).toContainText("2 problématiques possibles");
+    await page.reload();
+    await expect(item).toContainText("2 problématiques possibles");
+
+    // Une problématique trop courte est refusée, avec son rang.
+    await item.getByRole("button", { name: "Modifier Énergie" }).click();
+    // En édition, la ligne devient le formulaire « Modifier Énergie » (plus de titre de sujet).
+    const editor = main(page).getByRole("region", { name: "Modifier Énergie" });
+    const edit = editor.getByLabel(/^Problématiques possibles/);
+    await expect(edit).toHaveValue("Faut-il taxer le kérosène ?\nLa sobriété énergétique suffit-elle ?");
+    await edit.fill("Court ?");
+    await editor.getByRole("button", { name: "Enregistrer le sujet" }).click();
+    await expect(edit).toHaveAttribute("aria-invalid", "true");
+    await expect(editor.getByText(/Problématique 1 : Une problématique doit faire au moins 10 caractères/)).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    const sheet = item.getByRole("link", { name: "Fiche de révision de Énergie" });
+    await sheet.click();
+    await expect(page).toHaveURL(new RegExp(`/projets/${id}/sujets/[a-z0-9]+/fiche$`));
+    await expect(page.getByRole("navigation", { name: "Fil d'Ariane" })).toContainText("Fiche de révision");
+  });
+});
+
 test.describe("5. Trame — import d'une liste de sujets", () => {
   test("devrait importer trois sujets au format pipe avec description et mots-clés", async ({ page, account }) => {
     void account;

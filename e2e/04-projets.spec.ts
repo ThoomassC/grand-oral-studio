@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { test, expect, BASE_URL, expectNoHorizontalScroll } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
 import { createProject, dialog, importThemeList, openNewProjectDialog, projectRowAction, waitForHydration } from "./support/app";
@@ -64,7 +65,7 @@ test.describe("4. Projets — création et carte", () => {
     await expect(page.getByRole("main").getByRole("heading", { name: "Projet double clic", level: 3 })).toHaveCount(1);
   });
 
-  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 2/3 (apparence et trame par défaut) avec « Commencer le Jour J »", async ({
+  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 2/3 (apparence et trame par défaut) avec « S'entraîner » et « Jour J »", async ({
     page,
     account,
   }) => {
@@ -79,9 +80,14 @@ test.describe("4. Projets — création et carte", () => {
     await expect(card.getByRole("img", { name: "2 étapes faites sur 3" })).toBeVisible();
     await expect(card).toContainText("Grand oral de fin d'études");
     await expect(card).toContainText("Sujets :0");
-    const resume = card.getByRole("link", { name: "Commencer le Jour J — Master Management 2027" });
-    await expect(resume).toHaveAttribute("href", `/projets/${id}/jour-j`);
-    await resume.click();
+    await expect(card.getByText(/^Rédaction : /)).toBeVisible();
+    await expect(card.getByRole("link", { name: "S'entraîner — Master Management 2027" })).toHaveAttribute(
+      "href",
+      `/projets/${id}/jour-j?mode=entrainement`,
+    );
+    const day = card.getByRole("link", { name: "Jour J — Master Management 2027" });
+    await expect(day).toHaveAttribute("href", `/projets/${id}/jour-j`);
+    await day.click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${id}/jour-j`);
   });
 
@@ -170,6 +176,48 @@ test.describe("4. Projets — menu du projet", () => {
   });
 });
 
+test.describe("4. Projets — import, exemple et export", () => {
+  test("devrait proposer l'import et l'exemple dans la liste vide, puis créer le projet d'exemple", async ({ page, account }) => {
+    void account;
+    await page.goto("/projets");
+    const example = page.getByRole("button", { name: "Partir de l'exemple" });
+    await expect(page.getByRole("button", { name: "Importer un projet (.json)" })).toBeVisible();
+    await waitForHydration(example);
+    await example.click();
+    await page.waitForURL(/\/projets\/[a-z0-9]+\/apparence$/);
+    await page.goto("/projets");
+    // Une fois la liste non vide, les deux actions restent à côté de « Nouveau projet ».
+    await expect(page.getByRole("button", { name: "Importer un projet (.json)" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Partir de l'exemple" })).toHaveCount(1);
+  });
+
+  test("devrait exporter un projet en JSON puis le réimporter comme nouveau projet", async ({ page, account }) => {
+    void account;
+    const id = await createProject(page, "Projet à transférer", "Description transférée");
+    await page.goto(`/projets/${id}/apparence`);
+    const gear = page.getByRole("button", { name: "Paramètres du projet" });
+    await waitForHydration(gear);
+    await gear.click();
+    const downloading = page.waitForEvent("download");
+    await page.getByRole("menu", { name: "Paramètres du projet" }).getByRole("menuitem", { name: "Exporter le projet (JSON)" }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toMatch(/\.json$/);
+    // Le fichier tel que le navigateur l'enregistre : sous son nom proposé (.json), pas sous le nom
+    // temporaire sans extension de Playwright, que l'import refuse à juste titre.
+    const file = { name: download.suggestedFilename(), mimeType: "application/json", buffer: fs.readFileSync(await download.path()) };
+
+    await page.goto("/projets");
+    const trigger = page.getByRole("button", { name: "Importer un projet (.json)" });
+    await waitForHydration(trigger);
+    await trigger.click();
+    const modal = dialog(page, "Importer un projet");
+    await modal.getByLabel(/Déposez le fichier d'export/).setInputFiles(file);
+    await page.waitForURL((url) => /\/projets\/[a-z0-9]+\/apparence$/.test(url.pathname) && !url.pathname.includes(id));
+    await page.goto("/projets");
+    await expect(page.getByRole("main").getByRole("heading", { name: /Projet à transférer/, level: 3 })).toHaveCount(2);
+  });
+});
+
 test.describe("4. Projets — duplication et suppression", () => {
   test("devrait garder le bouton d'avancement et ouvrir le menu « ⋮ » au clavier, lisible à 375 px", async ({ page, account }) => {
     void account;
@@ -177,7 +225,8 @@ test.describe("4. Projets — duplication et suppression", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/projets");
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { level: 3 }) });
-    await expect(card.getByRole("link", { name: /^Commencer le Jour J/ })).toBeVisible();
+    await expect(card.getByRole("link", { name: /^S'entraîner/ })).toBeVisible();
+    await expect(card.getByRole("link", { name: /^Jour J/ })).toBeVisible();
     const trigger = card.getByRole("button", { name: /^Actions du projet / });
     const box = await trigger.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -188,11 +237,30 @@ test.describe("4. Projets — duplication et suppression", () => {
     await trigger.focus();
     await page.keyboard.press("Enter");
     const menu = page.getByRole("menu", { name: /^Actions du projet / });
-    await expect(menu.getByRole("menuitem")).toHaveText(["Dupliquer", "Supprimer"]);
-    await expect(menu.getByRole("menuitem", { name: "Dupliquer" })).toBeFocused();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Renommer", "Dupliquer", "Supprimer"]);
+    await expect(menu.getByRole("menuitem", { name: "Renommer" })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(trigger).toBeFocused();
+  });
+
+  test("devrait renommer un projet depuis le menu « ⋮ » de la liste", async ({ page, account }) => {
+    void account;
+    await createProject(page, "Projet à renommer");
+    await page.goto("/projets");
+    const trigger = page.getByRole("button", { name: "Actions du projet Projet à renommer" });
+    await waitForHydration(trigger);
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Renommer" }).click();
+    const dialog = page.getByRole("dialog", { name: "Renommer le projet" });
+    const field = dialog.getByLabel("Nom du projet");
+    await expect(field).toHaveValue("Projet à renommer");
+    await field.fill("Projet renommé depuis la liste");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("main").getByText("Projet renommé.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projet renommé depuis la liste" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projet à renommer" })).toHaveCount(0);
   });
 
   test("devrait dupliquer le projet en tête de liste", async ({ page, account }) => {
