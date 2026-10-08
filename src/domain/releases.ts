@@ -48,7 +48,7 @@ export const RELEASES: readonly Release[] = [
         "Édition des diaporamas : régénérer, insérer, déplacer ou supprimer une diapo, dupliquer un diaporama.",
         "Partage d'un projet avec des collègues, en éditeur ou en lecteur.",
         "Bibliothèque d'équipe : publiez une apparence ou une trame, appliquez celle d'un collègue.",
-        "Export et import d'un projet (.json), et un projet d'exemple pour découvrir l'application.",
+        "Export et import d'un projet (.json), et un projet d'exemple aux couleurs CESI, avec une trame générique de grand oral, pour découvrir l'application.",
         "Comptes : mot de passe oublié, vérification de l'adresse e-mail, changement de mot de passe, suppression du compte et export de vos données.",
       ],
       changed: [

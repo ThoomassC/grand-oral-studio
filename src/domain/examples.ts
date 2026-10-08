@@ -1,10 +1,10 @@
-import { defaultBrand, defaultTemplate } from "./defaults";
 import type { ExportedProject } from "./project-export";
+import type { Brand, PromptTemplate } from "./schemas";
 
 /**
  * Projet d'exemple « Grand oral MAALSI (exemple) » : trois sujets prêts à l'emploi
- * pour découvrir l'application sans partir d'une page blanche. Apparence et trame
- * par défaut (cf. ./defaults.ts), aucun diaporama.
+ * pour découvrir l'application sans partir d'une page blanche, avec l'apparence
+ * CESI et une trame générique de grand oral. Aucun diaporama.
  *
  * Les chiffres et sources des notes sont PLAUSIBLES mais donnés à titre d'exemple :
  * chaque note le rappelle, l'utilisateur doit les vérifier avant son oral.
@@ -15,13 +15,97 @@ export const EXAMPLE_PROJECT_NAME = "Grand oral MAALSI (exemple)";
 
 const EXAMPLE_WARNING = "Exemple : chiffres et sources à vérifier (et à dater) avant l'oral.";
 
+/**
+ * Apparence CESI, relevée sur un support de grand oral MAALSI : fonds blancs,
+ * titres et couverture noirs (#111111), texte #222222, sous-titres #333333,
+ * jaune CESI (#FBE216) en accent, Arial partout. Pas de logo : le support n'en
+ * embarquait pas, chacun ajoute le sien dans l'Apparence.
+ */
+export function cesiBrand(): Brand {
+  return {
+    name: "CESI",
+    colors: {
+      primary: "#111111",
+      secondary: "#333333",
+      accent: "#FBE216",
+      background: "#FFFFFF",
+      text: "#222222",
+    },
+    fonts: { heading: "Arial", body: "Arial" },
+    logoDataUrl: null,
+  };
+}
+
+/**
+ * Trame générique d'un grand oral, sur la structure de ce même support :
+ * problématique, cas et enjeux, trois axes (solution, mise en œuvre, garde-fous),
+ * conclusion. 12 diapos couverture comprise pour 20 minutes (la diapo finale
+ * « Questions ? » du support, sans contenu, n'est pas reprise).
+ *
+ * Les titres évitent « question » et « plan » : sectionKind (domain/free/outline)
+ * les lirait comme une problématique ou une annonce du plan.
+ */
+export function exampleTemplate(): PromptTemplate {
+  return {
+    format: "16:9",
+    language: "fr",
+    durationMinutes: 20,
+    sections: [
+      {
+        id: "problem",
+        title: "Problématique",
+        guidance: "La problématique tirée, recopiée mot pour mot, et pourquoi elle se pose aujourd'hui.",
+        slides: 1,
+      },
+      {
+        id: "intro",
+        title: "Introduction : contexte et enjeux",
+        guidance:
+          "Le cas concret qui sert de fil rouge (entreprise, projet, mission), son contexte, l'objectif visé et les critères qui permettront de juger la réponse.",
+        slides: 1,
+      },
+      {
+        id: "part1",
+        title: "Premier axe : la solution proposée",
+        guidance:
+          "Ce qui est mis en place : sources et outils, architecture cible, et pourquoi ce choix plutôt qu'un autre.",
+        slides: 2,
+      },
+      {
+        id: "part2",
+        title: "Deuxième axe : mise en œuvre et résultats",
+        guidance:
+          "Comment la solution fonctionne sur le cas : organisation des données ou des traitements, indicateurs suivis, restitution, et ce qu'elle change concrètement pour la décision.",
+        slides: 4,
+      },
+      {
+        id: "part3",
+        title: "Troisième axe : garde-fous, limites et déploiement",
+        guidance:
+          "Qualité, sécurité, éthique et RGPD ; limites de la solution ; conditions de réussite et étapes du déploiement.",
+        slides: 2,
+      },
+      {
+        id: "conclusion",
+        title: "Conclusion",
+        guidance:
+          "Réponse explicite et nuancée à la problématique, apport du cas, étape suivante, puis ouverture vers les échanges avec le jury.",
+        slides: 1,
+      },
+    ],
+    tone: "Clair, structuré et argumenté, niveau master",
+    constraints:
+      "Au plus six puces courtes par diapo. Une idée par diapo, annoncée par un titre qui l'affirme. Chaque axe s'appuie sur le cas concret.",
+  };
+}
+
 export function exampleProject(): ExportedProject {
   return {
     name: EXAMPLE_PROJECT_NAME,
     description:
       "Projet d'exemple : trois sujets de grand oral du titre MAALSI (manager en architecture et applications logicielles des systèmes d'information), avec notes et problématiques. Modifiez-le librement ou supprimez-le.",
-    brand: defaultBrand(),
-    template: defaultTemplate(),
+    brand: cesiBrand(),
+    template: exampleTemplate(),
     themes: [
       {
         name: "Sobriété numérique et éco-conception",
