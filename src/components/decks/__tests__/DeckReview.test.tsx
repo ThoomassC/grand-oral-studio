@@ -121,7 +121,10 @@ describe("DeckReview — structure du diaporama", () => {
     expect(actions.moveSlide).toHaveBeenCalledWith("d1", 3, "down", VERSION);
     await waitFor(() => expect(card(5)).toHaveTextContent(SPEC.slides[3]!.title));
     expect(screen.getByText(`Diapo 4 déplacée en position 5.`)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: action("Monter", 5) }));
+    // Les actions restent inertes (aria-disabled) tant que le premier déplacement n'est pas terminé.
+    const up = screen.getByRole("button", { name: action("Monter", 5) });
+    await waitFor(() => expect(up).not.toHaveAttribute("aria-disabled"));
+    await user.click(up);
     expect(actions.moveSlide).toHaveBeenLastCalledWith("d1", 4, "up", NEXT);
   });
 

@@ -102,6 +102,8 @@ describe("Éditeur de la page Apparence — concurrence optimiste", () => {
     render(<BrandWorkspace programId="p1" initialBrand={defaultBrand()} savedAt={V0} format="16:9" />);
     save();
     await screen.findByText("Apparence enregistrée.");
+    // Le bouton reprend son libellé une fois l'enregistrement terminé (sur une machine lente, après l'annonce).
+    await screen.findByRole("button", { name: "Enregistrer l'apparence" });
     save();
     await waitFor(() => expect(updateBrand).toHaveBeenCalledTimes(2));
     expect(updateBrand.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
