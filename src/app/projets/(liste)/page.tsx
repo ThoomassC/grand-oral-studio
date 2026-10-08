@@ -105,6 +105,7 @@ export default async function ProgramsPage() {
                   <ProgramActions
                     programId={p.id}
                     programName={p.name}
+                    programDescription={p.description}
                     role={p.role}
                     focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
                       (x): x is string => x !== null,

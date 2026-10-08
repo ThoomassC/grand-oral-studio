@@ -237,11 +237,30 @@ test.describe("4. Projets — duplication et suppression", () => {
     await trigger.focus();
     await page.keyboard.press("Enter");
     const menu = page.getByRole("menu", { name: /^Actions du projet / });
-    await expect(menu.getByRole("menuitem")).toHaveText(["Dupliquer", "Supprimer"]);
-    await expect(menu.getByRole("menuitem", { name: "Dupliquer" })).toBeFocused();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Renommer", "Dupliquer", "Supprimer"]);
+    await expect(menu.getByRole("menuitem", { name: "Renommer" })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(trigger).toBeFocused();
+  });
+
+  test("devrait renommer un projet depuis le menu « ⋮ » de la liste", async ({ page, account }) => {
+    void account;
+    await createProject(page, "Projet à renommer");
+    await page.goto("/projets");
+    const trigger = page.getByRole("button", { name: "Actions du projet Projet à renommer" });
+    await waitForHydration(trigger);
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Renommer" }).click();
+    const dialog = page.getByRole("dialog", { name: "Renommer le projet" });
+    const field = dialog.getByLabel("Nom du projet");
+    await expect(field).toHaveValue("Projet à renommer");
+    await field.fill("Projet renommé depuis la liste");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("main").getByText("Projet renommé.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projet renommé depuis la liste" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Projet à renommer" })).toHaveCount(0);
   });
 
   test("devrait dupliquer le projet en tête de liste", async ({ page, account }) => {

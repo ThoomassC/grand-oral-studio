@@ -6,11 +6,13 @@ const refresh = vi.fn();
 const duplicate = vi.fn();
 const remove = vi.fn();
 const restore = vi.fn();
+const update = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh, replace: vi.fn() }) }));
 vi.mock("@/server/actions/programs", () => ({
   duplicateProgram: (...args: unknown[]) => duplicate(...args),
   deleteProgram: (...args: unknown[]) => remove(...args),
   restoreProgram: (...args: unknown[]) => restore(...args),
+  updateProgram: (...args: unknown[]) => update(...args),
 }));
 
 const { ToastProvider } = await import("@thomascaron/opale-ui");
@@ -22,6 +24,7 @@ afterEach(() => {
   duplicate.mockReset();
   remove.mockReset();
   restore.mockReset();
+  update.mockReset();
 });
 
 /** Région d'annonce de la ligne (la file des notifications d'Opale, hors de la ligne, est aussi un « status »). */
@@ -44,6 +47,7 @@ function renderActions(role?: "owner" | "editor" | "viewer") {
         <ProgramActions
           programId="p1"
           programName="BTS SIO"
+          programDescription="Oral de fin d'année"
           role={role}
           focusAfterDelete={["programme-p2", "liste-programmes"]}
         />
@@ -73,12 +77,12 @@ describe("Menu « ⋮ » d'une ligne de projet", () => {
     expect(screen.queryByRole("button", { name: /Supprimer/ })).not.toBeInTheDocument();
   });
 
-  it("devrait ouvrir un menu avec Dupliquer et Supprimer", async () => {
+  it("devrait ouvrir un menu avec Renommer, Dupliquer et Supprimer", async () => {
     const user = userEvent.setup();
     renderActions();
     const menu = await openMenu(user);
     expect(trigger()).toHaveAttribute("aria-expanded", "true");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Dupliquer", "Supprimer"]);
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Renommer", "Dupliquer", "Supprimer"]);
   });
 
   it("devrait s'ouvrir au clavier et rendre le focus au bouton sur Échap", async () => {
@@ -87,7 +91,8 @@ describe("Menu « ⋮ » d'une ligne de projet", () => {
     trigger().focus();
     await user.keyboard("{Enter}");
     const menu = screen.getByRole("menu");
-    await waitFor(() => expect(within(menu).getByRole("menuitem", { name: "Dupliquer" })).toHaveFocus());
+    // Premier élément du menu : « Renommer ».
+    await waitFor(() => expect(within(menu).getByRole("menuitem", { name: "Renommer" })).toHaveFocus());
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     await waitFor(() => expect(trigger()).toHaveFocus());
@@ -180,11 +185,51 @@ describe("Menu « ⋮ » d'une ligne de projet", () => {
     expect(screen.getByRole("dialog", { name: "Supprimer le projet ?" })).toBeInTheDocument();
   });
 
-  it("devrait masquer « Supprimer » pour un éditeur ou un lecteur (réservé au propriétaire)", async () => {
+  it("devrait masquer « Supprimer » pour un éditeur (réservé au propriétaire), mais garder « Renommer »", async () => {
     const user = userEvent.setup();
     renderActions("editor");
     const menu = await openMenu(user);
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Renommer", "Dupliquer"]);
+  });
+
+  it("devrait masquer « Renommer » et « Supprimer » pour un lecteur", async () => {
+    const user = userEvent.setup();
+    renderActions("viewer");
+    const menu = await openMenu(user);
     expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Dupliquer"]);
+  });
+
+  it("devrait renommer le projet depuis le menu, en gardant la description, puis rafraîchir la liste", async () => {
+    update.mockResolvedValue({ ok: true, data: null });
+    const user = userEvent.setup();
+    renderActions();
+    const menu = await openMenu(user);
+    await user.click(within(menu).getByRole("menuitem", { name: "Renommer" }));
+    const dialog = await screen.findByRole("dialog", { name: "Renommer le projet" });
+    const field = within(dialog).getByLabelText("Nom du projet");
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(field).toHaveValue("BTS SIO");
+    await user.clear(field);
+    await user.type(field, "BTS SIO — session 2026");
+    await user.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith("p1", { name: "BTS SIO — session 2026", description: "Oral de fin d'année" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Renommer le projet" })).not.toBeInTheDocument());
+    expect(refresh).toHaveBeenCalled();
+    expect(await announcement()).toHaveTextContent("Projet renommé.");
+    await waitFor(() => expect(trigger()).toHaveFocus());
+  });
+
+  it("devrait garder la fenêtre ouverte et afficher l'erreur si le renommage échoue", async () => {
+    update.mockResolvedValue({ ok: false, error: "Ce projet a été supprimé entre-temps." });
+    const user = userEvent.setup();
+    renderActions();
+    await user.click(within(await openMenu(user)).getByRole("menuitem", { name: "Renommer" }));
+    const dialog = await screen.findByRole("dialog", { name: "Renommer le projet" });
+    await user.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+    expect(await within(dialog).findByText("Ce projet a été supprimé entre-temps.")).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("devrait proposer d'annuler la suppression pendant quelques secondes, puis restaurer", async () => {
