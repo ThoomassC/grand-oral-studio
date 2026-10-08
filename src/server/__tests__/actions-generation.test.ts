@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Couche de transport des actions de génération : on isole Next (cache,
@@ -13,12 +13,14 @@ vi.mock("@/server/session", () => ({
   requireUser: async () => ({ id: "user-1", email: "u@example.test", name: "U" }),
 }));
 type Resolved = { engine: "free" } | { engine: string; provider: { name: string }; billing: string };
-const getEngineForUser = vi.fn<(userId: string) => Promise<Resolved>>(async () => ({
+const getEngineForUser = vi.fn<(userId: string, options?: { override?: unknown }) => Promise<Resolved>>(async () => ({
   engine: "mock",
   provider: { name: "mock" },
   billing: "server",
 }));
-vi.mock("@/server/ai", () => ({ getEngineForUser: (userId: string) => getEngineForUser(userId) }));
+vi.mock("@/server/ai", () => ({
+  getEngineForUser: (userId: string, options?: { override?: unknown }) => getEngineForUser(userId, options),
+}));
 
 const service = {
   generateFinalDeck: vi.fn(),
@@ -35,24 +37,37 @@ const PROBLEM = "Comment concilier mobilité et sobriété en ville ?";
 
 beforeEach(() => {
   revalidatePath.mockReset();
+  getEngineForUser.mockClear();
   service.generateFinalDeck.mockReset();
   service.classifyProblem.mockReset();
 });
 
 describe("action generateFinalDeck", () => {
   it("devrait transmettre le sujet et revalider les pages du projet", async () => {
-    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-1", warnings: [], reused: false });
+    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-1", warnings: [], reused: false, engine: "mock" });
     const result = await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
-    expect(result).toEqual({ ok: true, data: { deckId: "deck-1" } });
-    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({ programId: "prog-1", themeId: "theme-1", problem: PROBLEM });
+    expect(result).toEqual({ ok: true, data: { deckId: "deck-1", warnings: [], reused: false, engine: "mock" } });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({
+      programId: "prog-1",
+      themeId: "theme-1",
+      problem: PROBLEM,
+      practice: false,
+      prepStartedAt: null,
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/projets/prog-1", "layout");
   });
 
   it("devrait accepter un deck sans sujet (themeId null)", async () => {
-    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-2", warnings: [], reused: false });
+    service.generateFinalDeck.mockResolvedValue({ deckId: "deck-2", warnings: [], reused: false, engine: "mock" });
     const result = await actions.generateFinalDeck("prog-1", null, PROBLEM);
-    expect(result).toEqual({ ok: true, data: { deckId: "deck-2" } });
-    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({ programId: "prog-1", themeId: null, problem: PROBLEM });
+    expect(result).toEqual({ ok: true, data: { deckId: "deck-2", warnings: [], reused: false, engine: "mock" } });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({
+      programId: "prog-1",
+      themeId: null,
+      problem: PROBLEM,
+      practice: false,
+      prepStartedAt: null,
+    });
   });
 
   it.each([
@@ -81,7 +96,7 @@ describe("choix du moteur et de la facturation", () => {
     getEngineForUser.mockResolvedValueOnce({ engine: "claude", provider: { name: "anthropic:x" }, billing: "user" });
     service.generateFinalDeck.mockResolvedValue({ deckId: "d", warnings: [], reused: false });
     await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
-    expect(getEngineForUser).toHaveBeenCalledWith("user-1");
+    expect(getEngineForUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ override: null }));
     expect(service.generateFinalDeck.mock.calls[0]![2]).toMatchObject({ billing: "user", ai: { name: "anthropic:x" } });
   });
 
@@ -98,7 +113,8 @@ describe("choix du moteur et de la facturation", () => {
     const result = await actions.generateFinalDeck("prog-1", "theme-1", PROBLEM);
     expect(result).toEqual({
       ok: false,
-      error: "Ajoutez votre clé API Anthropic dans la Configuration IA pour lancer une génération.",
+      error: "Ajoutez votre clé API Anthropic dans la Rédaction IA pour lancer une génération.",
+      code: "AI_KEY_REQUIRED",
     });
     expect(service.generateFinalDeck).not.toHaveBeenCalled();
   });
@@ -112,6 +128,91 @@ describe("choix du moteur et de la facturation", () => {
     expect(service.classifyProblem.mock.calls[0]![3]).toMatchObject({
       mode: "free",
       fallbackReason: "Ollama n'est pas configuré sur ce serveur.",
+    });
+  });
+});
+
+describe("generateFinalDeck — repli en un clic, entraînement et chrono", () => {
+  const NOW = new Date("2026-10-07T10:00:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    service.generateFinalDeck.mockResolvedValue({ deckId: "d", warnings: ["w"], reused: false, engine: "free" });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("devrait transmettre la surcharge « Sans IA » au choix du moteur (sans bascule implicite)", async () => {
+    getEngineForUser.mockResolvedValueOnce({ engine: "free" });
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM, { override: { engine: "free" } });
+    expect(getEngineForUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ override: { engine: "free" } }));
+    expect(service.generateFinalDeck.mock.calls[0]![2]).toMatchObject({ mode: "free" });
+    expect(result).toEqual({ ok: true, data: { deckId: "d", warnings: ["w"], reused: false, engine: "free" } });
+  });
+
+  it("devrait transmettre une autre connexion (fournisseur et origine de la clé)", async () => {
+    await actions.generateFinalDeck("prog-1", null, PROBLEM, { override: { engine: "mistral", keySource: "server" } });
+    expect(getEngineForUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ override: { engine: "mistral", keySource: "server" } }),
+    );
+  });
+
+  it.each([
+    { label: "Ollama (pas de surcharge locale)", override: { engine: "ollama" } },
+    { label: "fournisseur inconnu", override: { engine: "skynet", keySource: "user" } },
+    { label: "fournisseur sans origine de clé", override: { engine: "mistral" } },
+    { label: "Claude (plus proposé)", override: { engine: "claude", keySource: "user" } },
+    { label: "OpenAI (plus proposé)", override: { engine: "openai", keySource: "server" } },
+  ])("devrait refuser une surcharge invalide : $label", async ({ override }) => {
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM, { override } as never);
+    expect(result).toMatchObject({ ok: false, code: "VALIDATION" });
+    expect(getEngineForUser).not.toHaveBeenCalled();
+    expect(service.generateFinalDeck).not.toHaveBeenCalled();
+  });
+
+  it("devrait transmettre practice et le départ du chrono", async () => {
+    const started = new Date(NOW.getTime() - 30 * 60_000);
+    await actions.generateFinalDeck("prog-1", null, PROBLEM, { practice: true, prepStartedAt: started.toISOString() });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toEqual({
+      programId: "prog-1",
+      themeId: null,
+      problem: PROBLEM,
+      practice: true,
+      prepStartedAt: started,
+    });
+  });
+
+  it("devrait refuser un départ du chrono illisible", async () => {
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM, { prepStartedAt: "hier matin" });
+    expect(result).toMatchObject({ ok: false, code: "VALIDATION" });
+    expect(service.generateFinalDeck).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: "plus de 6 h", at: new Date(NOW.getTime() - 6 * 3_600_000 - 1000) },
+    { label: "dans le futur", at: new Date(NOW.getTime() + 10 * 60_000) },
+  ])("devrait ignorer un départ du chrono hors bornes ($label) sans bloquer la génération", async ({ at }) => {
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM, { prepStartedAt: at.toISOString() });
+    expect(result.ok).toBe(true);
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toMatchObject({ prepStartedAt: null });
+  });
+
+  it("devrait ramener à maintenant un départ légèrement en avance (horloge du navigateur)", async () => {
+    const at = new Date(NOW.getTime() + 30_000);
+    await actions.generateFinalDeck("prog-1", null, PROBLEM, { prepStartedAt: at.toISOString() });
+    expect(service.generateFinalDeck.mock.calls[0]![1]).toMatchObject({ prepStartedAt: NOW });
+  });
+
+  it("devrait renvoyer le code d'erreur, le message et l'attente (repli proposé par l'interface, heure affichée)", async () => {
+    const { AiProviderRateLimitedError } = await import("@/server/errors");
+    service.generateFinalDeck.mockRejectedValueOnce(new AiProviderRateLimitedError("mistral", 30));
+    const result = await actions.generateFinalDeck("prog-1", null, PROBLEM);
+    expect(result).toEqual({
+      ok: false,
+      error: "Mistral limite le nombre de requêtes en ce moment. Réessayez dans 30 s, ou choisissez un autre rédacteur.",
+      code: "AI_RATE_LIMITED",
+      retryAfterSeconds: 30,
     });
   });
 });

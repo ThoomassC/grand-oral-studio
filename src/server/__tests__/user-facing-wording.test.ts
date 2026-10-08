@@ -9,6 +9,10 @@ describe("vocabulaire affiché à l'utilisateur : « projet »", () => {
     expect(new NotFoundError("thème").userMessage).toBe("Ce sujet est introuvable.");
   });
 
+  it("devrait annoncer un diaporama introuvable, jamais un « deck », quand le deck est absent ou d'un autre compte", () => {
+    expect(new NotFoundError("deck").userMessage).toBe("Ce diaporama est introuvable.");
+  });
+
   it("parle de sujet, jamais de thème, quand l'IA refuse une demande", () => {
     expect(new AiRefusalError(null).userMessage).toBe(
       "L'IA a refusé de traiter cette demande. Reformulez la problématique ou le sujet, puis réessayez.",

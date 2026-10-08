@@ -4,6 +4,7 @@ import { SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { Button } from "@thomascaron/opale-ui";
 import { useId, useImperativeHandle, useRef, useState, useTransition, type Ref } from "react";
 import { defaultTemplate } from "@/domain/defaults";
+import { DEFAULT_PREP_MINUTES, PREP_MINUTES_MAX, PREP_MINUTES_MIN } from "@/domain/prep-clock";
 import { LIMITS, PromptTemplateSchema, type PromptTemplate, type Section } from "@/domain/schemas";
 import { formatSeconds, slideBudgetWarning, suggestSlideCount, totalSlides } from "@/domain/slides";
 import { updateTemplate } from "@/server/actions/programs";
@@ -54,13 +55,30 @@ function lineName(index: number, section: Section): string {
 export function TemplateEditor({
   programId,
   initialTemplate,
+  savedAt,
   ref,
 }: {
   programId: string;
   initialTemplate: PromptTemplate;
+  /**
+   * Version enregistrée reçue du serveur (templateSavedAt, ISO ; null = jamais enregistrée),
+   * renvoyée à chaque enregistrement pour détecter une trame modifiée entre-temps
+   * (autre onglet, autre membre). Absente : pas de contrôle.
+   */
+  savedAt?: string | null;
   ref?: Ref<TemplateEditorHandle>;
 }) {
   const [saved, setSaved] = useState<PromptTemplate>(initialTemplate);
+  // Jeton de concurrence optimiste : la version reçue au chargement, puis celle que renvoie
+  // chaque enregistrement. Une nouvelle version venue du serveur n'est reprise que si son
+  // contenu est celui que l'éditeur tient pour enregistré ; sinon l'enregistrement suivant
+  // est refusé (conflit) au lieu d'écraser l'autre version.
+  const [version, setVersion] = useState(savedAt);
+  const [serverVersion, setServerVersion] = useState(savedAt);
+  if (savedAt !== serverVersion) {
+    setServerVersion(savedAt);
+    if (JSON.stringify(initialTemplate) === JSON.stringify(saved)) setVersion(savedAt);
+  }
   const [template, setTemplate] = useState<PromptTemplate>(initialTemplate);
   /** Saisie des champs « Durée », convertie en secondes à l'enregistrement seulement. */
   const [durations, setDurations] = useState<DurationTexts>(() => durationTexts(initialTemplate));
@@ -73,7 +91,9 @@ export function TemplateEditor({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
 
-  const dirty = draftSignature(template, durations) !== draftSignature(saved, durationTexts(saved));
+  const dirty =
+    draftSignature(template, durations) !== draftSignature(saved, durationTexts(saved)) ||
+    !Object.is(template.prepMinutes, saved.prepMinutes);
   useUnsavedChanges(dirty);
   const durationOk = Number.isFinite(template.durationMinutes) && template.durationMinutes >= 3;
   const slidesOk = template.sections.every((s) => Number.isFinite(s.slides));
@@ -203,7 +223,7 @@ export function TemplateEditor({
     setFieldErrors({});
     startTransition(async () => {
       try {
-        const result = await updateTemplate(programId, checked.data);
+        const result = await updateTemplate(programId, checked.data, version);
         if (!result.ok) {
           const serverErrors = result.fieldErrors ?? {};
           setStatus({ kind: "error", message: result.error });
@@ -211,6 +231,7 @@ export function TemplateEditor({
           else setFieldErrors(serverErrors);
           return;
         }
+        setVersion(result.data.templateSavedAt);
         setSaved(checked.data);
         setTemplate(checked.data);
         // « 3 min » devient « 3:00 » : l'écriture enregistrée, sans changer la valeur.
@@ -226,6 +247,7 @@ export function TemplateEditor({
     format: `${baseId}-format`,
     language: `${baseId}-language`,
     duration: `${baseId}-duration`,
+    prep: `${baseId}-prep`,
     tone: `${baseId}-tone`,
     constraints: `${baseId}-constraints`,
     summary: `${baseId}-summary`,
@@ -300,6 +322,26 @@ export function TemplateEditor({
             {...errorProps(fieldErrors, "durationMinutes", `${ids.duration}-err`)}
           />
           <FieldError id={`${ids.duration}-err`} message={firstError(fieldErrors, "durationMinutes")} />
+        </div>
+        <div>
+          <label htmlFor={ids.prep} className="opale-field__label">
+            Temps de préparation (minutes)
+          </label>
+          <TextInput
+            id={ids.prep}
+            type="number"
+            inputMode="numeric"
+            min={PREP_MINUTES_MIN}
+            max={PREP_MINUTES_MAX}
+            placeholder={String(DEFAULT_PREP_MINUTES)}
+            value={template.prepMinutes === undefined || !Number.isFinite(template.prepMinutes) ? "" : template.prepMinutes}
+            onChange={(e) => patch({ prepMinutes: e.target.value.trim() === "" ? undefined : toNumber(e.target.value) })}
+            {...errorProps(fieldErrors, "prepMinutes", `${ids.prep}-err`, `${ids.prep}-help`)}
+          />
+          <p id={`${ids.prep}-help`} className="opale-field__helper">
+            Chronomètre du jour J ; vide : {DEFAULT_PREP_MINUTES} min.
+          </p>
+          <FieldError id={`${ids.prep}-err`} message={firstError(fieldErrors, "prepMinutes")} />
         </div>
       </div>
 

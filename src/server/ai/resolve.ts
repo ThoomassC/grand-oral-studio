@@ -29,8 +29,16 @@ function aiProviderChoice(env: Env): "mock" | "anthropic" | null {
   if (!choice) return null;
   if (choice === "mock" || choice === "anthropic") return choice;
   throw new AiUnavailableError(`AI_PROVIDER inconnu : « ${choice} »`, {
-    userMessage: "Le service de génération est mal configuré. Choisissez le moteur gratuit dans la Configuration IA ou réessayez plus tard.",
+    userMessage: "Le service de génération est mal configuré. Choisissez Sans IA dans la Rédaction IA ou réessayez plus tard.",
   });
+}
+
+/**
+ * AI_PROVIDER=mock (dev/tests), sans lever : une valeur invalide vaut « pas de
+ * mock » ici (le démarrage la refuse déjà, cf. assertAiProviderEnv).
+ */
+export function mockForced(env: Env): boolean {
+  return env.AI_PROVIDER?.trim().toLowerCase() === "mock";
 }
 
 /** Validation au démarrage (next.config.ts) : échoue tôt, avec un message explicite. */

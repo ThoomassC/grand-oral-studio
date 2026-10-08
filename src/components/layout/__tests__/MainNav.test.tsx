@@ -43,11 +43,11 @@ const modal = () => screen.queryByRole("dialog", { name: "Quitter sans enregistr
 describe("MainNav", () => {
   const tabs = () => [...screen.getByRole("navigation", { name: "Navigation principale" }).querySelectorAll("a")];
 
-  it("devrait proposer Projets, Configuration IA puis Notes de version à un compte connecté", () => {
+  it("devrait proposer Projets, Rédaction IA puis Notes de version à un compte connecté", () => {
     render(<MainNav signedIn />);
-    expect(tabs().map((a) => a.textContent)).toEqual(["Projets", "Configuration IA", "Notes de version"]);
+    expect(tabs().map((a) => a.textContent)).toEqual(["Projets", "Rédaction IA", "Notes de version"]);
     expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("href", "/projets");
-    expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("href", "/configuration-ia");
+    expect(screen.getByRole("link", { name: "Rédaction IA" })).toHaveAttribute("href", "/configuration-ia");
     expect(screen.getByRole("link", { name: "Notes de version" })).toHaveAttribute("href", "/notes-de-version");
   });
 
@@ -61,7 +61,7 @@ describe("MainNav", () => {
   it("devrait signaler la page courante sur /configuration-ia", () => {
     pathname = "/configuration-ia";
     render(<MainNav signedIn />);
-    expect(screen.getByRole("link", { name: "Configuration IA" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Rédaction IA" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Projets" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("link", { name: "Notes de version" })).not.toHaveAttribute("aria-current");
   });
@@ -81,7 +81,7 @@ describe("MainNav", () => {
       pathname = path;
       render(<MainNav signedIn />);
       expect(screen.getByRole("link", { name: "Projets" })).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("link", { name: "Configuration IA" })).not.toHaveAttribute("aria-current");
+      expect(screen.getByRole("link", { name: "Rédaction IA" })).not.toHaveAttribute("aria-current");
       cleanup();
     }
   });
@@ -95,7 +95,7 @@ describe("MainNav", () => {
   it("devrait demander confirmation avant de quitter par un onglet, puis rendre le focus en restant", async () => {
     const user = userEvent.setup();
     renderDirtyHeader();
-    const tab = within(screen.getByRole("navigation", { name: "Navigation principale" })).getByRole("link", { name: "Configuration IA" });
+    const tab = within(screen.getByRole("navigation", { name: "Navigation principale" })).getByRole("link", { name: "Rédaction IA" });
     await user.click(tab);
     expect(modal()).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();

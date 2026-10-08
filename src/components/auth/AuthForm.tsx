@@ -13,6 +13,8 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import type { GoogleButtonState } from "@/lib/auth-options";
 import { GoogleSignInButton } from "./GoogleSignInButton";
+import { verificationCallbackPath } from "./next-path";
+import { EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE } from "./oauth-error";
 import { PasswordInput } from "./PasswordInput";
 
 type Mode = "signin" | "signup";
@@ -21,6 +23,8 @@ interface AuthState {
   error: string | null;
   fieldErrors: Partial<Record<"name" | "email" | "password", string>>;
   values: { name: string; email: string };
+  /** Inscription faite, adresse à confirmer : l'adresse à laquelle le lien est parti. */
+  verificationSentTo?: string;
 }
 
 const MIN_PASSWORD = 10;
@@ -42,6 +46,11 @@ function authErrorMessage(code: string | undefined, status: number, mode: Mode):
       return "Le mot de passe est trop long (128 caractères au plus).";
     case "INVALID_EMAIL":
       return "Adresse e-mail invalide.";
+    case "EMAIL_NOT_VERIFIED":
+      // Renvoyé seulement après un mot de passe correct (sendOnSignIn) : rien n'est révélé.
+      return "Confirmez d'abord votre adresse e-mail : nous venons de vous renvoyer un lien de confirmation. Ouvrez-le pour vous connecter (pensez aux indésirables).";
+    case "EMAIL_DOMAIN_NOT_ALLOWED":
+      return EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE;
     default:
       return mode === "signin"
         ? "La connexion a échoué. Réessayez dans un instant."
@@ -56,9 +65,11 @@ interface AuthFormProps {
   google: GoogleButtonState;
   /** Message d'erreur à afficher dès l'arrivée (retour d'échec OAuth). */
   initialError?: string | null;
+  /** Vérification de l'adresse exigée (e-mails configurés côté serveur). */
+  verifyEmail?: boolean;
 }
 
-export function AuthForm({ mode, next, google, initialError = null }: AuthFormProps) {
+export function AuthForm({ mode, next, google, initialError = null, verifyEmail = false }: AuthFormProps) {
   const router = useRouter();
   const isSignup = mode === "signup";
   const ids = { name: useId(), email: useId(), password: useId(), hint: useId() };
@@ -83,17 +94,28 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
         return { error: invalidCountMessage(invalid, isSignup ? "de créer le compte" : "de vous connecter"), fieldErrors, values };
       }
 
+      // Destination du lien de confirmation d'adresse (envoyé à l'inscription, et à
+      // la connexion tant que l'adresse n'est pas confirmée).
+      const callback = verifyEmail ? { callbackURL: verificationCallbackPath(next) } : {};
       let error: { code?: string; status: number } | null;
+      let pendingVerification = false;
       try {
-        ({ error } =
-          mode === "signin"
-            ? await signIn.email({ email, password })
-            : await signUp.email({ email, password, name }));
+        if (mode === "signin") {
+          ({ error } = await signIn.email({ email, password, ...callback }));
+        } else {
+          const result = await signUp.email({ email, password, name, ...callback });
+          error = result.error;
+          // Pas de session : adresse à confirmer (ou adresse déjà inscrite, même réponse).
+          pendingVerification = !error && verifyEmail && !result.data?.token;
+        }
       } catch {
         return { error: "La connexion au serveur a été interrompue. Réessayez.", fieldErrors: {}, values };
       }
       if (error) {
         return { error: authErrorMessage(error.code, error.status, mode), fieldErrors: {}, values };
+      }
+      if (pendingVerification) {
+        return { error: null, fieldErrors: {}, values, verificationSentTo: email };
       }
       router.replace(next);
       router.refresh();
@@ -137,6 +159,14 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
         </LiveRegion>
         <LiveRegion className="sr-only">
           {pending ? (isSignup ? "Création du compte…" : "Connexion en cours…") : null}
+        </LiveRegion>
+        <LiveRegion>
+          {state.verificationSentTo ? (
+            <Notice tone="success" title="Presque terminé">
+              Ouvrez le lien de confirmation envoyé à {state.verificationSentTo} pour activer votre compte (pensez aux
+              indésirables). Si vous aviez déjà un compte avec cette adresse, connectez-vous simplement.
+            </Notice>
+          ) : null}
         </LiveRegion>
 
         {isSignup ? (
@@ -199,6 +229,13 @@ export function AuthForm({ mode, next, google, initialError = null }: AuthFormPr
             </p>
           ) : null}
           <FieldError id={`${ids.password}-err`} message={state.fieldErrors.password} />
+          {isSignup ? null : (
+            <p className="mt-2 text-sm">
+              <Link href="/mot-de-passe-oublie" className="opale-link">
+                Mot de passe oublié ?
+              </Link>
+            </p>
+          )}
         </div>
 
         <Button type="submit" fullWidth aria-disabled={pending || undefined}>

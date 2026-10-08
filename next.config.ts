@@ -9,10 +9,11 @@ assertAiProviderEnv(process.env);
 
 /**
  * Corps maximal d'une Server Action : l'import d'apparence accepte un .pptx de
- * 20 Mo (cf. BRAND_FILE_MAX_BYTES) ; la limite porte sur le corps HTTP brut,
- * enveloppe multipart comprise, d'où 1 Mo de marge — et pas davantage.
+ * 4 Mo (cf. BRAND_FILE_MAX_BYTES, src/domain/import/limits.ts) ; la limite porte
+ * sur le corps HTTP brut, enveloppe multipart comprise, d'où 1 Mo de marge — et
+ * pas davantage.
  */
-export const SERVER_ACTION_BODY_LIMIT = "21mb";
+export const SERVER_ACTION_BODY_LIMIT = "5mb";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,

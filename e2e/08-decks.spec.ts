@@ -35,20 +35,20 @@ function breadcrumb(page: Page) {
 }
 
 test.describe("8. Decks — liste, ouverture, suppression", () => {
-  test("devrait lister le deck sous « Decks du jour J » avec son sujet et son moteur, et l'ouvrir", async ({ page, account }) => {
+  test("devrait lister le deck sous « Diaporamas du jour J » avec son sujet et son moteur, et l'ouvrir", async ({ page, account }) => {
     void account;
     const { programId, deckId } = await setupDeck(page, "Liste des decks");
     await page.goto(`/projets/${programId}/decks`);
     const main = page.getByRole("main");
-    await expect(main.getByRole("heading", { name: "Decks du jour J", level: 2 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Diaporamas du jour J", level: 2 })).toBeVisible();
     await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)" })).toHaveCount(0);
     const item = deckItem(page, PROBLEM);
     await expect(item).toContainText("Sujet : Intelligence artificielle");
     await expect(item.getByText("Démo")).toBeVisible();
-    await expect(main.getByRole("link", { name: "Decks : 1 diaporama" })).toBeVisible();
-    await item.getByRole("link", { name: /^Ouvrir le deck/ }).click();
+    await expect(main.getByRole("link", { name: "Diaporamas : 1 diaporama" })).toBeVisible();
+    await item.getByRole("link", { name: /^Ouvrir le diaporama / }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${deckId}`);
-    await expect(main.getByText("Deck final · Intelligence artificielle")).toBeVisible();
+    await expect(main.getByText("Diaporama final · Intelligence artificielle")).toBeVisible();
   });
 
   test("devrait afficher le fil d'Ariane « Decks / {titre} » sur la page d'un deck", async ({ page, account }) => {
@@ -58,9 +58,9 @@ test.describe("8. Decks — liste, ouverture, suppression", () => {
     const title = (await page.locator("#titre-deck").textContent())?.trim() ?? "";
     expect(title.length).toBeGreaterThan(0);
     await expect(breadcrumb(page)).toContainText(title);
-    await breadcrumb(page).getByRole("link", { name: "Decks", exact: true }).click();
+    await breadcrumb(page).getByRole("link", { name: "Diaporamas", exact: true }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
-    await expect(page.getByRole("main").getByRole("heading", { name: "Decks du jour J", level: 2 })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("heading", { name: "Diaporamas du jour J", level: 2 })).toBeVisible();
   });
 
   test("devrait lister un deck sans sujet « Sans sujet » avec le bandeau « Construit sans IA »", async ({ page, account }) => {
@@ -68,33 +68,39 @@ test.describe("8. Decks — liste, ouverture, suppression", () => {
     await chooseFreeWriter(page);
     const programId = await createProject(page, "Deck sans sujet");
     const deckId = await generateDeck(page, programId, PROBLEM, null);
-    await expect(page.getByRole("main").getByText("Construit sans IA", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Sans IA", { exact: true })).toBeVisible();
     await page.goto(`/projets/${programId}/decks`);
     const item = deckItem(page, PROBLEM);
     await expect(item).toContainText("Sujet : Sans sujet");
     await expect(item.getByText("Sans IA · à compléter")).toBeVisible();
     await page.goto(`/projets/${programId}/decks/${deckId}`);
-    await expect(page.getByRole("main").getByText("Deck final · Sans sujet")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Diaporama final · Sans sujet")).toBeVisible();
   });
 
-  test("devrait supprimer un deck depuis la liste par la modale", async ({ page, account }) => {
+  test("devrait supprimer un deck depuis la liste par la modale, puis annuler la suppression", async ({ page, account }) => {
     void account;
     const { programId } = await setupDeck(page, "Suppression liste");
     await page.goto(`/projets/${programId}/decks`);
-    await page.getByRole("main").getByRole("button", { name: /^Supprimer le deck / }).click();
-    const modal = dialog(page, "Supprimer le deck ?");
-    await expect(modal).toContainText("Cette action est définitive.");
-    await modal.getByRole("button", { name: "Supprimer le deck" }).click();
-    await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+    await page.getByRole("main").getByRole("button", { name: /^Supprimer le diaporama / }).click();
+    const modal = dialog(page, "Supprimer le diaporama ?");
+    await expect(modal).toContainText("Vous pourrez annuler pendant quelques secondes.");
+    await modal.getByRole("button", { name: "Supprimer le diaporama" }).click();
+    await expect(page.getByRole("main").getByText("Aucun diaporama pour l'instant")).toBeVisible();
+
+    // Notification d'Opale (hors <main>) : « Annuler » pendant 10 s.
+    await expect(page.getByText("Diaporama supprimé.")).toBeVisible();
+    await page.getByRole("button", { name: /^Annuler la suppression du diaporama / }).click();
+    await expect(page.getByText("Diaporama restauré.")).toBeVisible();
+    await expect(deckItem(page, PROBLEM)).toBeVisible();
   });
 
   test("devrait supprimer un deck depuis sa page et revenir à la liste", async ({ page, account }) => {
     void account;
     const { programId } = await setupDeck(page, "Suppression page");
-    await page.getByRole("main").getByRole("region", { name: "Supprimer ce deck" }).getByRole("button", { name: /^Supprimer le deck/ }).click();
-    await dialog(page, "Supprimer le deck ?").getByRole("button", { name: "Supprimer le deck" }).click();
+    await page.getByRole("main").getByRole("region", { name: "Supprimer ce diaporama" }).getByRole("button", { name: /^Supprimer le diaporama/ }).click();
+    await dialog(page, "Supprimer le diaporama ?").getByRole("button", { name: "Supprimer le diaporama" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
-    await expect(page.getByRole("main").getByText("Aucun deck pour l'instant")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Aucun diaporama pour l'instant")).toBeVisible();
   });
 });
 
@@ -112,17 +118,19 @@ test.describe("8. Decks — anciens squelettes (version 1.0)", () => {
     const item = deckItem(page, SKELETON);
     await expect(item).toContainText("Sujet : Intelligence artificielle");
     // Le squelette ne compte pas parmi les decks du jour J.
-    await expect(main.getByRole("link", { name: "Decks : 1 diaporama" })).toBeVisible();
+    await expect(main.getByRole("link", { name: "Diaporamas : 1 diaporama" })).toBeVisible();
 
     await item.getByRole("link", { name: `Ouvrir le squelette ${SKELETON}` }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks/${skeletonId}`);
     await expect(main.getByText("Squelette (version 1.0) · Intelligence artificielle")).toBeVisible();
     await expect(main.getByText("Ancien squelette", { exact: true })).toBeVisible();
     await expect(breadcrumb(page)).toContainText(SKELETON);
-    await expect(breadcrumb(page).getByRole("link", { name: "Decks", exact: true })).toBeVisible();
+    await expect(breadcrumb(page).getByRole("link", { name: "Diaporamas", exact: true })).toBeVisible();
 
-    await main.getByRole("region", { name: "Supprimer ce squelette" }).getByRole("button", { name: `Supprimer le deck ${SKELETON}` }).click();
-    await dialog(page, "Supprimer le deck ?").getByRole("button", { name: "Supprimer le deck" }).click();
+    await main.getByRole("region", { name: "Supprimer ce squelette" }).getByRole("button", { name: `Supprimer le diaporama ${SKELETON}` }).click();
+    // Un ancien squelette ne passe pas par la corbeille : suppression définitive, sans annulation.
+    await expect(dialog(page, "Supprimer le diaporama ?")).toContainText("Cette action est définitive.");
+    await dialog(page, "Supprimer le diaporama ?").getByRole("button", { name: "Supprimer le diaporama" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/projets/${programId}/decks`);
     await expect(main.getByRole("heading", { name: "Squelettes (version 1.0)" })).toHaveCount(0);
     await expect(deckItem(page, PROBLEM)).toBeVisible();
@@ -194,6 +202,76 @@ test.describe("8. Decks — édition et conflit", () => {
   });
 });
 
+test.describe("8. Decks — structure du diaporama", () => {
+  test("devrait insérer, déplacer et supprimer des diapos, et les garder après rechargement", async ({ page, account }) => {
+    void account;
+    await setupDeck(page, "Structure du deck");
+    const main = page.getByRole("main");
+    const initial = await slideCount(page);
+    const third = (await main.locator("#diapo-3 h3").textContent())?.replace(/^\s*\d+\s*/, "").replace(/^Diapo 3 — /, "").trim() ?? "";
+
+    // Insérer après la diapo 3 : la nouvelle diapo 4 s'ouvre en édition.
+    await main.getByRole("button", { name: "Insérer une diapo après la diapo 3" }).click();
+    await expect(main.getByRole("heading", { level: 2, name: `${initial + 1} diapos` })).toBeVisible();
+    const title = main.getByRole("textbox", { name: "Titre", exact: true });
+    await expect(title).toHaveValue("Nouvelle diapo");
+    await title.fill("Diapo ajoutée");
+    await main.getByRole("button", { name: "Enregistrer la diapo" }).click();
+    await expect(main.getByRole("heading", { level: 3, name: "Diapo 4 — Diapo ajoutée" })).toBeVisible();
+
+    // Descendre la diapo 3 : elle prend la place 4.
+    await main.getByRole("button", { name: "Descendre la diapo 3" }).click();
+    await expect(main.getByRole("heading", { level: 3, name: "Diapo 3 — Diapo ajoutée" })).toBeVisible();
+    await expect(main.locator("#diapo-4")).toContainText(third);
+
+    // La couverture ne se déplace ni ne se supprime.
+    await expect(main.locator("#diapo-1").getByRole("button", { name: /^(Monter|Descendre|Supprimer)/ })).toHaveCount(0);
+
+    // Supprimer la diapo ajoutée.
+    await main.getByRole("button", { name: "Supprimer la diapo 3" }).click();
+    await dialog(page, "Supprimer la diapo ?").getByRole("button", { name: "Supprimer la diapo" }).click();
+    await expect(main.getByRole("heading", { level: 2, name: `${initial} diapos` })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("main").getByRole("heading", { level: 2, name: `${initial} diapos` })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Diapo ajoutée")).toHaveCount(0);
+  });
+
+  test("devrait régénérer une diapo avec l'IA du rédacteur (démo)", async ({ page, account }) => {
+    void account;
+    await setupDeck(page, "Régénérer une diapo");
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Régénérer la diapo 3 avec l'IA" }).click();
+    await dialog(page, "Régénérer la diapo ?").getByRole("button", { name: "Régénérer la diapo" }).click();
+    await expect(dialog(page, "Régénérer la diapo ?")).toHaveCount(0);
+    // Le moteur démo réécrit le titre en « … (révisé) ».
+    await expect(main.locator("#diapo-3 h3")).toContainText("(révisé)");
+    await page.reload();
+    await expect(page.getByRole("main").locator("#diapo-3 h3")).toContainText("(révisé)");
+  });
+
+  test("Sans IA : la régénération est masquée", async ({ page, account }) => {
+    void account;
+    await chooseFreeWriter(page);
+    const programId = await createProject(page, "Régénération sans IA");
+    await generateDeck(page, programId, PROBLEM, null);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("button", { name: /Régénérer/ })).toHaveCount(0);
+    await expect(main.getByText("Régénérer une diapo : disponible avec une rédaction IA (Rédaction IA).")).toBeVisible();
+  });
+
+  test("devrait dupliquer le diaporama et ouvrir la copie", async ({ page, account }) => {
+    void account;
+    const { programId, deckId } = await setupDeck(page, "Duplication du deck");
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Dupliquer le diaporama" }).click();
+    await expect(page).toHaveURL(new RegExp(`/projets/${programId}/decks/(?!${deckId})[^/?]+\\?copie=1$`));
+    await expect(main.getByText("Copie créée.")).toBeVisible();
+    await page.goto(`/projets/${programId}/decks`);
+    await expect(deckItem(page, PROBLEM)).toHaveCount(2);
+  });
+});
+
 test.describe("8. Decks — export et Canva", () => {
   test("devrait télécharger un .pptx valide avec le bon nombre de diapos", async ({ page, account }) => {
     void account;
@@ -234,11 +312,11 @@ test.describe("8. Decks — export et Canva", () => {
     await expect(panel.getByRole("listitem")).toHaveCount(5);
     await expect(panel).toContainText("Importer un fichier");
     await expect(panel.getByRole("link", { name: /canva\.com/ })).toHaveAttribute("rel", "noopener noreferrer");
-    const prompt = panel.getByRole("textbox", { name: "Prompt Canva" });
+    const prompt = panel.getByRole("textbox", { name: "Consignes pour Canva" });
     const value = await prompt.inputValue();
     expect(value.length).toBeGreaterThan(100);
-    await panel.getByRole("button", { name: "Copier le prompt Canva" }).click();
-    await expect(panel.getByText("Prompt copié dans le presse-papiers.")).toBeVisible();
+    await panel.getByRole("button", { name: "Copier les consignes Canva" }).click();
+    await expect(panel.getByText("Consignes copiées dans le presse-papiers.")).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(value);
     await main.getByRole("button", { name: "Masquer l'import dans Canva" }).click();
     await expect(panel).toHaveCount(0);

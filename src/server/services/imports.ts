@@ -2,6 +2,7 @@ import { z } from "zod";
 import { brandFromTheme } from "@/domain/import/brand-from-theme";
 import { ImportFileError } from "@/domain/import/errors";
 import { detectImportFile, type ImportFileKind } from "@/domain/import/file-kind";
+import { BRAND_FILE_MAX_BYTES, BRAND_FILE_TOO_LARGE_MESSAGE } from "@/domain/import/limits";
 import { extractOfficeTheme } from "@/domain/import/office-theme";
 import { parseTemplateText, type RecognizedField } from "@/domain/import/template-from-text";
 import { parseThemePromptText, type ThemePromptImport } from "@/domain/import/themes-from-text";
@@ -9,7 +10,7 @@ import type { Brand, PromptTemplate } from "@/domain/schemas";
 import { ValidationError } from "../errors";
 import type { Logger } from "../logger";
 import { consumeImportQuota } from "../rate-limit";
-import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo/programs";
+import { assertProgramAccess, getProgramBrand, getProgramTemplate } from "../repo/programs";
 
 /**
  * Imports d'un projet (apparence depuis un fichier, trame depuis un prompt,
@@ -21,7 +22,8 @@ import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo
  * applique au formulaire ; l'enregistrement passe par les actions habituelles.
  *
  * Ordre immuable :
- *   1. autorisation sur le projet (requête filtrée par propriétaire),
+ *   1. autorisation sur le projet (requête filtrée par rôle : éditeur, car le
+ *      résultat est destiné à modifier l'apparence, la trame ou les sujets),
  *   2. limite de débit des imports (le seul quota consommé),
  *   3. type du fichier (extension ET signature, taille) avant toute lecture,
  *   4. lecture déterministe, hors de toute transaction.
@@ -31,9 +33,8 @@ import { assertProgramOwned, getProgramBrand, getProgramTemplate } from "../repo
 // Contrats d'entrée (validés au bord, types dérivés)
 // ---------------------------------------------------------------------------
 
-const MB = 1024 * 1024;
-/** Taille maximale d'un fichier importé (.pptx, .potx, .thmx). */
-export const BRAND_FILE_MAX_BYTES = 20 * MB;
+/** Taille maximale d'un fichier importé (.pptx, .potx, .thmx) : 4 Mo, partagée avec le client et next.config.ts. */
+export { BRAND_FILE_MAX_BYTES, BRAND_FILE_TOO_LARGE_MESSAGE };
 export const TEMPLATE_PROMPT_MAX_CHARS = 20_000;
 
 /** Fichier reçu du client (FormData, champ `file`). */
@@ -41,7 +42,7 @@ export const BrandFileSchema = z.object({
   file: z
     .instanceof(File, { message: "Choisissez un fichier à importer." })
     .refine((f) => f.size > 0, { message: "Le fichier est vide." })
-    .refine((f) => f.size <= BRAND_FILE_MAX_BYTES, { message: `Le fichier dépasse ${BRAND_FILE_MAX_BYTES / MB} Mo.` })
+    .refine((f) => f.size <= BRAND_FILE_MAX_BYTES, { message: BRAND_FILE_TOO_LARGE_MESSAGE })
     .refine((f) => f.name.length > 0 && f.name.length <= 255, { message: "Nom de fichier invalide." }),
 });
 
@@ -90,6 +91,10 @@ export type ThemePromptResult = ThemePromptImport;
 // Dépendances injectables
 // ---------------------------------------------------------------------------
 
+/**
+ * Accès au projet, tous au rôle d'ÉDITEUR (le nom `assertProgramOwned` est
+ * historique : il est conservé pour les doublures de test existantes).
+ */
 export interface ImportsRepo {
   assertProgramOwned(userId: string, programId: string): Promise<void>;
   getProgramTemplate(userId: string, programId: string): Promise<PromptTemplate>;
@@ -106,7 +111,11 @@ export interface ImportsDeps {
   quotas?: ImportsQuotas;
 }
 
-const defaultRepo: ImportsRepo = { assertProgramOwned, getProgramTemplate, getProgramBrand };
+const defaultRepo: ImportsRepo = {
+  assertProgramOwned: (userId, programId) => assertProgramAccess(userId, programId, "editor"),
+  getProgramTemplate: (userId, programId) => getProgramTemplate(userId, programId, "editor"),
+  getProgramBrand: (userId, programId) => getProgramBrand(userId, programId, "editor"),
+};
 
 const defaultQuotas: ImportsQuotas = {
   consumeImport: (userId) => consumeImportQuota(userId),
@@ -136,7 +145,7 @@ export async function analyzeBrandFile(
 
   // Défense en profondeur : le bord l'a vérifié, mais on ne lit jamais un fichier trop gros.
   if (file.size > BRAND_FILE_MAX_BYTES) {
-    throw new ValidationError(`Le fichier dépasse ${BRAND_FILE_MAX_BYTES / MB} Mo.`, { file: ["Fichier trop volumineux."] });
+    throw new ValidationError(BRAND_FILE_TOO_LARGE_MESSAGE, { file: [BRAND_FILE_TOO_LARGE_MESSAGE] });
   }
   const bytes = await file.bytes();
   let kind: ImportFileKind;
@@ -186,7 +195,7 @@ export async function analyzeTemplatePrompt(
 
 /**
  * Sujets ET apparence proposés à partir d'un texte libre décrivant l'oral :
- * autorisation (lecture de l'apparence actuelle filtrée par propriétaire),
+ * autorisation (lecture de l'apparence actuelle filtrée par rôle : éditeur),
  * quota d'import, puis lecture déterministe. Rien n'est écrit ; le texte n'est
  * jamais journalisé.
  */

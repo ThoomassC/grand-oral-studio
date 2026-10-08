@@ -3,13 +3,15 @@ import { isAppError } from "@/server/errors";
 import { attachmentHeader, deckFileTitle, safeFilename, unicodeFilename } from "@/server/filename";
 import { createLogger } from "@/server/logger";
 import { getDeck } from "@/server/queries";
+import { markExportTried } from "@/server/repo/readiness";
 import { getUser } from "@/server/session";
 import { IdSchema } from "@/server/validation";
 
 /**
- * GET /api/decks/:id/pptx — export PowerPoint d'un deck possédé.
- * 401 sans session, 404 si le deck n'existe pas OU appartient à un autre
- * utilisateur (indistinguables), 500 générique sur panne (journalisée).
+ * GET /api/decks/:id/pptx — export PowerPoint d'un deck d'un projet auquel
+ * l'utilisateur a accès (lecteur au moins : l'export est ouvert au lecteur).
+ * 401 sans session, 404 si le deck n'existe pas, est à la corbeille OU relève
+ * d'un projet inaccessible (indistinguables), 500 générique sur panne (journalisée).
  */
 
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
@@ -27,7 +29,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (!user) return jsonError(401, "Vous devez être connecté.", log.correlationId);
 
   const parsedId = IdSchema.safeParse((await ctx.params).id);
-  if (!parsedId.success) return jsonError(404, "Ce deck est introuvable.", log.correlationId);
+  if (!parsedId.success) return jsonError(404, "Ce diaporama est introuvable.", log.correlationId);
 
   try {
     const deck = await getDeck(user.id, parsedId.data);
@@ -35,6 +37,10 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     // Même règle pour tous les moteurs (le titre du deck, lui, varie d'un moteur à l'autre).
     const title = deckFileTitle({ themeName: deck.themeName, kind: deck.kind, engine: deck.engine, createdAt: deck.createdAt });
     log.info("deck.exported", { userId: user.id, deckId: deck.id, bytes: buffer.byteLength });
+    // Liste « Avant l'examen » : export essayé. Sans effet sur Program.updatedAt ; un échec n'empêche pas le téléchargement.
+    await markExportTried(deck.program.id).catch((error: unknown) =>
+      log.warn("deck.export_mark_failed", { programId: deck.program.id, error }),
+    );
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {

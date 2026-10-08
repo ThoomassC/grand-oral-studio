@@ -30,15 +30,15 @@ test.beforeAll(async ({ browser }) => {
   const skeletonId = await seedLegacySkeleton(deckId, "Squelette hérité de la 1.0 au titre assez long pour le retour à la ligne");
   Object.assign(paths, {
     Projets: "/projets",
-    "Configuration IA": "/configuration-ia",
+    "Rédaction IA": "/configuration-ia",
     "Notes de version": "/notes-de-version",
     Profil: "/profil",
     "Étape 1 · Apparence": `/projets/${id}/apparence`,
     "Étape 2 · Trame": `/projets/${id}/trame`,
     "Trame · Sujets": `/projets/${id}/trame/sujets`,
     "Étape 3 · Jour J": `/projets/${id}/jour-j`,
-    Decks: `/projets/${id}/decks`,
-    Deck: `/projets/${id}/decks/${deckId}`,
+    Diaporamas: `/projets/${id}/decks`,
+    Diaporama: `/projets/${id}/decks/${deckId}`,
     "Squelette (version 1.0)": `/projets/${id}/decks/${skeletonId}`,
   });
 });
@@ -50,15 +50,15 @@ test.afterAll(async () => {
 
 const PAGES = [
   "Projets",
-  "Configuration IA",
+  "Rédaction IA",
   "Notes de version",
   "Profil",
   "Étape 1 · Apparence",
   "Étape 2 · Trame",
   "Trame · Sujets",
   "Étape 3 · Jour J",
-  "Decks",
-  "Deck",
+  "Diaporamas",
+  "Diaporama",
   "Squelette (version 1.0)",
 ] as const;
 
@@ -140,7 +140,7 @@ test.describe("10. Thème sombre — lisibilité de base", () => {
   test("devrait appliquer un fond sombre et un texte clair en mode sombre", async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto(paths["Deck"]!);
+    await page.goto(paths["Diaporama"]!);
     const colors = await page.evaluate(() => {
       const s = getComputedStyle(document.body);
       return { bg: s.backgroundColor, fg: s.color };

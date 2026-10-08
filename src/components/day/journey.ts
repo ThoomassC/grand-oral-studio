@@ -1,3 +1,11 @@
+import {
+  engineLabel,
+  SELECTABLE_PROVIDERS,
+  type CloudProvider,
+  type EngineId,
+  type KeySource,
+  type SelectableProvider,
+} from "@/domain/ai-providers";
 import type { ClassificationOutcome } from "@/domain/contracts";
 
 /**
@@ -96,4 +104,75 @@ export function restoreDraft(draft: Draft | null, themeIds: readonly string[]): 
     return themeIds.length >= 2 ? restored : { ...restored, choice: otherThemeId, otherThemeId: "" };
   }
   return { ...restored, stage: "input", result: null, choice: "", otherThemeId: "" };
+}
+
+// ---------------------------------------------------------------------------
+// v1.2 : brouillon par mode, repli en un clic, tirage d'une problématique
+// ---------------------------------------------------------------------------
+
+/** Brouillon du parcours : l'entraînement a le sien (il n'écrase pas celui du jour J). */
+export function draftKey(programId: string, practice: boolean): string {
+  const base = `grand-oral-studio:jour-j:${programId}`;
+  return practice ? `${base}:entrainement` : base;
+}
+
+/** Rédacteur ponctuel d'une génération (même forme que EngineOverride côté serveur : jamais Claude ni OpenAI). */
+export type WriterOverride = { engine: "free" } | { engine: SelectableProvider; keySource: KeySource };
+
+/** Une connexion utilisable pour un repli : clé personnelle ou clé d'équipe d'un fournisseur. */
+export interface EngineChoice {
+  override: { engine: SelectableProvider; keySource: KeySource };
+  /** « Mistral (votre clé) », « Gemini (clé d'équipe) ». */
+  label: string;
+}
+
+/**
+ * Connexions proposées au repli, dans l'ordre des fournisseurs proposés : pour
+ * chacun, la clé personnelle enregistrée puis la clé d'équipe disponible. Une
+ * connexion héritée (Claude, OpenAI) n'est jamais proposée : ces fournisseurs ne
+ * sont plus proposés depuis la 1.2 (le serveur refuserait la surcharge).
+ */
+export function engineChoices(connections: readonly CloudProvider[], team: readonly CloudProvider[]): EngineChoice[] {
+  const out: EngineChoice[] = [];
+  for (const provider of SELECTABLE_PROVIDERS) {
+    if (connections.includes(provider)) {
+      out.push({ override: { engine: provider, keySource: "user" }, label: `${engineLabel(provider)} (votre clé)` });
+    }
+    if (team.includes(provider)) {
+      out.push({ override: { engine: provider, keySource: "server" }, label: `${engineLabel(provider)} (clé d'équipe)` });
+    }
+  }
+  return out;
+}
+
+/** Codes d'échec dus au rédacteur : le panneau d'erreur propose alors un repli. */
+export function offersFallback(code: string | undefined): boolean {
+  return code !== undefined && (code.startsWith("AI_") || code === "ENGINE_UNAVAILABLE" || code === "RATE_LIMITED");
+}
+
+/** Rédacteur d'une tentative : moteur et origine de la clé (null hors fournisseur cloud). */
+export interface AttemptedWriter {
+  engine: EngineId | "mock";
+  keySource: KeySource | null;
+}
+
+/** Les autres connexions que celle qui vient d'échouer. */
+export function otherChoices(choices: readonly EngineChoice[], attempted: AttemptedWriter): EngineChoice[] {
+  return choices.filter((c) => !(c.override.engine === attempted.engine && c.override.keySource === attempted.keySource));
+}
+
+export interface DrawnProblem {
+  problem: string;
+  themeId: string;
+}
+
+/**
+ * Tire une problématique parmi celles enregistrées sur les sujets (`random`
+ * dans [0, 1[, Math.random côté appelant) ; null s'il n'y en a aucune.
+ */
+export function drawProblem(themes: readonly { id: string; problems?: readonly string[] }[], random: number): DrawnProblem | null {
+  const pool = themes.flatMap((t) => (t.problems ?? []).filter((p) => p.trim() !== "").map((problem) => ({ problem, themeId: t.id })));
+  if (pool.length === 0) return null;
+  const index = Math.min(pool.length - 1, Math.max(0, Math.floor(random * pool.length)));
+  return pool[index] ?? null;
 }

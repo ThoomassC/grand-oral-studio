@@ -9,7 +9,7 @@ import { getUser } from "@/server/session";
 const STEPS = [
   {
     title: "Apparence",
-    text: "Couleurs, polices et logo de vos diaporamas : à la main, depuis un prompt ou depuis une présentation d'exemple. Sans IA.",
+    text: "Couleurs, polices et logo de vos diaporamas : à la main, depuis vos consignes ou depuis une présentation d'exemple. Sans IA.",
   },
   {
     title: "Trame",
@@ -24,7 +24,7 @@ const STEPS = [
 const DAY_TIMELINE = [
   { at: "0:00", text: "Vous recopiez la problématique tirée au sort." },
   { at: "0:01", text: "L'IA reconnaît le sujet de la problématique ; vous confirmez d'un clic." },
-  { at: "0:03", text: "Le deck complet, notes d'orateur comprises, est prêt à relire et à exporter." },
+  { at: "0:03", text: "Le diaporama complet, notes d'orateur comprises, est prêt à relire et à exporter." },
 ] as const;
 
 /** Apparence d'exemple dans la palette d'Opale, pour les miniatures de l'accueil. */
@@ -69,7 +69,7 @@ export default async function HomePage() {
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted">
             Grand Oral Studio vous aide à préparer l&apos;apparence et la trame de vos diaporamas à l&apos;avance, puis à
-            produire le jour J un support fidèle à votre trame, que vous relisez et ajustez pendant votre temps de
+            produire le jour J un diaporama fidèle à votre trame, que vous relisez et ajustez pendant votre temps de
             préparation.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -160,10 +160,10 @@ export default async function HomePage() {
             ))}
           </ol>
           <p className="mt-6 font-semibold">
-            Il vous reste environ <Duration minutes={87} className="num" /> pour vous approprier le support et répéter.
+            Il vous reste environ <Duration minutes={87} className="num" /> pour vous approprier le diaporama et répéter.
           </p>
           <p className="mt-2 text-sm text-muted">
-            Sans IA : votre trame remplie avec vos notes, à compléter. Avec Claude : un diaporama rédigé.
+            Sans IA : un diaporama à compléter, construit avec votre trame et vos notes. Avec une rédaction IA : un diaporama rédigé.
           </p>
         </div>
       </section>

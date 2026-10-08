@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath } from "@/components/auth/next-path";
+import { safeNextPath, verificationCallbackPath } from "@/components/auth/next-path";
 
 describe("safeNextPath", () => {
   it("conserve un chemin interne avec sa requête", () => {
@@ -24,5 +24,16 @@ describe("safeNextPath", () => {
 
   it("prend la première valeur d'un paramètre répété", () => {
     expect(safeNextPath(["/projets/a", "//evil.example"])).toBe("/projets/a");
+  });
+});
+
+describe("verificationCallbackPath", () => {
+  it("renvoie vers la connexion, qui redirige vers la destination une fois la session ouverte", () => {
+    expect(verificationCallbackPath("/projets")).toBe("/connexion");
+    expect(verificationCallbackPath("/projets/abc?x=1")).toBe("/connexion?next=%2Fprojets%2Fabc%3Fx%3D1");
+  });
+
+  it("ne transporte jamais une destination externe", () => {
+    expect(verificationCallbackPath("//evil.example")).toBe("/connexion");
   });
 });

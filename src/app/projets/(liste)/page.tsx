@@ -1,24 +1,33 @@
+import { Badge } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
 import { ProgramActions } from "@/components/programs/ProgramActions";
+import { ProjectListActions } from "@/components/programs/ProjectListActions";
 import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
 import { projectHomeHref } from "@/components/projects/steps";
 import { formatDate, plural } from "@/components/ui/format";
-import { listPrograms } from "@/server/queries";
+import { engineLabel } from "@/domain/ai-providers";
+import { getWriter, listPrograms } from "@/server/queries";
 import { requireUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "Projets" };
 
 export default async function ProgramsPage() {
   const user = await requireUser();
-  const programs = await listPrograms(user.id);
+  // Lectures indépendantes en parallèle ; le rédacteur (celui de l'utilisateur) est lu une fois pour toute la liste.
+  const [programs, writer] = await Promise.all([listPrograms(user.id), getWriter(user.id)]);
+  const writerLabel = engineLabel(writer.engine);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <h1 className="text-3xl sm:text-4xl">Projets</h1>
-        <CreateProgramDialog />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Dans l'état vide, l'import et l'exemple sont proposés dans l'encart, une seule fois. */}
+          {programs.length > 0 ? <ProjectListActions /> : null}
+          <CreateProgramDialog />
+        </div>
       </div>
       <p className="mt-2 max-w-2xl text-muted">
         Un projet réunit l&apos;apparence de vos diaporamas, leur trame et, si besoin, les sujets possibles de l&apos;oral.
@@ -31,9 +40,13 @@ export default async function ProgramsPage() {
         {programs.length === 0 ? (
           <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
             <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
-            <p className="text-muted">Créez votre premier projet, puis choisissez son apparence et sa trame.</p>
-            <div className="mt-2">
+            <p className="text-muted">
+              Créez votre premier projet, puis choisissez son apparence et sa trame. Vous pouvez aussi importer un
+              projet exporté (.json) ou partir d&apos;un projet d&apos;exemple.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
+              <ProjectListActions />
             </div>
           </div>
         ) : (
@@ -61,6 +74,12 @@ export default async function ProgramsPage() {
                           {p.name}
                         </Link>
                       </h3>
+                      {/* Projet dont l'utilisateur est membre (éditeur ou lecteur), pas propriétaire. */}
+                      {p.ownerName !== null ? (
+                        <Badge tone="neutral" className="mt-1">
+                          Partagé par {p.ownerName}
+                        </Badge>
+                      ) : null}
                       {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
                       <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                         <div className="flex gap-1 whitespace-nowrap">
@@ -74,12 +93,20 @@ export default async function ProgramsPage() {
                       </dl>
                     </div>
                     <div className="shrink-0">
-                      <ProjectProgressSummary programId={p.id} programName={p.name} progress={p.progress} />
+                      <ProjectProgressSummary
+                        programId={p.id}
+                        programName={p.name}
+                        progress={p.progress}
+                        role={p.role}
+                        writerLabel={writerLabel}
+                      />
                     </div>
                   </div>
                   <ProgramActions
                     programId={p.id}
                     programName={p.name}
+                    programDescription={p.description}
+                    role={p.role}
                     focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
                       (x): x is string => x !== null,
                     )}

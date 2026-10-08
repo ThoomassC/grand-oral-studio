@@ -1,12 +1,16 @@
 import { Badge, type BadgeTone } from "@thomascaron/opale-ui";
+import type { EngineId } from "@/domain/ai-providers";
 
-export type DeckEngine = "claude" | "ollama" | "free" | "mock";
+export type DeckEngine = EngineId | "mock";
 
 const BADGE: Record<DeckEngine, { label: string; tone: BadgeTone }> = {
   // Trame sans IA : l'accent d'Opale (à compléter), sans ton d'alerte.
   free: { label: "Sans IA · à compléter", tone: "accent" },
   ollama: { label: "Modèle local", tone: "info" },
   claude: { label: "Claude", tone: "primary" },
+  mistral: { label: "Mistral", tone: "primary" },
+  gemini: { label: "Gemini", tone: "primary" },
+  openai: { label: "OpenAI", tone: "primary" },
   mock: { label: "Démo", tone: "neutral" },
 };
 
@@ -16,7 +20,7 @@ export function EngineBadge({ engine, className }: { engine: DeckEngine | null; 
   const badge = BADGE[engine];
   return (
     <Badge tone={badge.tone} className={className}>
-      <span className="sr-only">Moteur : </span>
+      <span className="sr-only">Rédaction : </span>
       {badge.label}
     </Badge>
   );

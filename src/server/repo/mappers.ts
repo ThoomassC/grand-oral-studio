@@ -1,3 +1,4 @@
+import { ENGINE_IDS } from "@/domain/ai-providers";
 import { BrandSchema, DeckSpecSchema, PromptTemplateSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import type { Prisma } from "../db/generated/prisma/client";
 import type { DeckKind } from "../db/generated/prisma/enums";
@@ -14,12 +15,14 @@ interface DeckRow {
   kind: DeckKind;
   problem: string | null;
   engine: string | null;
+  practice: boolean;
   spec: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const DeckEngineSchema = z.enum(["claude", "ollama", "free", "mock"]).nullable() satisfies z.ZodType<DeckEngine | null>;
+/** Moteurs connus d'un deck (source unique : toDeckView et la liste des decks de repo/decks). */
+export const DeckEngineSchema = z.enum([...ENGINE_IDS, "mock"]) satisfies z.ZodType<DeckEngine>;
 
 export function toDeckView(row: DeckRow): DeckView {
   return {
@@ -28,7 +31,8 @@ export function toDeckView(row: DeckRow): DeckView {
     themeId: row.themeId,
     kind: row.kind,
     problem: row.problem,
-    engine: parseStored(DeckEngineSchema, row.engine, "Deck.engine", row.id),
+    engine: parseStored(DeckEngineSchema.nullable(), row.engine, "Deck.engine", row.id),
+    practice: row.practice,
     spec: parseStored(DeckSpecSchema, row.spec, "Deck.spec", row.id),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -43,6 +47,8 @@ interface ThemeRow {
   description: string;
   keywords: string[];
   notes: string;
+  problems: string[];
+  updatedAt: Date;
 }
 
 export function toThemeView(row: ThemeRow): ThemeView {
@@ -54,6 +60,8 @@ export function toThemeView(row: ThemeRow): ThemeView {
     description: row.description,
     keywords: row.keywords,
     notes: row.notes,
+    problems: row.problems,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

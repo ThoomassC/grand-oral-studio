@@ -1,6 +1,9 @@
+import type { KeySource } from "@/domain/ai-providers";
 import type { DeckSpec, ThemeInput } from "@/domain/schemas";
+import { loadSecretBoxFromEnv } from "@/server/crypto/secret-box";
 import { db } from "@/server/db/client";
 import type { Logger, LogFields } from "@/server/logger";
+import { saveCredential } from "@/server/repo/ai-credentials";
 import { createProgram } from "@/server/repo/programs";
 import { makeBrand, makeConformingDeck, makeTemplate } from "@/test/fixtures";
 
@@ -52,4 +55,31 @@ export async function seedDeck(
     select: { id: true },
   });
   return row.id;
+}
+
+/** Invite directement un membre dans un projet (préparation des tests de partage, sans le domaine). */
+export async function seedMember(programId: string, userId: string, role: "EDITOR" | "VIEWER" = "EDITOR"): Promise<void> {
+  await db().programMember.create({ data: { programId, userId, role }, select: { programId: true } });
+}
+
+/**
+ * Connexion HÉRITÉE d'un fournisseur qui n'est plus proposé (Claude, OpenAI) :
+ * écrite par le dépôt, comme avant la 1.2 (« Vérifier et activer » : clé chiffrée
+ * ET sélection), sans passer par le service, qui refuse désormais toute nouvelle
+ * connexion de ces fournisseurs. `select: null` : la clé seule, sans sélection.
+ */
+export async function seedLegacyCredential(
+  userId: string,
+  provider: "claude" | "openai",
+  apiKey: string,
+  env: Partial<Record<string, string | undefined>>,
+  select: KeySource | null = "user",
+): Promise<void> {
+  await saveCredential(
+    userId,
+    provider,
+    { apiKey, model: null, verifiedAt: new Date() },
+    loadSecretBoxFromEnv(env),
+    select ? { select: { engine: provider, keySource: select } } : {},
+  );
 }

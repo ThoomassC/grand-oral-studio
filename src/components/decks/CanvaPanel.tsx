@@ -48,7 +48,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
       </h2>
       <ol className="mt-3 list-decimal space-y-1.5 pl-5">
         <li>
-          Téléchargez le fichier .pptx de ce deck (bouton « Télécharger le .pptx » ci-dessus).
+          Téléchargez le fichier .pptx de ce diaporama (bouton « Télécharger le .pptx » ci-dessus).
         </li>
         <li>
           Ouvrez{" "}
@@ -62,19 +62,19 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
         </li>
         <li>Choisissez le fichier .pptx téléchargé : Canva le convertit en design modifiable.</li>
         <li>
-          Pour aller plus loin, copiez le prompt ci-dessous et collez-le dans l&apos;assistant IA de Canva : il
-          rappelle l&apos;apparence et le contenu diapo par diapo.
+          Pour aller plus loin, copiez les consignes ci-dessous et collez-les dans l&apos;assistant IA de Canva : elles
+          rappellent l&apos;apparence et le contenu diapo par diapo.
         </li>
       </ol>
 
       <div className="mt-5">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <label htmlFor={textareaId} className="opale-field__label mb-0">
-            Prompt Canva
+            Consignes pour Canva
           </label>
           {/* Les deux libellés partagent la même cellule : la largeur du bouton ne bouge pas. */}
           <Button type="button" variant="ghost" size="small" onClick={copyPrompt}>
-            <ButtonLabel idle="Copier le prompt Canva" busy="Copié !" isBusy={justCopied} />
+            <ButtonLabel idle="Copier les consignes Canva" busy="Copié !" isBusy={justCopied} />
           </Button>
         </div>
         <TextArea
@@ -88,7 +88,7 @@ export function CanvaPanel({ prompt, id }: { prompt: string; id: string }) {
         />
         <p id={`${textareaId}-status`} role="status" className="mt-2 text-sm font-medium">
           {copy.kind === "copied" ? (
-            <span className="text-success">Prompt copié dans le presse-papiers.</span>
+            <span className="text-success">Consignes copiées dans le presse-papiers.</span>
           ) : copy.kind === "manual" ? (
             <span className="text-warning">
               La copie automatique n&apos;est pas disponible. Le texte est sélectionné : appuyez sur Ctrl+C (ou Cmd+C

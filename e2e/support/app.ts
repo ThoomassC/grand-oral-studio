@@ -68,21 +68,27 @@ export async function importThemeList(page: Page, programId: string, text = DEFA
   await expect(main.getByText(/^\d+ sujets? créés?\.$|^Aucun nouveau sujet créé\.$/)).toBeVisible();
 }
 
-export type EngineChoice = "free" | "claude" | "ollama";
+export type EngineChoice = "free" | "demo" | "ollama";
 
 const ENGINE_RADIO: Record<EngineChoice, string> = {
-  free: "Gratuit (sans IA)",
-  claude: "Claude (Anthropic)",
+  free: "Sans IA",
+  demo: "Démo (contenus factices)",
   ollama: "Modèle local (Ollama)",
 };
 
-/** Choisit et enregistre le moteur dans la Configuration IA. `claude` = moteur démo (AI_PROVIDER=mock). */
+/** Choisit et enregistre le rédacteur (page Rédaction IA). `demo` = moteur démo (AI_PROVIDER=mock). */
 export async function setEngine(page: Page, engine: EngineChoice, ollamaModel?: string): Promise<void> {
   await page.goto("/configuration-ia");
-  await page.getByRole("radio", { name: ENGINE_RADIO[engine] }).check();
-  if (engine === "ollama" && ollamaModel) await page.getByLabel("Modèle Ollama").selectOption(ollamaModel);
-  await page.getByRole("button", { name: "Enregistrer le moteur" }).click();
-  await expect(page.getByText(/Moteur enregistré :/)).toBeVisible();
+  const main = page.getByRole("main");
+  const radio = main.getByRole("radio", { name: ENGINE_RADIO[engine], exact: true });
+  await waitForHydration(radio);
+  await radio.check();
+  if (engine === "ollama" && ollamaModel) await main.getByLabel("Modèle", { exact: true }).selectOption(ollamaModel);
+  const save = main.getByRole("button", { name: /^Choisir / });
+  // Choix déjà enregistré : aucun bouton à cliquer.
+  if ((await save.count()) === 0) return;
+  await save.click();
+  await expect(main.getByText(/^Choix enregistré :/)).toBeVisible();
 }
 
 export async function generateMissingSkeletons(page: Page, programId: string, timeout = 60_000): Promise<void> {

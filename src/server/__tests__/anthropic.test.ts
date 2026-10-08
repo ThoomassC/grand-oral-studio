@@ -3,7 +3,15 @@ import type { PromptPair } from "@/domain/contracts";
 import { DeckSpecSchema } from "@/domain/schemas";
 import { createAnthropicProvider } from "@/server/ai/anthropic";
 import type { DeckHints } from "@/server/ai/types";
-import { AiCreditExhaustedError, AiInvalidOutputError, AiKeyRejectedError, AiRefusalError, AiUnavailableError } from "@/server/errors";
+import {
+  AiCreditExhaustedError,
+  AiInvalidOutputError,
+  AiKeyRejectedError,
+  AiProviderRateLimitedError,
+  AiRefusalError,
+  AiUnavailableError,
+  isRefundableAiError,
+} from "@/server/errors";
 import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
 
 /**
@@ -25,6 +33,8 @@ interface Reply {
   errorBody?: unknown;
   /** Ne répond jamais (jusqu'à l'abandon par le signal). */
   hang?: boolean;
+  /** En-têtes ajoutés à une réponse d'erreur (ex. retry-after). */
+  headers?: Record<string, string>;
 }
 
 interface Captured {
@@ -81,7 +91,7 @@ function fakeFetch(replies: Reply[]) {
     if (reply.status && reply.status >= 400) {
       return new Response(JSON.stringify(reply.errorBody ?? { type: "error", error: { type: "api_error", message: "boom" } }), {
         status: reply.status,
-        headers: { "content-type": "application/json", "x-should-retry": "true", "retry-after-ms": "10" },
+        headers: { "content-type": "application/json", "x-should-retry": "true", "retry-after-ms": "10", ...reply.headers },
       });
     }
     if (body.stream === true) {
@@ -225,7 +235,7 @@ describe("createAnthropicProvider — clé refusée (401/403)", () => {
     const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AiKeyRejectedError);
     expect((error as AiKeyRejectedError).userMessage).toBe(
-      "Votre clé API Anthropic est refusée. Mettez-la à jour dans la Configuration IA.",
+      "Votre clé API Anthropic est refusée. Mettez-la à jour dans la Rédaction IA.",
     );
     expect(calls).toHaveLength(1);
   });
@@ -258,7 +268,7 @@ describe("createAnthropicProvider — crédit épuisé (400 credit balance)", ()
     const error = (await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e)) as AiCreditExhaustedError;
     expect(error).toBeInstanceOf(AiCreditExhaustedError);
     expect(error.userMessage).toBe(
-      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez le moteur gratuit dans la Configuration IA.",
+      "Votre compte Anthropic n'a plus de crédit. Rechargez-le sur console.anthropic.com ou choisissez Sans IA dans la Rédaction IA.",
     );
   });
 
@@ -278,6 +288,60 @@ describe("createAnthropicProvider — crédit épuisé (400 credit balance)", ()
 describe("createAnthropicProvider — surface", () => {
   it("ne devrait plus exposer que la rédaction du deck et la reconnaissance (imports sans IA)", () => {
     const { ai } = provider([]);
-    expect(Object.keys(ai).sort()).toEqual(["classify", "engine", "generateDeck", "name"]);
+    expect(Object.keys(ai).sort()).toEqual(["classify", "engine", "generateDeck", "generateStructured", "name"]);
+  });
+});
+
+describe("createAnthropicProvider — 1.2 : budget par appel et tâches structurées", () => {
+  it("devrait respecter CallOptions.budgetMs plutôt que le budget par défaut", async () => {
+    const { ai } = provider([{ hang: true }], { deckBudgetMs: 60_000 });
+    const started = Date.now();
+    const error = await ai.generateDeck(PROMPT, HINTS, { budgetMs: 40 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiUnavailableError);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it("devrait produire les questions du jury avec un format JSON dédié, normalisées et validées", async () => {
+    const { ai, calls } = provider([{ text: JSON.stringify({ questions: [{ question: " Pourquoi ? ", answer: "Parce que." }] }) }]);
+    expect(await ai.generateStructured({ task: "juryQuestions", prompt: PROMPT })).toEqual({
+      questions: [{ question: "Pourquoi ?", answer: "Parce que." }],
+    });
+    const format = (calls[0]!.body.output_config as { format: { type: string; schema: { properties: Record<string, unknown> } } }).format;
+    expect(format.type).toBe("json_schema");
+    expect(Object.keys(format.schema.properties)).toEqual(["questions"]);
+    expect(calls[0]!.body.stream).toBeFalsy();
+  });
+
+  it("devrait produire une diapo, et refuser une sortie vide de questions", async () => {
+    const { ai } = provider([
+      { text: JSON.stringify({ layout: "content", sectionId: "p1", title: "Titre", bullets: ["A"] }) },
+      { text: JSON.stringify({ questions: [] }) },
+    ]);
+    expect(await ai.generateStructured({ task: "slide", prompt: PROMPT })).toEqual({
+      layout: "content",
+      sectionId: "p1",
+      title: "Titre",
+      subtitle: "",
+      bullets: ["A"],
+      notes: "",
+    });
+    await expect(ai.generateStructured({ task: "juryQuestions", prompt: PROMPT })).rejects.toBeInstanceOf(AiInvalidOutputError);
+  });
+});
+
+describe("createAnthropicProvider — limite de débit (429)", () => {
+  it("devrait lever AiProviderRateLimitedError avec le Retry-After, remboursable, comme les autres fournisseurs", async () => {
+    const { ai, calls } = provider([{ status: 429, headers: { "retry-after": "30", "x-should-retry": "false" } }], { keySource: "user" });
+    const error = await ai.generateDeck(PROMPT, HINTS).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiProviderRateLimitedError);
+    expect(error).toMatchObject({ code: "AI_RATE_LIMITED", status: 429, retryAfterSeconds: 30, provider: "claude" });
+    expect(isRefundableAiError(error)).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("devrait borner un Retry-After absent (60 s par défaut)", async () => {
+    const { ai } = provider([{ status: 429 }]);
+    const error = await ai.generateStructured({ task: "slide", prompt: PROMPT, hints: {} } as never).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "AI_RATE_LIMITED", retryAfterSeconds: 60 });
   });
 });

@@ -9,15 +9,21 @@ import {
 } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
-import { deleteProgram, duplicateProgram } from "@/server/actions/programs";
+import { deleteProgram, duplicateProgram, restoreProgram } from "@/server/actions/programs";
+import type { ProgramRole } from "@/server/queries";
+import { useUndoToast } from "@/components/decks/undo-toast";
 import { ConfirmActionDialog } from "@/components/ui/ConfirmAction";
 import { focusLater } from "@/components/ui/focus";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { ProgramMetaDialog } from "./ProgramMetaDialog";
 
 /**
  * Bouton « ⋮ » en fin de ligne d'un projet : un `DropdownMenu` d'Opale
- * (« Dupliquer », « Supprimer »). « Supprimer » ouvre la confirmation avec
- * recopie du nom (`ConfirmActionDialog`).
+ * (« Renommer », « Dupliquer », « Supprimer »). « Renommer » ouvre la même
+ * fenêtre que le menu de l'en-tête du projet (`ProgramMetaDialog`) ; il est
+ * réservé aux éditeurs et au propriétaire. « Supprimer » ouvre la confirmation
+ * avec recopie du nom (`ConfirmActionDialog`) ; il est réservé au propriétaire.
+ * Après suppression, une notification propose « Annuler » pendant 10 s.
  *
  * Focus : Échap ou une entrée du menu le rendent au bouton (Opale) ; en
  * annulant la confirmation, on le rend au bouton nous-mêmes (l'entrée de menu
@@ -30,10 +36,16 @@ import { LiveRegion } from "@/components/ui/LiveRegion";
 export function ProgramActions({
   programId,
   programName,
+  programDescription,
+  role = "owner",
   focusAfterDelete,
 }: {
   programId: string;
   programName: string;
+  /** Description en cours : « Renommer » renvoie le nom ET la description. */
+  programDescription: string;
+  /** Rôle de l'utilisateur ; seul le propriétaire peut supprimer. Défaut : propriétaire. */
+  role?: ProgramRole;
   /** Ids à focaliser après suppression, par ordre de préférence. */
   focusAfterDelete: string[];
 }) {
@@ -41,8 +53,12 @@ export function ProgramActions({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const showUndo = useUndoToast();
   const label = `Actions du projet ${programName}`;
+  const canDelete = role === "owner";
+  const canRename = role !== "viewer";
 
   function duplicate() {
     if (pending) return;
@@ -81,31 +97,75 @@ export function ProgramActions({
           align="end"
           className="header-menu min-w-[11rem] max-w-[min(20rem,calc(100vw-2rem))]"
         >
+          {canRename ? (
+            <DropdownMenuItem
+              className="header-menu__item"
+              value="renommer"
+              disabled={pending}
+              onSelect={() => {
+                setMessage(null);
+                setRenaming(true);
+              }}
+            >
+              Renommer
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="header-menu__item" value="dupliquer" disabled={pending} onSelect={duplicate}>
             {pending ? "Duplication…" : "Dupliquer"}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="header-menu__item"
-            value="supprimer"
-            disabled={pending}
-            onSelect={() => setConfirming(true)}
-          >
-            Supprimer
-          </DropdownMenuItem>
+          {canDelete ? (
+            <DropdownMenuItem
+              className="header-menu__item"
+              value="supprimer"
+              disabled={pending}
+              onSelect={() => setConfirming(true)}
+            >
+              Supprimer
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
       <LiveRegion className={`basis-full text-sm ${message?.kind === "error" ? "text-danger" : "text-success"}`}>
         {message?.text}
       </LiveRegion>
+      {renaming && canRename ? (
+        <ProgramMetaDialog
+          field="name"
+          programId={programId}
+          initial={{ name: programName, description: programDescription }}
+          onClose={(done) => {
+            setRenaming(false);
+            if (done) {
+              setMessage({ kind: "success", text: done });
+              router.refresh();
+            }
+            // Après le démontage de la modale (l'entrée de menu qui l'a ouverte n'existe plus) : le bouton « ⋮ ».
+            window.setTimeout(() => triggerRef.current?.focus(), 0);
+          }}
+        />
+      ) : null}
       <ConfirmActionDialog
         open={confirming}
         title="Supprimer le projet ?"
-        question={`Supprimer « ${programName} », ses sujets et ses decks ? Cette action est définitive.`}
+        question={`Supprimer « ${programName} », ses sujets et ses diaporamas ? Vous pourrez annuler pendant quelques secondes.`}
         confirmLabel="Supprimer définitivement"
         requireText={programName}
         onConfirm={async () => {
           const result = await deleteProgram(programId);
-          return result.ok ? null : result.error;
+          if (!result.ok) return result.error;
+          showUndo({
+            id: `annuler-projet-${programId}`,
+            message: "Projet supprimé.",
+            undoAccessibleLabel: `Annuler la suppression du projet ${programName}`,
+            restoredMessage: "Projet restauré.",
+            onUndo: async () => {
+              const restored = await restoreProgram(programId);
+              if (!restored.ok) return restored.error;
+              router.refresh();
+              return null;
+            },
+          });
+          return null;
         }}
         onCancel={() => {
           setConfirming(false);

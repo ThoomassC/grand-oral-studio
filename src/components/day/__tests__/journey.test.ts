@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { NONE, OTHER, parseDraft, restoreDraft, selectedSubject, subjectMode, type Draft } from "@/components/day/journey";
+import {
+  draftKey,
+  drawProblem,
+  engineChoices,
+  NONE,
+  offersFallback,
+  OTHER,
+  otherChoices,
+  parseDraft,
+  restoreDraft,
+  selectedSubject,
+  subjectMode,
+  type Draft,
+} from "@/components/day/journey";
 
 const DRAFT: Draft = {
   problem: "Comment financer la transition des PME ?",
@@ -96,5 +109,51 @@ describe("restoreDraft — brouillon confronté aux sujets actuels", () => {
 
   it("devrait laisser passer l'absence de brouillon", () => {
     expect(restoreDraft(null, ["t1"])).toBeNull();
+  });
+});
+
+describe("repli en un clic et tirage (v1.2)", () => {
+  it("engineChoices : clé personnelle puis clé d'équipe, dans l'ordre des fournisseurs proposés", () => {
+    expect(engineChoices(["gemini", "mistral"], ["gemini", "mistral"]).map((c) => c.label)).toEqual([
+      "Mistral (votre clé)",
+      "Mistral (clé d'équipe)",
+      "Gemini (votre clé)",
+      "Gemini (clé d'équipe)",
+    ]);
+  });
+
+  it("engineChoices : jamais Claude ni OpenAI (plus proposés), même avec une connexion ou une clé d'équipe héritée", () => {
+    expect(engineChoices(["claude", "openai", "mistral"], ["claude", "openai"]).map((c) => c.override)).toEqual([
+      { engine: "mistral", keySource: "user" },
+    ]);
+  });
+
+  it("offersFallback : seulement pour un échec dû au rédacteur", () => {
+    for (const code of ["AI_UNAVAILABLE", "AI_RATE_LIMITED", "AI_KEY_REJECTED", "ENGINE_UNAVAILABLE", "RATE_LIMITED"]) {
+      expect(offersFallback(code)).toBe(true);
+    }
+    for (const code of [undefined, "NOT_FOUND", "VALIDATION", "FORBIDDEN", "CONFLICT"]) expect(offersFallback(code)).toBe(false);
+  });
+
+  it("otherChoices : retire la connexion qui vient d'échouer", () => {
+    const choices = engineChoices(["mistral"], ["mistral"]);
+    expect(otherChoices(choices, { engine: "mistral", keySource: "user" }).map((c) => c.label)).toEqual(["Mistral (clé d'équipe)"]);
+  });
+
+  it("drawProblem : tirage borné parmi les problématiques non vides, null sans problématique", () => {
+    const themes = [
+      { id: "a", problems: ["P1", " "] },
+      { id: "b", problems: ["P2"] },
+      { id: "c" },
+    ];
+    expect(drawProblem(themes, 0)).toEqual({ problem: "P1", themeId: "a" });
+    expect(drawProblem(themes, 0.99)).toEqual({ problem: "P2", themeId: "b" });
+    expect(drawProblem(themes, 1)).toEqual({ problem: "P2", themeId: "b" });
+    expect(drawProblem([{ id: "c", problems: [] }], 0.5)).toBeNull();
+  });
+
+  it("draftKey : un brouillon d'entraînement distinct de celui du jour J", () => {
+    expect(draftKey("p1", false)).toBe("grand-oral-studio:jour-j:p1");
+    expect(draftKey("p1", true)).toBe("grand-oral-studio:jour-j:p1:entrainement");
   });
 });

@@ -235,7 +235,7 @@ export function SubjectPromptImport({
 
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" aria-disabled={analyzing || undefined}>
-            <ButtonLabel idle="Analyser le prompt" busy="Analyse…" isBusy={analyzing} />
+            <ButtonLabel idle="Lire le texte" busy="Lecture…" isBusy={analyzing} />
           </Button>
           <Button
             type="button"

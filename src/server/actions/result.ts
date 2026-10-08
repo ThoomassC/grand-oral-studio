@@ -1,4 +1,18 @@
-/** Résultat uniforme des Server Actions (sérialisable, sans exception côté client). */
+import type { AppErrorCode } from "../errors";
+
+/**
+ * Résultat uniforme des Server Actions (sérialisable, sans exception côté client).
+ * `code` : nature de l'erreur attendue, pour les actions qui l'exposent (le jour J
+ * s'en sert pour proposer un repli) ; absent pour une panne.
+ * `retryAfterSeconds` : attente annoncée par un quota (RATE_LIMITED) ou par le
+ * fournisseur d'IA (AI_RATE_LIMITED), pour afficher l'heure à laquelle réessayer.
+ */
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  | {
+      ok: false;
+      error: string;
+      code?: AppErrorCode;
+      fieldErrors?: Record<string, string[]>;
+      retryAfterSeconds?: number;
+    };

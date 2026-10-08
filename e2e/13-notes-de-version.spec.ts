@@ -12,7 +12,7 @@ test.afterAll(async () => {
   await deleteE2eUsers();
 });
 
-const VERSIONS = ["1.1.0", "1.0.1", "1.0.0"];
+const VERSIONS = ["1.2.0", "1.1.0", "1.0.1", "1.0.0"];
 
 function mainNav(page: Page) {
   return page.getByRole("banner").getByRole("navigation", { name: "Navigation principale" });
@@ -27,14 +27,17 @@ test.describe("13. Notes de version", () => {
     await expect(page).toHaveTitle(/Notes de version/);
   });
 
-  test("devrait lister les versions 1.1.0, 1.0.1 et 1.0.0, de la plus récente à la plus ancienne", async ({ page }) => {
+  test("devrait lister les versions 1.2.0, 1.1.0, 1.0.1 et 1.0.0, de la plus récente à la plus ancienne", async ({ page }) => {
     await page.goto("/notes-de-version");
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { level: 2 })).toHaveText(VERSIONS);
-    const latest = main.getByRole("article", { name: "1.1.0" });
-    await expect(latest.getByRole("heading", { name: "Ajouts", level: 3 })).toBeVisible();
-    await expect(latest.getByRole("heading", { name: "Retraits", level: 3 })).toBeVisible();
-    await expect(latest.getByRole("listitem").filter({ hasText: "L'onglet Notes de version." })).toBeVisible();
+    const latest = main.getByRole("article", { name: "1.2.0" });
+    await expect(latest.getByRole("heading", { name: "Corrections", level: 3 })).toBeVisible();
+    await expect(latest.locator("time")).toHaveAttribute("datetime", "2026-10-07");
+    const previous = main.getByRole("article", { name: "1.1.0" });
+    await expect(previous.getByRole("heading", { name: "Ajouts", level: 3 })).toBeVisible();
+    await expect(previous.getByRole("heading", { name: "Retraits", level: 3 })).toBeVisible();
+    await expect(previous.getByRole("listitem").filter({ hasText: "L'onglet Notes de version." })).toBeVisible();
     await expect(main.getByRole("article", { name: "1.0.0" })).toContainText("Première version en ligne.");
     await expect(main.getByRole("article", { name: "1.0.0" }).locator("time")).toHaveAttribute("datetime", "2026-10-04");
   });
@@ -52,7 +55,7 @@ test.describe("13. Notes de version", () => {
     void account;
     await page.goto("/projets");
     const nav = mainNav(page);
-    await expect(nav.getByRole("link")).toHaveText(["Projets", "Configuration IA", "Notes de version"]);
+    await expect(nav.getByRole("link")).toHaveText(["Projets", "Rédaction IA", "Notes de version"]);
     await nav.getByRole("link", { name: "Notes de version" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(nav.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");

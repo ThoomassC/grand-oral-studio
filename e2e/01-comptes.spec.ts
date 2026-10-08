@@ -233,15 +233,15 @@ test.describe("1. Comptes — notes de version", () => {
     await nav.getByRole("link", { name: "Notes de version" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("heading", { name: "1.1.0", level: 2 })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("heading", { name: "1.2.0", level: 2 })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");
   });
 
-  test("devrait proposer Projets, Configuration IA puis Notes de version à un compte connecté", async ({ page, account }) => {
+  test("devrait proposer Projets, Rédaction IA puis Notes de version à un compte connecté", async ({ page, account }) => {
     void account;
     await page.goto("/projets");
     const nav = page.getByRole("navigation", { name: "Navigation principale" });
-    await expect(nav.getByRole("link")).toHaveText(["Projets", "Configuration IA", "Notes de version"]);
+    await expect(nav.getByRole("link")).toHaveText(["Projets", "Rédaction IA", "Notes de version"]);
     await nav.getByRole("link", { name: "Notes de version" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();

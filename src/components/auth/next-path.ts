@@ -18,3 +18,13 @@ export function safeNextPath(raw: string | string[] | undefined, fallback = "/pr
   if (url.origin !== ORIGIN || url.pathname.startsWith("//")) return fallback;
   return `${url.pathname}${url.search}${url.hash}`;
 }
+
+/**
+ * Destination du lien de confirmation d'adresse (Better Auth y ajoute
+ * `?error=TOKEN_EXPIRED` en cas d'échec) : la page de connexion, qui affiche
+ * l'erreur, ou redirige vers `next` quand la vérification a ouvert la session.
+ */
+export function verificationCallbackPath(next: string): string {
+  const safe = safeNextPath(next);
+  return safe === "/projets" ? "/connexion" : `/connexion?next=${encodeURIComponent(safe)}`;
+}

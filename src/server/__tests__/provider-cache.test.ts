@@ -3,7 +3,12 @@ import { createProviderCache } from "@/server/ai/provider-cache";
 import type { AiProvider } from "@/server/ai/types";
 
 function fakeProvider(name: string): AiProvider {
-  return { name, generateDeck: async () => Promise.reject(new Error("x")), classify: async () => Promise.reject(new Error("x")) };
+  return {
+    name,
+    generateDeck: async () => Promise.reject(new Error("x")),
+    classify: async () => Promise.reject(new Error("x")),
+    generateStructured: async () => Promise.reject(new Error("x")),
+  };
 }
 
 describe("createProviderCache", () => {

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { checkDeckAgainstTemplate } from "@/domain/deck";
 import { DeckSpecSchema } from "@/domain/schemas";
 import { createMockProvider } from "@/server/ai/mock";
-import { makeTemplate, makeThemes } from "@/test/fixtures";
+import { JuryQuestionsSchema } from "@/domain/jury-questions";
+import { makeConformingDeck, makeTemplate, makeThemes } from "@/test/fixtures";
 
 const PROBLEM = "Comment concilier mobilité urbaine et sobriété énergétique ?";
 
@@ -40,6 +41,29 @@ describe("fournisseur mock", () => {
 
   it("ne devrait plus proposer de brouillons d'import (imports sans IA)", () => {
     const provider = createMockProvider();
-    expect(Object.keys(provider).sort()).toEqual(["classify", "engine", "generateDeck", "name"]);
+    expect(Object.keys(provider).sort()).toEqual(["classify", "engine", "generateDeck", "generateStructured", "name"]);
+  });
+});
+
+describe("fournisseur mock — tâches structurées (1.2)", () => {
+  it("devrait produire des questions du jury déterministes et valides à partir du diaporama", async () => {
+    const spec = makeConformingDeck();
+    const hints = { spec, subject: makeThemes()[0]! };
+    const a = await createMockProvider().generateStructured({ task: "juryQuestions", prompt: { system: "", user: "" }, hints });
+    const b = await createMockProvider().generateStructured({ task: "juryQuestions", prompt: { system: "", user: "" }, hints });
+    expect(a).toEqual(b);
+    expect(JuryQuestionsSchema.safeParse(a).success).toBe(true);
+  });
+
+  it("devrait réécrire une diapo de façon déterministe et idempotente", async () => {
+    const current = makeConformingDeck().slides[1]!;
+    const once = await createMockProvider().generateStructured({ task: "slide", prompt: { system: "", user: "" }, hints: { current } });
+    expect(once).toEqual({ ...current, title: `${current.title} (révisé)` });
+    const twice = await createMockProvider().generateStructured({ task: "slide", prompt: { system: "", user: "" }, hints: { current: once } });
+    expect(twice).toEqual(once);
+  });
+
+  it("devrait exiger les indications", async () => {
+    await expect(createMockProvider().generateStructured({ task: "slide", prompt: { system: "", user: "" } })).rejects.toMatchObject({ detail: expect.stringMatching(/hints/) });
   });
 });
