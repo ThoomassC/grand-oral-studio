@@ -2,6 +2,7 @@ import { Card, DescriptionList } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ChangePasswordForm } from "@/components/profile/ChangePasswordForm";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { DeleteAccountForm } from "@/components/profile/DeleteAccountForm";
 import { ProfileNameForm } from "@/components/profile/ProfileNameForm";
 import { DownloadButton } from "@/components/projects/DownloadButton";
@@ -27,8 +28,8 @@ export default async function ProfilePage() {
   const hasPassword = profile.signInMethods.includes("password");
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-3xl sm:text-4xl">Informations du profil</h1>
+    <div className="studio-container studio-container--narrow">
+      <PageHeading title="Informations du profil" kicker="Votre compte" />
 
       <div className="mt-8 flex flex-col gap-6">
         <section aria-labelledby="profil-infos">

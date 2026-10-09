@@ -186,8 +186,8 @@ export function BrandEditor({
   const previewId = `${baseId}-preview`;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-      <section aria-labelledby={previewId} className="lg:sticky lg:top-4 lg:order-2 lg:self-start">
+    <div className="studio-workspace-grid grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+      <section aria-labelledby={previewId} className="studio-preview-panel lg:sticky lg:top-4 lg:order-2 lg:self-start">
         <h2 id={previewId} className="text-lg font-semibold">
           Aperçu
         </h2>
@@ -202,7 +202,7 @@ export function BrandEditor({
         </ul>
       </section>
 
-      <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-6 lg:order-1">
+      <form ref={formRef} noValidate onSubmit={save} className="studio-editor-panel flex flex-col gap-6 lg:order-1">
         <div>
           <h2 tabIndex={-1} className="text-2xl focus:outline-none">
             Couleurs, polices et logo

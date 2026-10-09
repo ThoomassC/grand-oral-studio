@@ -10,7 +10,7 @@ import styles from "./HomeLanding.module.css";
 
 /** Une vraie miniature du diaporama, rendue par le même composant que dans le studio. */
 const EXAMPLE_BRAND: SlideBrand = {
-  colors: { primary: "#23457A", secondary: "#667085", accent: "#9DB7DC", background: "#FAFAF7", text: "#25354C" },
+  colors: { primary: "#294C66", secondary: "#66777F", accent: "#92B3C4", background: "#F9FBFC", text: "#172E38" },
   fonts: { heading: "Arial", body: "Arial" },
   logoDataUrl: null,
 };

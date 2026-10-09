@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SubjectImport } from "@/components/themes/SubjectImport";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { ThemeManager, type ThemeItem } from "@/components/themes/ThemeManager";
 import { loadProgram } from "../../../_lib/load";
 
@@ -26,13 +27,10 @@ export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h2 className="text-2xl">Sujets</h2>
-        <p className="max-w-3xl text-sm text-muted">
+      <PageHeading title="Sujets" kicker="02 · Vos idées, vos sources" level={2}>
           Facultatif. Les sujets possibles de l&apos;oral et vos notes (chiffres, exemples, sources) : le jour J, le
           sujet de la problématique est reconnu et le diaporama s&apos;appuie sur ses notes.
-        </p>
-      </div>
+      </PageHeading>
       {/* Lecteur : ni import ni édition (le serveur les refuse de toute façon). */}
       {readOnly ? null : <SubjectImport programId={program.id} format={program.template.format} />}
       <ThemeManager programId={program.id} themes={subjects} readOnly={readOnly} />

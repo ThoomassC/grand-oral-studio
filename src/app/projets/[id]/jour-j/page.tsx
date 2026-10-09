@@ -1,6 +1,7 @@
 import { Feedback } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import { DayJourney, type DayTheme, type DayWriter, type RecentDeck } from "@/components/day/DayJourney";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { ExamChecklist } from "@/components/day/ExamChecklist";
 import { engineChoices } from "@/components/day/journey";
 import { PrepCountdown } from "@/components/day/PrepCountdown";
@@ -107,20 +108,16 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
   const requestTime = new Date().getTime();
   return (
     <div className="flex flex-col gap-6">
-      <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
+      <div className="mx-auto w-full max-w-3xl">
         {/* Un h2 par page, comme Apparence et Trame : les étapes du parcours sont ses h3. */}
-        <div className="min-w-0">
-          <h2 className="text-2xl">{practice ? "Entraînement" : "Jour J"}</h2>
-          <p className="text-muted">
+        <PageHeading title={practice ? "Entraînement" : "Jour J"} kicker="03 · À vous de jouer" level={2}
+          actions={<PrepCountdown storageKey={prepKey} minutes={prepMinutes} />}>
             {practice
               ? "Tirez ou recopiez une problématique, puis générez un diaporama d'entraînement, chronomètre en marche."
               : themes.length === 0
                 ? "Recopiez la problématique, puis générez le diaporama."
                 : "Recopiez la problématique, vérifiez le sujet, générez le diaporama."}
-          </p>
-        </div>
-        {/* Décompte réel : démarre à la première saisie de la problématique. */}
-        <PrepCountdown storageKey={prepKey} minutes={prepMinutes} />
+        </PageHeading>
       </div>
       {checklist ? (
         <div className="mx-auto w-full max-w-3xl">
@@ -144,9 +141,7 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
 function ReadOnlyDay({ programId, practice }: { programId: string; practice: boolean }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="min-w-0">
-        <h2 className="text-2xl">{practice ? "Entraînement" : "Jour J"}</h2>
-      </div>
+      <PageHeading title={practice ? "Entraînement" : "Jour J"} level={2} />
       <Feedback tone="neutral" title={`${practice ? "Entraînement" : "Jour J"} en lecture seule`}>
         Générer un diaporama est réservé au propriétaire et aux éditeurs du projet. Vous pouvez relire, exporter et
         répéter les diaporamas déjà créés.

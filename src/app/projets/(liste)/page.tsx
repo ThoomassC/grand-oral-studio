@@ -2,6 +2,8 @@ import { Badge } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
+import { BrandMark } from "@/components/layout/BrandMark";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { ProgramActions } from "@/components/programs/ProgramActions";
 import { ProjectListActions } from "@/components/programs/ProjectListActions";
 import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
@@ -20,52 +22,62 @@ export default async function ProgramsPage() {
   const writerLabel = engineLabel(writer.engine);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <h1 className="text-3xl sm:text-4xl">Projets</h1>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="studio-container">
+      <PageHeading title="Projets" kicker="Votre studio" actions={
+        <>
           {/* Dans l'état vide, l'import et l'exemple sont proposés dans l'encart, une seule fois. */}
           {programs.length > 0 ? <ProjectListActions /> : null}
           <CreateProgramDialog />
-        </div>
-      </div>
-      <p className="mt-2 max-w-2xl text-muted">
+        </>
+      }>
         Un projet réunit l&apos;apparence de vos diaporamas, leur trame et, si besoin, les sujets possibles de l&apos;oral.
-      </p>
+      </PageHeading>
 
       <section aria-labelledby="liste-programmes" className="mt-8">
         <h2 id="liste-programmes" tabIndex={-1} className="sr-only">
           Liste des projets
         </h2>
         {programs.length === 0 ? (
-          <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
-            <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
-            <p className="text-muted">
-              Créez votre premier projet, puis choisissez son apparence et sa trame. Vous pouvez aussi importer un
-              projet exporté (.json) ou partir d&apos;un projet d&apos;exemple.
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
-              <ProjectListActions />
+          <div className="studio-empty">
+            <div className="studio-empty__artwork" aria-hidden="true"><BrandMark /></div>
+            <div>
+              <h2 className="text-2xl">Aucun projet pour l&apos;instant</h2>
+              <p className="mt-3 max-w-2xl text-muted">
+                Créez votre premier projet, puis choisissez son apparence et sa trame. Vous pouvez aussi importer un
+                projet exporté (.json) ou partir d&apos;un projet d&apos;exemple.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
+                <ProjectListActions />
+              </div>
             </div>
           </div>
         ) : (
           <>
             {/* Le nombre de projets, en haut à droite de la liste. */}
             <p className="num mb-3 text-right text-sm text-muted">{plural(programs.length, "projet")}</p>
-            <ul className="flex flex-col gap-3">
-            {programs.map((p, i) => {
-              const neighbour = programs[i + 1] ?? programs[i - 1];
-              return (
-                // Ligne : contenu (infos, puis avancement à droite dès sm) | bouton « ⋮ » toujours en fin de ligne.
-                // `flex-row` : la carte Opale impose `flex-direction: column`. `flex-wrap` : l'annonce de la duplication (dans ProgramActions) passe dessous, sur toute la largeur.
-                <li
-                  key={p.id}
-                  className="opale-card opale-card--e1 flex flex-row flex-wrap items-start gap-x-2 gap-y-3 p-5 pt-7 sm:gap-x-3 sm:p-6 sm:pt-8"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-xl">
+            <ul className="studio-project-grid">
+              {programs.map((p, i) => {
+                const neighbour = programs[i + 1] ?? programs[i - 1];
+                return (
+                  <li
+                    key={p.id}
+                    className="studio-project-card"
+                  >
+                    <div className="studio-project-card__top">
+                      <span className="studio-project-card__index" aria-hidden="true"><BrandMark />{String(i + 1).padStart(2, "0")}</span>
+                      <ProgramActions
+                        programId={p.id}
+                        programName={p.name}
+                        programDescription={p.description}
+                        role={p.role}
+                        focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
+                          (x): x is string => x !== null,
+                        )}
+                      />
+                    </div>
+                    <div className="studio-project-card__body">
+                      <h3 className="studio-project-card__title">
                         <Link
                           id={`programme-${p.id}`}
                           href={projectHomeHref(p.id)}
@@ -92,7 +104,7 @@ export default async function ProgramsPage() {
                         </div>
                       </dl>
                     </div>
-                    <div className="shrink-0">
+                    <div className="studio-project-card__footer">
                       <ProjectProgressSummary
                         programId={p.id}
                         programName={p.name}
@@ -101,19 +113,9 @@ export default async function ProgramsPage() {
                         writerLabel={writerLabel}
                       />
                     </div>
-                  </div>
-                  <ProgramActions
-                    programId={p.id}
-                    programName={p.name}
-                    programDescription={p.description}
-                    role={p.role}
-                    focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
-                      (x): x is string => x !== null,
-                    )}
-                  />
-                </li>
-              );
-            })}
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}

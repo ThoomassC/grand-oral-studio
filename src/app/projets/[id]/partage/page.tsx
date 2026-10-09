@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShareManager } from "@/components/projects/ShareManager";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { isEmailDeliveryEnabled } from "@/lib/auth-options";
 import { listMembers, NotFoundError, type ProgramMembers } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -30,14 +31,11 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h2 className="text-2xl">Partage</h2>
-        <p className="max-w-3xl text-sm text-muted">
+      <PageHeading title="Partage" kicker="Préparer ensemble" level={2}>
           {view.myRole === "owner"
             ? "Travaillez à plusieurs sur ce projet : un éditeur le modifie avec vous, un lecteur le consulte et répète ses diaporamas."
             : `Ce projet appartient à ${view.owner.name}, qui gère ses membres.`}
-        </p>
-      </div>
+      </PageHeading>
       <ShareManager
         programId={program.id}
         programName={program.name}

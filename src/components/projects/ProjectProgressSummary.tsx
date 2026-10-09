@@ -38,7 +38,7 @@ export function ProjectProgressSummary({
   const canGenerate = role !== "viewer";
   const name = <span className="sr-only"> — {programName}</span>;
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="studio-progress-summary">
       <p className="flex items-center gap-2 text-sm">
         <span role="img" aria-label={`${doneCount} ${doneCount > 1 ? "étapes faites" : "étape faite"} sur ${total}`} className="flex gap-1">
           {Array.from({ length: total }, (_, i) => (
@@ -63,7 +63,7 @@ export function ProjectProgressSummary({
           {name}
         </ButtonLink>
       ) : toDay ? (
-        <div className="flex flex-wrap gap-2 sm:justify-end">
+        <div className="flex flex-wrap gap-2">
           <ButtonLink href={practiceHref(programId)} variant="primary" size="small">
             S&apos;entraîner
             {name}

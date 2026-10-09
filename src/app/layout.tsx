@@ -4,14 +4,16 @@ import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { HeaderVisibility } from "@/components/layout/HeaderVisibility";
 import { HomeHeader } from "@/components/home/HomeHeader";
+import { ContentMotion } from "@/components/layout/ContentMotion";
 import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { preferencesScript } from "@/components/preferences/preferences";
 import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InlineScript } from "@/components/ui/InlineScript";
 import "./globals.css";
+import "./studio.css";
 
-// Polices : celles d'Opale (Chivo, Bricolage Grotesque), reliées par sa feuille.
+// Chivo vient d’Opale ; les titres éditoriaux utilisent Georgia (studio.css).
 
 export const metadata: Metadata = {
   title: {
@@ -43,7 +45,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {/* Taille du texte et animations (panneau Réglages), posées avant la première peinture. */}
         <InlineScript html={preferencesScript()} />
       </head>
-      <body className="opale-root flex min-h-full flex-col">
+      <body className="opale-root studio-app flex min-h-full flex-col" data-opale-glass-ink="page">
         <ThemeProvider defaultTheme={defaultTheme}>
           <a
             href="#contenu"
@@ -59,7 +61,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <SiteHeader />
               </HeaderVisibility>
               <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
-                {children}
+                <ContentMotion>{children}</ContentMotion>
               </main>
               <UnsavedChangesBanner />
             </UnsavedChangesProvider>

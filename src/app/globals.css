@@ -1,9 +1,10 @@
 /*
- * Direction artistique : celle d'Opale (@thomascaron/opale-ui). Sa feuille est
+ * Composants : Opale (@thomascaron/opale-ui). Sa feuille est
  * rangée dans la couche `opale`, placée avant `components` et `utilities` :
  * un utilitaire Tailwind l'emporte sur une règle d'Opale (README d'Opale,
  * « Avec Tailwind v4 : la feuille en couche »). Elle relie aussi ses polices,
- * Chivo et Bricolage Grotesque.
+ * Chivo et Bricolage Grotesque. La direction visuelle de Grand Oral Studio
+ * personnalise ses jetons publics dans studio.css, importé après cette feuille.
  */
 @layer theme, base, opale, components, utilities;
 @import "tailwindcss";
@@ -33,7 +34,7 @@
 
 /*
  * Nos noms de couleur, branchés sur les jetons publics d'Opale : aucune
- * couleur n'est définie ici, les deux thèmes viennent d'Opale. Les « lavis »
+ * couleur n'est définie ici, les deux thèmes sont personnalisés par studio.css. Les « lavis »
  * (fonds doux) sont des mélanges de ces jetons avec la surface, comme ceux
  * d'Opale (`.opale-feedback--*`).
  */

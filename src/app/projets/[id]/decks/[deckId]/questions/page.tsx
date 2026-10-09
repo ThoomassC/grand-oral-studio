@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { notFound } from "next/navigation";
 import { JuryQuestions, type JuryQuestionItem } from "@/components/decks/JuryQuestions";
 import { decksHref } from "@/components/projects/steps";
@@ -45,17 +46,11 @@ export default async function JuryQuestionsPage({ params }: Params) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-2xl">Questions du jury</h2>
-          <p className="max-w-3xl text-muted">
+      <PageHeading title="Questions du jury" kicker="Prenez une longueur d’avance" level={2} actions={
+        <ButtonLink href={deckHref} variant="ghost">Retour au diaporama</ButtonLink>
+      }>
             {deck.spec.title} · Entraînez-vous à répondre sans lire, puis révélez les éléments de réponse.
-          </p>
-        </div>
-        <ButtonLink href={deckHref} variant="ghost">
-          Retour au diaporama
-        </ButtonLink>
-      </div>
+      </PageHeading>
       <JuryQuestions deckId={deck.id} canEdit={program.role !== "viewer"} initialQuestions={questions} />
     </div>
   );

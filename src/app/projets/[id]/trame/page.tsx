@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { TemplateWorkspace } from "@/components/template/TemplateWorkspace";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { loadProgram } from "../../_lib/load";
 
 export async function generateMetadata({ params }: PageProps<"/projets/[id]/trame">): Promise<Metadata> {
@@ -12,13 +13,10 @@ export default async function TemplatePage({ params }: PageProps<"/projets/[id]/
   const program = await loadProgram((await params).id);
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h2 className="text-2xl">Trame</h2>
-        <p className="max-w-3xl text-sm text-muted">
+      <PageHeading title="Trame" kicker="02 · Votre fil conducteur" level={2}>
           La suite des diapos et ce que chacune contient. Le jour J, ce contenu type est développé pour la
           problématique tirée au sort.
-        </p>
-      </div>
+      </PageHeading>
       {/* Lecteur : la trame en lecture seule (le serveur refuse de toute façon ses modifications). */}
       <TemplateWorkspace
         programId={program.id}

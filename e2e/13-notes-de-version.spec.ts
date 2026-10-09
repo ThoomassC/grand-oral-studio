@@ -42,12 +42,12 @@ test.describe("13. Notes de version", () => {
     await expect(main.getByRole("article", { name: "1.0.0" }).locator("time")).toHaveAttribute("datetime", "2026-10-04");
   });
 
-  test("devrait offrir le seul onglet « Notes de version » sans compte", async ({ page }) => {
+  test("devrait ouvrir les notes depuis l’accueil et offrir un seul onglet sans compte", async ({ page }) => {
     await page.goto("/");
     const nav = mainNav(page);
-    await expect(nav.getByRole("link")).toHaveText(["Notes de version"]);
-    await nav.getByRole("link", { name: "Notes de version" }).click();
+    await nav.getByRole("link", { name: /^Quoi de neuf/ }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
+    await expect(nav.getByRole("link")).toHaveText(["Notes de version"]);
     await expect(nav.getByRole("link", { name: "Notes de version" })).toHaveAttribute("aria-current", "page");
   });
 
