@@ -13,9 +13,10 @@ import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import type { GoogleButtonState } from "@/lib/auth-options";
 import { GoogleSignInButton } from "./GoogleSignInButton";
-import { verificationCallbackPath } from "./next-path";
+import { postLoginPath, verificationCallbackPath } from "./next-path";
 import { EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE } from "./oauth-error";
 import { PasswordInput } from "./PasswordInput";
+import styles from "./LoginExperience.module.css";
 
 type Mode = "signin" | "signup";
 
@@ -60,6 +61,7 @@ function authErrorMessage(code: string | undefined, status: number, mode: Mode):
 
 interface AuthFormProps {
   mode: Mode;
+  appearance?: "default" | "studio";
   next: string;
   /** Connexion Google configurée côté serveur (booléen seul, aucun identifiant). */
   google: GoogleButtonState;
@@ -69,11 +71,14 @@ interface AuthFormProps {
   verifyEmail?: boolean;
 }
 
-export function AuthForm({ mode, next, google, initialError = null, verifyEmail = false }: AuthFormProps) {
+export function AuthForm({ mode, next, google, initialError = null, verifyEmail = false, appearance = "default" }: AuthFormProps) {
   const router = useRouter();
   const isSignup = mode === "signup";
+  const studio = appearance === "studio";
   const ids = { name: useId(), email: useId(), password: useId(), hint: useId() };
   const formRef = useRef<HTMLFormElement>(null);
+  const [navigating, setNavigating] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
 
   const [state, submit, pending] = useActionState<AuthState, FormData>(
     async (_prev, formData) => {
@@ -117,7 +122,8 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
       if (pendingVerification) {
         return { error: null, fieldErrors: {}, values, verificationSentTo: email };
       }
-      router.replace(next);
+      setNavigating(true);
+      router.replace(postLoginPath(next));
       router.refresh();
       return { error: null, fieldErrors: {}, values };
     },
@@ -132,20 +138,50 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
   const [oauthErrorDismissed, setOauthErrorDismissed] = useState(false);
   const oauthError = hydrated && !oauthErrorDismissed ? initialError : null;
   const shownError = oauthError ?? state.error;
+  const busy = pending || navigating || googlePending;
 
   const otherHref = `${isSignup ? "/connexion" : "/inscription"}${next !== "/projets" ? `?next=${encodeURIComponent(next)}` : ""}`;
 
+  const googleSection = google !== "hidden" ? (
+    <>
+      {!studio ? (
+        <div className="auth-divider flex items-center gap-3 text-sm text-muted">
+          <span aria-hidden="true" className="h-px flex-1 bg-border" />
+          ou
+          <span aria-hidden="true" className="h-px flex-1 bg-border" />
+        </div>
+      ) : null}
+      <GoogleSignInButton
+        next={next}
+        configured={google === "enabled"}
+        blocked={pending || navigating}
+        onStart={() => setOauthErrorDismissed(true)}
+        onPendingChange={setGooglePending}
+      />
+      {studio ? (
+        <div className="auth-divider flex items-center gap-3">
+          <span aria-hidden="true" className="h-px flex-1 bg-border" />
+          ou avec votre adresse e-mail
+          <span aria-hidden="true" className="h-px flex-1 bg-border" />
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className={`flex flex-col gap-5 ${studio ? styles.form : ""}`}>
+      {studio ? googleSection : null}
       <form
         ref={formRef}
         noValidate
+        aria-busy={busy || undefined}
         className="flex flex-col gap-5"
         onSubmit={(e) => {
           // Soumission manuelle : évite la réinitialisation automatique du formulaire
           // par React après l'action (on garde la saisie en cas d'erreur).
           e.preventDefault();
-          if (pending) return;
+          if (busy) return;
+          setOauthErrorDismissed(true);
           const data = new FormData(e.currentTarget);
           startTransition(() => submit(data));
         }}
@@ -198,6 +234,7 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
             inputMode="email"
             autoComplete="email"
             spellCheck={false}
+            placeholder={studio ? "vous@exemple.fr" : undefined}
             defaultValue={state.values.email}
             aria-invalid={Boolean(state.fieldErrors.email)}
             aria-describedby={state.fieldErrors.email ? `${ids.email}-err` : undefined}
@@ -207,13 +244,19 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
         </div>
 
         <div>
-          <label htmlFor={ids.password} className="opale-field__label">
-            Mot de passe
-          </label>
+          <div className={studio ? "auth-password-label" : undefined}>
+            <label htmlFor={ids.password} className="opale-field__label">
+              Mot de passe
+            </label>
+            {studio && !isSignup ? (
+              <Link href="/mot-de-passe-oublie" className="opale-link">Mot de passe oublié ?</Link>
+            ) : null}
+          </div>
           <PasswordInput
             id={ids.password}
             name="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
+            placeholder={studio ? "Votre mot de passe" : undefined}
             aria-invalid={Boolean(state.fieldErrors.password)}
             aria-describedby={
               [isSignup ? ids.hint : null, state.fieldErrors.password ? `${ids.password}-err` : null]
@@ -229,7 +272,7 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
             </p>
           ) : null}
           <FieldError id={`${ids.password}-err`} message={state.fieldErrors.password} />
-          {isSignup ? null : (
+          {isSignup || studio ? null : (
             <p className="mt-2 text-sm">
               <Link href="/mot-de-passe-oublie" className="opale-link">
                 Mot de passe oublié ?
@@ -238,31 +281,23 @@ export function AuthForm({ mode, next, google, initialError = null, verifyEmail 
           )}
         </div>
 
-        <Button type="submit" fullWidth aria-disabled={pending || undefined}>
+        <Button type="submit" fullWidth className={studio ? "auth-submit" : undefined} aria-disabled={busy || undefined}>
           <ButtonLabel
             idle={isSignup ? "Créer mon compte" : "Se connecter"}
             busy={isSignup ? "Création du compte…" : "Connexion…"}
-            isBusy={pending}
+            isBusy={pending || navigating}
           />
+          {studio ? (
+            <svg className="auth-submit-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
         </Button>
       </form>
 
-      {google !== "hidden" ? (
-        <>
-          <div className="flex items-center gap-3 text-sm text-muted">
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
-            ou
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleSignInButton
-            next={next}
-            configured={google === "enabled"}
-            onStart={() => setOauthErrorDismissed(true)}
-          />
-        </>
-      ) : null}
+      {!studio ? googleSection : null}
 
-      <p className="text-center text-sm text-muted">
+      <p className="auth-other-account text-center text-sm text-muted">
         {isSignup ? "Déjà un compte ? " : "Pas encore de compte ? "}
         <Link href={otherHref} className="opale-link font-medium">
           {isSignup ? "Se connecter" : "Créer un compte"}

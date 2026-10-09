@@ -114,7 +114,25 @@ test.describe("1. Comptes — connexion", () => {
     await page.getByLabel("Adresse e-mail").fill(user.email);
     await page.getByLabel("Mot de passe", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Se connecter" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/connexion/chargement?next=%2Fconfiguration-ia`);
+    await expect(page.getByRole("heading", { name: "Grand Oral Studio", level: 1 })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("status")).toHaveText("Ouverture de votre espace…");
+    await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
+  });
+
+  test("devrait poursuivre immédiatement en mouvement réduit et sans retour à une entrée d'authentification", async ({ page, account }) => {
+    void account;
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/connexion/chargement?next=%2Fconnexion%2Fchargement");
+    await expect(page).toHaveURL(`${BASE_URL}/projets`);
+    await expect(page.getByRole("heading", { name: "Projets", level: 1 })).toBeVisible();
+  });
+
+  test("devrait vérifier la session avant d'ouvrir le studio", async ({ page }) => {
+    await page.goto("/connexion/chargement?next=%2Fconfiguration-ia");
+    await expect(page).toHaveURL(`${BASE_URL}/connexion?next=%2Fconfiguration-ia`);
+    await expect(page.getByRole("heading", { name: "Heureux de vous revoir." })).toBeVisible();
   });
 
   for (const next of ["//evil.example", "/%09/evil.example", "https://evil.example/", "/\\evil.example"]) {
@@ -192,7 +210,7 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
     test(`devrait rediriger ${path} vers /connexion?next= sans session`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent(path)}`);
-      await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Heureux de vous revoir." })).toBeVisible();
     });
   }
 

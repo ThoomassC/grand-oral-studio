@@ -98,6 +98,45 @@ describe("AuthForm — mot de passe oublié et vérification de l'adresse", () =
     await user.type(screen.getByLabelText("Mot de passe"), "mot-de-passe-1");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(signInEmail).toHaveBeenCalledWith({ email: "eleve@lycee-exemple.fr", password: "mot-de-passe-1" });
-    expect(replace).toHaveBeenCalledWith("/projets");
+    expect(replace).toHaveBeenCalledWith("/connexion/chargement");
+  });
+});
+
+describe("AuthForm — entrée dans le studio", () => {
+  it("devrait ouvrir la transition en conservant la destination après une connexion réussie", async () => {
+    signInEmail.mockResolvedValue({ data: { token: "t" }, error: null });
+    const user = userEvent.setup();
+    render(<AuthForm mode="signin" next="/configuration-ia?x=1" google="hidden" appearance="studio" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "eleve@lycee-exemple.fr");
+    await user.type(screen.getByLabelText("Mot de passe"), "mot-de-passe-1");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(replace).toHaveBeenCalledWith("/connexion/chargement?next=%2Fconfiguration-ia%3Fx%3D1");
+    expect(screen.getByRole("button", { name: "Connexion…" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("devrait remplacer l'erreur OAuth par celle du nouvel essai par mot de passe", async () => {
+    signInEmail.mockResolvedValue({ data: null, error: { status: 401, code: "INVALID_EMAIL_OR_PASSWORD" } });
+    const user = userEvent.setup();
+    render(<AuthForm mode="signin" next="/projets" google="hidden" initialError={MESSAGE} />);
+    await screen.findByText(MESSAGE);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "eleve@lycee-exemple.fr");
+    await user.type(screen.getByLabelText("Mot de passe"), "mot-de-passe-1");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(await screen.findByText("Adresse e-mail ou mot de passe incorrect.")).toBeInTheDocument();
+    expect(screen.queryByText(MESSAGE)).not.toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("devrait empêcher une connexion par mot de passe pendant une redirection Google", async () => {
+    social.mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    render(<AuthForm mode="signin" next="/projets" google="enabled" appearance="studio" />);
+    await user.type(screen.getByLabelText("Adresse e-mail"), "eleve@lycee-exemple.fr");
+    await user.type(screen.getByLabelText("Mot de passe"), "mot-de-passe-1");
+    await user.click(screen.getByRole("button", { name: "Continuer avec Google" }));
+    const submit = screen.getByRole("button", { name: "Se connecter" });
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    await user.click(submit);
+    expect(signInEmail).not.toHaveBeenCalled();
   });
 });

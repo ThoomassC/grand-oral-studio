@@ -1,0 +1,231 @@
+.page {
+  position: relative;
+  display: grid;
+  flex: 1;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  padding: 2rem;
+  background: var(--opale-background);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  margin-top: -2rem;
+  text-align: center;
+}
+
+.logoScene {
+  position: relative;
+  display: grid;
+  width: 9rem;
+  height: 9rem;
+  place-items: center;
+}
+
+.halo {
+  position: absolute;
+  inset: -6rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--opale-primary) 10%, transparent), transparent 65%);
+  animation: halo-in 1000ms ease-out both;
+}
+
+.orbit {
+  position: absolute;
+  inset: 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--opale-primary) 13%, transparent);
+  border-top-color: var(--opale-primary);
+  border-radius: 50%;
+  animation: orbit-turn 2400ms linear infinite;
+}
+
+.logoTile {
+  position: relative;
+  display: grid;
+  width: 5rem;
+  height: 5rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--opale-primary) 14%, var(--opale-divider));
+  border-radius: 1.375rem;
+  background: var(--opale-surface);
+  color: var(--opale-text);
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--opale-primary) 9%, transparent);
+  animation: logo-in 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.logo {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.logo > rect:first-child {
+  stroke-dasharray: 68;
+  stroke-dashoffset: 68;
+  animation: logo-draw 700ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
+}
+
+.logo > rect:nth-child(2),
+.logo > path {
+  animation: detail-in 450ms ease 350ms both;
+}
+
+.title {
+  margin-top: 1rem;
+  font-size: clamp(1.75rem, 5vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  animation: text-in 550ms ease 200ms both;
+}
+
+.title > span {
+  color: var(--opale-text-secondary);
+  font-weight: 400;
+}
+
+.status {
+  margin-top: 0.625rem;
+  color: var(--opale-text-secondary);
+  font-size: 0.8125rem;
+  animation: text-in 550ms ease 300ms both;
+}
+
+.track {
+  width: 7rem;
+  height: 2px;
+  overflow: hidden;
+  margin-top: 1.75rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--opale-primary) 12%, transparent);
+}
+
+.track > span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--opale-primary);
+  animation: progress-pass 1600ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.skipLink {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  color: var(--opale-text-secondary);
+  font-size: 0.6875rem;
+  text-decoration: none;
+  animation: text-in 550ms ease 450ms both;
+}
+
+.skipLink:hover {
+  color: var(--opale-primary-on-surface);
+  text-decoration: underline;
+}
+
+.signature {
+  position: absolute;
+  inset: auto 1.25rem 2rem;
+  color: var(--opale-text-secondary);
+  font-size: 0.625rem;
+  text-align: center;
+}
+
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes logo-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes detail-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes text-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes halo-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress-pass {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo,
+  .orbit,
+  .logoTile,
+  .logo > rect,
+  .logo > path,
+  .title,
+  .status,
+  .skipLink,
+  .track > span {
+    animation: none;
+  }
+  .logo > rect:first-child {
+    stroke-dashoffset: 0;
+  }
+}
+
+:global([data-motion="reduced"]) .halo,
+:global([data-motion="reduced"]) .orbit,
+:global([data-motion="reduced"]) .logoTile,
+:global([data-motion="reduced"]) .logo > rect,
+:global([data-motion="reduced"]) .logo > path,
+:global([data-motion="reduced"]) .title,
+:global([data-motion="reduced"]) .status,
+:global([data-motion="reduced"]) .skipLink,
+:global([data-motion="reduced"]) .track > span {
+  animation: none;
+}
+
+:global([data-motion="reduced"]) .logo > rect:first-child {
+  stroke-dashoffset: 0;
+}
