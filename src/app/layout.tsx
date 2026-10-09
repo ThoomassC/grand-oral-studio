@@ -3,6 +3,7 @@ import { opaleThemeScript, ToastProvider } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { HeaderVisibility } from "@/components/layout/HeaderVisibility";
+import { HomeHeader } from "@/components/home/HomeHeader";
 import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { preferencesScript } from "@/components/preferences/preferences";
 import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
@@ -54,7 +55,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <ToastProvider>
             {/* La garde « modifications non enregistrées » englobe l'en-tête : logo, onglets et menu du compte. */}
             <UnsavedChangesProvider>
-              <HeaderVisibility>
+              <HeaderVisibility homeHeader={<HomeHeader />}>
                 <SiteHeader />
               </HeaderVisibility>
               <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">

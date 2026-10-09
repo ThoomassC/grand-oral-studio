@@ -85,8 +85,7 @@
   padding-block: 1.75rem 0.75rem;
 }
 
-.eyebrow,
-.formEyebrow {
+.eyebrow {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -418,12 +417,6 @@
   border-color: color-mix(in srgb, var(--opale-primary) 14%, var(--opale-divider));
   background: color-mix(in srgb, var(--opale-primary) 6%, var(--opale-surface));
   color: var(--opale-primary-on-surface);
-}
-
-.formEyebrow {
-  color: var(--opale-text-secondary);
-  font-size: 0.625rem;
-  letter-spacing: 0.14em;
 }
 
 .title {

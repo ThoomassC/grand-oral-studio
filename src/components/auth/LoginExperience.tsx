@@ -59,7 +59,6 @@ export function LoginExperience({ children }: { children: ReactNode }) {
 
         <div className={styles.formContent}>
           <div className={styles.welcomeMark} aria-hidden="true"><BrandMark className={styles.brandMark} /></div>
-          <p className={styles.formEyebrow}>VOTRE ESPACE DE PRÉPARATION</p>
           <h1 id="login-title" className={styles.title}>Heureux de vous revoir<span>.</span></h1>
           <p className={styles.intro}>Vos idées, vos diaporamas, votre prochain grand oral.<br />Reprenez là où vous en étiez.</p>
           {children}

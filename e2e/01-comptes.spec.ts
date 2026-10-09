@@ -100,6 +100,9 @@ test.describe("1. Comptes — connexion", () => {
     const google = page.getByRole("button", { name: "Continuer avec Google" });
     await expect(google).toBeVisible();
     await expect(google).not.toHaveAttribute("aria-disabled", "true");
+    await google.hover();
+    await expect(google).toHaveCSS("cursor", "pointer");
+    await expect(page.getByText("VOTRE ESPACE DE PRÉPARATION", { exact: true })).toHaveCount(0);
     await page.goto("/inscription");
     await expect(page.getByRole("button", { name: "Continuer avec Google" })).toBeVisible();
   });
@@ -244,11 +247,11 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
 });
 
 test.describe("1. Comptes — notes de version", () => {
-  test("devrait ouvrir les notes de version sans session depuis le seul onglet de l'en-tête", async ({ page }) => {
+  test("devrait ouvrir les notes de version sans session depuis l’en-tête de l’accueil", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Navigation principale" });
-    await expect(nav.getByRole("link")).toHaveText(["Notes de version"]);
-    await nav.getByRole("link", { name: "Notes de version" }).click();
+    await expect(nav.getByRole("link")).toHaveText(["Le parcours", "Le jour J", "Quoi de neuf ↗"]);
+    await nav.getByRole("link", { name: "Quoi de neuf" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();
     await expect(page.getByRole("main").getByRole("heading", { name: "1.2.0", level: 2 })).toBeVisible();
