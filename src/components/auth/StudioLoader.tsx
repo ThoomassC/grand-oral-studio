@@ -1,18 +1,31 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
+import stagePhoto from "@/assets/oral-stage.webp";
 import { BrandMark } from "@/components/layout/BrandMark";
 import styles from "./StudioLoader.module.css";
 
-/** Même signature de marque pendant la vérification et l'ouverture du studio. */
-export function StudioLoader({ children }: { children?: ReactNode }) {
+/** La photo de l’accueil, le logo et une barre sans pourcentage fictif. */
+export function StudioLoader({ children, mode = "signin", complete = false }: {
+  children?: ReactNode;
+  mode?: "signin" | "signout";
+  complete?: boolean;
+}) {
+  const status = mode === "signout" ? "Déconnexion en cours…" : "Ouverture de votre espace…";
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-state={complete ? "complete" : "loading"}>
+      <div className={styles.background} aria-hidden="true">
+        <Image src={stagePhoto} alt="" fill sizes="100vw" preload placeholder="blur" className={styles.photo} />
+      </div>
+      <div className={styles.shade} aria-hidden="true" />
       <div className={styles.content}>
         <div className={styles.logoScene} aria-hidden="true">
-          <span className={styles.orbit} />
-          <span className={styles.logoTile}><BrandMark className={styles.logo} /></span>
+          <BrandMark className={styles.logo} />
         </div>
-        <h1 className={styles.title}>Grand Oral <span>Studio</span></h1>
-        <p className={styles.status} role="status">Ouverture de votre espace…</p>
+        <div className={styles.progress} role="progressbar" aria-label={status}>
+          <span className={styles.progressFill} />
+        </div>
+        <h1 className="sr-only">Grand Oral Studio</h1>
+        <p className="sr-only" role="status">{status}</p>
         {children}
       </div>
     </div>

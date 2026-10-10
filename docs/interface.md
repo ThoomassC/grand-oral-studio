@@ -18,7 +18,9 @@ L’accueil reprend le contraste entre une grande photo sombre, des titres sans 
 
 `ContentMotion` accompagne l’arrivée d’une page pendant 240 ms, sans ajouter d’attente ni remonter ses composants. Les formulaires, brouillons et gardes de modifications restent en place. Le premier focus annule le déplacement.
 
-L’accueil et le formulaire de connexion apparaissent discrètement. Les sections de l’accueil se révèlent au défilement ; elles sont immédiatement visibles sans JavaScript. Après vérification de la session, le logo et son indicateur circulaire apparaissent pendant 1 100 ms avant d’ouvrir le studio ; cette attente est supprimée en mouvement réduit. Le lien « Accéder à mon espace » permet de poursuivre immédiatement.
+L’accueil et le formulaire de connexion apparaissent discrètement. Les sections de l’accueil se révèlent au défilement ; elles sont immédiatement visibles sans JavaScript. La connexion et la déconnexion partagent une transition de 1 100 ms : photo de l’accueil floutée, logo blanc et barre fine, sans texte visible ni pourcentage fictif. La barre se termine juste avant la navigation. Les messages d’état restent accessibles aux lecteurs d’écran ; le lien « Accéder à mon espace » se révèle au focus clavier.
+
+La session est vérifiée avant d’ouvrir le studio. La déconnexion attend la confirmation du serveur, précharge l’accueil et conserve la garde des modifications non enregistrées. La modale Opale bloque les commandes du fond pendant la sortie ; en cas d’échec, elle se ferme, rend le focus au compte et annonce l’erreur. Le mouvement réduit supprime toute attente visuelle, tout en attendant la réponse réelle de déconnexion.
 
 Respecter `prefers-reduced-motion` et le réglage du site, y compris lors d’un changement de préférence. Ne pas animer les champs pendant la saisie, déplacer les contrôles focalisés ou faire attendre pour jouer une transition.
 

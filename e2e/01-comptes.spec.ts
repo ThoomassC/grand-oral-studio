@@ -118,7 +118,7 @@ test.describe("1. Comptes — connexion", () => {
     await page.getByLabel("Mot de passe", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Se connecter" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/connexion/chargement?next=%2Fconfiguration-ia`);
-    await expect(page.getByRole("heading", { name: "Grand Oral Studio", level: 1 })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Ouverture de votre espace…" })).toBeVisible();
     await expect(page.getByRole("main").getByRole("status")).toHaveText("Ouverture de votre espace…");
     await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
@@ -201,10 +201,62 @@ test.describe("1. Comptes — connexion", () => {
     await page.goto("/projets");
     await page.getByRole("button", { name: `Compte : ${account.email}` }).click();
     await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page.getByRole("dialog", { name: "Déconnexion", exact: true })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Déconnexion en cours…" })).toBeVisible();
     await expect(page).toHaveURL(`${BASE_URL}/`);
     await expect(page.getByRole("banner").getByRole("link", { name: "Connexion" })).toBeVisible();
     await page.goto("/projets");
     await expect(page).toHaveURL(/\/connexion\?next=%2Fprojets$/);
+  });
+
+  test("garde le logo et la barre à l’écran tant que la déconnexion attend le serveur", async ({ page, account }) => {
+    let release!: () => void;
+    const response = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/api/auth/sign-out", async (route) => {
+      await response;
+      await route.continue();
+    });
+    await page.goto("/projets");
+    await page.getByRole("button", { name: `Compte : ${account.email}` }).click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    const dialog = page.getByRole("dialog", { name: "Déconnexion", exact: true });
+    try {
+      await expect(dialog.getByRole("progressbar")).toBeVisible();
+      await expect(dialog.getByRole("status")).toHaveText("Déconnexion en cours…");
+      await page.keyboard.press("Tab");
+      await expect(dialog).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+      await page.waitForTimeout(1200);
+      await expect(page).toHaveURL(`${BASE_URL}/projets`);
+      await expect(dialog).toBeVisible();
+      const dimensions = await dialog.boundingBox();
+      expect(dimensions?.width).toBe(page.viewportSize()?.width);
+      expect(dimensions?.height).toBe(page.viewportSize()?.height);
+      expect(await dialog.locator("[data-state]").boundingBox()).toEqual(dimensions);
+    } finally {
+      release();
+    }
+    await expect(page).toHaveURL(`${BASE_URL}/`);
+  });
+
+  test("rend le focus au compte en cas d’échec de déconnexion puis permet de réessayer", async ({ page, account }) => {
+    await page.route("**/api/auth/sign-out", (route) => route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ code: "FORBIDDEN", message: "Déconnexion refusée" }),
+    }));
+    await page.goto("/projets");
+    const accountButton = page.getByRole("button", { name: `Compte : ${account.email}` });
+    await accountButton.click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page.getByText("La déconnexion a échoué. Réessayez.")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Déconnexion", exact: true })).toHaveCount(0);
+    await expect(accountButton).toBeFocused();
+    await page.unroute("**/api/auth/sign-out");
+    await accountButton.click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/`);
   });
 });
 
