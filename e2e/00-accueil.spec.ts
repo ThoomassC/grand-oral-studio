@@ -46,7 +46,7 @@ test.describe("0. Accueil", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 }).locator("..")).toHaveCSS("animation-name", "none");
     await expect(page.locator("[data-reveal-state=waiting]")).toHaveCount(0);
-    await page.getByRole("link", { name: "Retrouvez votre espace" }).click();
+    await page.getByRole("banner").getByRole("link", { name: "Connexion", exact: true }).click();
     await expect(page).toHaveURL(`${BASE_URL}/connexion`);
   });
 
@@ -78,16 +78,6 @@ test.describe("0. Accueil", () => {
       return Math.max(...getComputedStyle(section).transitionDuration.split(",").map((duration) => parseFloat(duration) * (duration.trim().endsWith("ms") ? 1 : 1000)));
     });
     expect(transitionMs).toBeLessThanOrEqual(1);
-  });
-
-  test("affiche immédiatement un appel à l’action hors écran lorsqu’il reçoit le focus clavier", async ({ page }) => {
-    await page.goto("/");
-    const lastSignup = page.getByRole("link", { name: "Créer un compte", exact: true }).last();
-    await lastSignup.focus();
-    await expect(lastSignup).toBeFocused();
-    await expect(lastSignup.locator("xpath=ancestor::section")).toHaveCSS("opacity", "1");
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(`${BASE_URL}/inscription`);
   });
 });
 

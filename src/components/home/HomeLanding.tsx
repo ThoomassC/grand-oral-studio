@@ -101,12 +101,6 @@ export function HomeLanding() {
         </div>
       </section>
 
-      <section className={styles.closing} aria-labelledby="commencer" data-reveal>
-        <h2 id="commencer">Votre prochain grand oral<br />commence ici.</h2>
-        <p>Créez votre premier projet et avancez à votre rythme.</p>
-        <ButtonLink href="/inscription" size="large" className={styles.primaryAction}>Créer un compte <Icon name="arrow-right" /></ButtonLink>
-        <p className={styles.closingLogin}>Déjà un compte ? <Link href="/connexion">Retrouvez votre espace <span aria-hidden="true">↗</span></Link></p>
-      </section>
       <footer className={styles.footer} role="contentinfo"><HomeBrand footer /><div><Link href="/notes-de-version">Notes de version <span aria-hidden="true">↗</span></Link><span>© {new Date().getFullYear()} Grand Oral Studio</span></div></footer>
     </LandingMotion>
   );

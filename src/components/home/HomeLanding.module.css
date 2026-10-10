@@ -723,41 +723,6 @@
   line-height: 1.8;
 }
 
-.closing {
-  padding: 5rem 1.25rem;
-  background: #18181b;
-  color: #fff;
-  text-align: center;
-}
-
-.closing h2 {
-  color: #fff;
-  font-size: clamp(1.875rem, 3.5vw, 3rem);
-  font-weight: 600;
-  letter-spacing: -.05em;
-  line-height: 1.2;
-}
-
-.closing > p {
-  margin-top: 1rem;
-  color: #d4d4d8;
-  font-size: .8125rem;
-}
-
-.closing .primaryAction {
-  margin-top: 1.75rem;
-}
-
-.closing .closingLogin {
-  margin-top: 1.5rem;
-  font-size: .75rem;
-}
-
-.closingLogin a {
-  color: #fff;
-  text-underline-offset: 4px;
-}
-
 .footer {
   display: flex;
   flex-wrap: wrap;
@@ -795,7 +760,7 @@
   outline-offset: 4px;
 }
 
-.header a:focus-visible, .hero a:focus-visible, .closing a:focus-visible {
+.header a:focus-visible, .hero a:focus-visible {
   outline-color: #fff;
 }
 
