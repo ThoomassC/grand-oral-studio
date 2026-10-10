@@ -1,7 +1,8 @@
 import Image from "next/image";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import stagePhoto from "@/assets/oral-stage.webp";
 import { BrandMark } from "@/components/layout/BrandMark";
+import { AUTH_COMPLETION_MS, AUTH_TRANSITION_MS } from "./auth-motion";
 import styles from "./StudioLoader.module.css";
 
 /** La photo de l’accueil, le logo et une barre sans pourcentage fictif. */
@@ -12,7 +13,10 @@ export function StudioLoader({ children, mode = "signin", complete = false }: {
 }) {
   const status = mode === "signout" ? "Déconnexion en cours…" : "Ouverture de votre espace…";
   return (
-    <div className={styles.page} data-state={complete ? "complete" : "loading"}>
+    <div className={styles.page} data-state={complete ? "complete" : "loading"} style={{
+      "--auth-fill-duration": `${AUTH_TRANSITION_MS - AUTH_COMPLETION_MS}ms`,
+      "--auth-completion-duration": `${AUTH_COMPLETION_MS}ms`,
+    } as CSSProperties}>
       <div className={styles.background} aria-hidden="true">
         <Image src={stagePhoto} alt="" fill sizes="100vw" preload placeholder="blur" className={styles.photo} />
       </div>

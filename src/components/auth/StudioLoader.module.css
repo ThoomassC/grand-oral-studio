@@ -50,12 +50,14 @@
 .logo {
   width: 100%;
   height: 100%;
+  transform-origin: 50% 60%;
+  animation: float 1800ms ease-in-out infinite;
 }
 
 .progress {
   width: 10rem;
   max-width: 100%;
-  height: 3px;
+  height: 5px;
   overflow: hidden;
   border-radius: var(--studio-control-radius);
   background: rgb(255 255 255 / 20%);
@@ -66,16 +68,24 @@
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  transform: translateX(0);
+  transition: transform var(--auth-completion-duration) cubic-bezier(.22, .5, .35, 1);
+}
+
+/* Deux déplacements se composent : le remplissage final ne relance pas la barre. */
+.progressFill::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
   background: #fff;
-  transform: scaleX(.08);
-  transform-origin: left;
-  animation: progress 920ms cubic-bezier(.16, 1, .3, 1) both;
+  transform: translateX(-92%);
+  animation: progress var(--auth-fill-duration) cubic-bezier(.35, .1, .45, .95) both;
 }
 
 .page[data-state="complete"] .progressFill {
-  animation: none;
-  transform: scaleX(1);
-  transition: transform 180ms var(--studio-ease);
+  transform: translateX(14%);
 }
 
 /* Le raccourci reste accessible au clavier sans ajouter de texte à l’écran. */
@@ -134,23 +144,31 @@
 }
 
 @keyframes progress {
-  from { transform: scaleX(.08); }
-  to { transform: scaleX(.86); }
+  from { transform: translateX(-92%); }
+  to { transform: translateX(-14%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-4px) rotate(4deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .logoScene, .page[data-state] .progressFill {
+  .logoScene, .logo, .page[data-state] .progressFill, .progressFill::before {
     animation: none;
     transition: none;
   }
 
-  .progressFill { transform: scaleX(1); }
+  .page[data-state] .progressFill, .progressFill::before { transform: none; }
 }
 
 :global([data-motion="reduced"]) .logoScene,
-:global([data-motion="reduced"]) .page[data-state] .progressFill {
+:global([data-motion="reduced"]) .logo,
+:global([data-motion="reduced"]) .page[data-state] .progressFill,
+:global([data-motion="reduced"]) .progressFill::before {
   animation: none;
   transition: none;
 }
 
-:global([data-motion="reduced"]) .progressFill { transform: scaleX(1); }
+:global([data-motion="reduced"]) .page[data-state] .progressFill,
+:global([data-motion="reduced"]) .progressFill::before { transform: none; }

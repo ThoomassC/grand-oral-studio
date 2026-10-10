@@ -1,6 +1,6 @@
 /** Durée commune aux transitions d’entrée et de sortie, remplissage final inclus. */
 export const AUTH_TRANSITION_MS = 1100;
-export const AUTH_COMPLETION_MS = 180;
+export const AUTH_COMPLETION_MS = 260;
 
 export function authMotionReduced(): boolean {
   return document.documentElement.dataset.motion === "reduced"
