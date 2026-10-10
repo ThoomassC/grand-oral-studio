@@ -31,7 +31,7 @@ export default async function SharePage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeading title="Partage" kicker="Préparer ensemble" level={2}>
+      <PageHeading title="Partage" level={2}>
           {view.myRole === "owner"
             ? "Travaillez à plusieurs sur ce projet : un éditeur le modifie avec vous, un lecteur le consulte et répète ses diaporamas."
             : `Ce projet appartient à ${view.owner.name}, qui gère ses membres.`}

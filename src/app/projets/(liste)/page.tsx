@@ -16,7 +16,7 @@ export default async function ProgramsPage() {
 
   return (
     <div className="studio-container">
-      <PageHeading title="Projets" kicker="Votre studio" actions={programs.length ? <ProjectStartMenu /> : null}>
+      <PageHeading title="Projets" actions={programs.length ? <ProjectStartMenu /> : null}>
         Vos présentations, en un coup d&apos;œil.
       </PageHeading>
 

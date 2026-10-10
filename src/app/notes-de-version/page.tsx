@@ -25,7 +25,7 @@ const SECTION_TONE: Record<ReleaseSection, string> = {
 export default function ReleaseNotesPage() {
   return (
     <div className="studio-container studio-container--narrow">
-      <PageHeading title="Notes de version" kicker="Le studio évolue">Ce qui change à chaque version, de la plus récente à la plus ancienne.</PageHeading>
+      <PageHeading title="Notes de version">Ce qui change à chaque version, de la plus récente à la plus ancienne.</PageHeading>
 
       <ol className="mt-8 flex flex-col">
         {RELEASES.map((release, index) => {

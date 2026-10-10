@@ -46,7 +46,7 @@ export default async function JuryQuestionsPage({ params }: Params) {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeading title="Questions du jury" kicker="Prenez une longueur d’avance" level={2} actions={
+      <PageHeading title="Questions du jury" level={2} actions={
         <ButtonLink href={deckHref} variant="ghost">Retour au diaporama</ButtonLink>
       }>
             {deck.spec.title} · Entraînez-vous à répondre sans lire, puis révélez les éléments de réponse.

@@ -13,7 +13,7 @@ export default async function TemplatePage({ params }: PageProps<"/projets/[id]/
   const program = await loadProgram((await params).id);
   return (
     <div className="flex flex-col gap-8">
-      <PageHeading title="Trame" kicker="02 · Votre fil conducteur" level={2}>
+      <PageHeading title="Trame" level={2}>
           La suite des diapos et ce que chacune contient. Le jour J, ce contenu type est développé pour la
           problématique tirée au sort.
       </PageHeading>

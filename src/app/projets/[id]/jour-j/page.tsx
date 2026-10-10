@@ -110,7 +110,7 @@ export default async function DayPage({ params, searchParams }: PageProps<"/proj
     <div className="flex flex-col gap-6">
       <div className="mx-auto w-full max-w-3xl">
         {/* Un h2 par page, comme Apparence et Trame : les étapes du parcours sont ses h3. */}
-        <PageHeading title={practice ? "Entraînement" : "Jour J"} kicker="03 · À vous de jouer" level={2}
+        <PageHeading title={practice ? "Entraînement" : "Jour J"} level={2}
           actions={<PrepCountdown storageKey={prepKey} minutes={prepMinutes} />}>
             {practice
               ? "Tirez ou recopiez une problématique, puis générez un diaporama d'entraînement, chronomètre en marche."

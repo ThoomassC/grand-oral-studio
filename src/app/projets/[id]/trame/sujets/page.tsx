@@ -27,7 +27,7 @@ export default async function SubjectsPage({ params }: PageProps<"/projets/[id]/
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeading title="Sujets" kicker="02 · Vos idées, vos sources" level={2}>
+      <PageHeading title="Sujets" level={2}>
           Facultatif. Les sujets possibles de l&apos;oral et vos notes (chiffres, exemples, sources) : le jour J, le
           sujet de la problématique est reconnu et le diaporama s&apos;appuie sur ses notes.
       </PageHeading>

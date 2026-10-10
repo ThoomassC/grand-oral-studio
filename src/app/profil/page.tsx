@@ -29,16 +29,13 @@ export default async function ProfilePage() {
 
   return (
     <div className="studio-container studio-container--narrow">
-      <PageHeading title="Informations du profil" kicker="Votre compte" />
+      <PageHeading title="Informations du profil" />
 
       <div className="mt-8 flex flex-col gap-6">
-        <section aria-labelledby="profil-infos">
+        <section aria-label="Informations du compte">
           <Card elevation={1} className="p-5 sm:p-6">
-            <h2 id="profil-infos" className="text-2xl">
-              Votre compte
-            </h2>
             <DescriptionList
-              className="mt-4 break-words"
+              className="break-words"
               items={[
                 { term: "Nom", description: profile.name },
                 { term: "Adresse e-mail", description: profile.email },

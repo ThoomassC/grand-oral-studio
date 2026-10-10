@@ -17,7 +17,7 @@ export default async function AiConfigurationPage() {
 
   return (
     <div className={SETTINGS_CONTAINER}>
-      <PageHeading title="Rédaction IA" kicker="Votre rédacteur">
+      <PageHeading title="Rédaction IA">
         L&apos;IA n&apos;intervient qu&apos;au jour J, pour rédiger le diaporama : tout le reste se prépare sans elle.
         Mode clair ou sombre, taille du texte et animations se règlent dans Réglages, depuis l&apos;en-tête.
       </PageHeading>

@@ -26,7 +26,7 @@ test.describe("2. Profil", () => {
     await page.getByRole("menuitem", { name: "Informations du profil" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/profil`);
     await expect(page.getByRole("heading", { name: "Informations du profil", level: 1 })).toBeVisible();
-    const infos = page.getByRole("region", { name: "Votre compte" });
+    const infos = page.getByRole("region", { name: "Informations du compte" });
     await expect(infos).toContainText(account.email);
     await expect(infos).toContainText("E-mail et mot de passe");
     await expect(infos).toContainText("0 projet");
@@ -63,7 +63,7 @@ test.describe("2. Profil", () => {
     await page.getByRole("button", { name: "Enregistrer le nom" }).click();
     await expect(page.getByText("Nom enregistré.")).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("region", { name: "Votre compte" })).toContainText(name);
+    await expect(page.getByRole("region", { name: "Informations du compte" })).toContainText(name);
     await page.getByRole("button", { name: `Compte : ${account.email}` }).click();
     await expect(page.getByRole("menu", { name: "Compte" }).getByRole("group")).toContainText(name);
   });

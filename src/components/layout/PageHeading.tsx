@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 export function PageHeading({
   title,
-  kicker,
   children,
   actions,
   level = 1,
@@ -10,7 +9,6 @@ export function PageHeading({
   tabIndex,
 }: {
   title: string;
-  kicker?: string;
   children?: ReactNode;
   actions?: ReactNode;
   level?: 1 | 2;
@@ -21,7 +19,6 @@ export function PageHeading({
   return (
     <div className="studio-page-heading">
       <div className="studio-page-heading__copy">
-        {kicker ? <p className="studio-kicker">{kicker}</p> : null}
         <Heading id={id} tabIndex={tabIndex} className="studio-page-heading__title focus:outline-none">{title}</Heading>
         {children ? <p className="studio-page-heading__description">{children}</p> : null}
       </div>

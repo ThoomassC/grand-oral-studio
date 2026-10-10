@@ -16,7 +16,7 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
   const readOnly = program.role === "viewer";
   return (
     <div className="flex flex-col gap-8">
-      <PageHeading title="Apparence" kicker="01 · Le fond et la forme" level={2}>
+      <PageHeading title="Apparence" level={2}>
           Les couleurs, les polices et le logo de vos diaporamas. L&apos;apparence par défaut convient : vous pouvez
           passer directement à la suite.
       </PageHeading>

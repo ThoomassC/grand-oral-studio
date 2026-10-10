@@ -39,7 +39,7 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
   return (
     <div className="flex flex-col gap-10">
       <section aria-labelledby="decks-title" className="flex flex-col gap-6">
-        <PageHeading title="Diaporamas du jour J" kicker="Vos présentations" level={2} id="decks-title" tabIndex={-1}>
+        <PageHeading title="Diaporamas du jour J" level={2} id="decks-title" tabIndex={-1}>
           Les diaporamas complets générés à partir d&apos;une problématique.
         </PageHeading>
         {decks.length === 0 ? (
