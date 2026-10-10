@@ -2,12 +2,21 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Helpers de parcours : passent par l'interface, comme un utilisateur. */
 
-/** Ouvre la modale « Nouveau projet » depuis /projets (bouton à côté du titre) ; renvoie la modale. */
-export async function openNewProjectDialog(page: Page): Promise<Locator> {
-  await page.goto("/projets");
-  const trigger = page.getByRole("main").getByRole("button", { name: "Nouveau projet" });
+/** Ouvre les trois points de départ de la galerie, vide ou non. */
+export async function openProjectStartMenu(page: Page): Promise<Locator> {
+  const trigger = page.getByRole("main").getByRole("button", { name: /^Créer (un projet|mon premier projet)$/ });
   await waitForHydration(trigger);
   await trigger.click();
+  const menu = page.getByRole("menu", { name: "Créer un projet" });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** Ouvre la modale « Nouveau projet » depuis le menu de la galerie. */
+export async function openNewProjectDialog(page: Page): Promise<Locator> {
+  await page.goto("/projets");
+  const menu = await openProjectStartMenu(page);
+  await menu.getByRole("menuitem", { name: "Projet vierge" }).click();
   const modal = dialog(page, "Nouveau projet");
   await expect(modal.getByLabel("Nom du projet")).toBeFocused();
   return modal;

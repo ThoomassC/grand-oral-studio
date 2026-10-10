@@ -14,6 +14,14 @@ L’accueil reprend le contraste entre une grande photo sombre, des titres sans 
 - L’aperçu public est un projet d’exemple, explicitement identifié. Il présente le parcours existant et ne propose aucun faux contrôle interactif.
 - Vérifier le mobile, les deux thèmes et le texte agrandi. Le défilement horizontal appartient aux zones qui le demandent (trame, tableaux), jamais à la page entière.
 
+## Galerie des projets
+
+La page `/projets` utilise une galerie responsive : une colonne sur mobile, deux sur ordinateur et trois sur les grands écrans. La couverture réutilise `SlidePreview`, avec les couleurs, les polices, le logo et le format réels du projet. Elle vient du dernier diaporama final actif modifié, puis d'un ancien squelette si aucun final n'existe. Sans diaporama lisible, elle affiche le titre et la description du projet dans sa charte. Les notes d'orateur ne sont pas chargées pour ces aperçus.
+
+La recherche accepte les noms, descriptions et noms des propriétaires sans distinguer accents ou majuscules. Elle se combine avec les filtres Tous, En préparation, Prêts et Partagés, ainsi qu'avec le tri par dernière modification ou par nom. « Prêts » reprend la progression existante du Jour J, propre à l'utilisateur ; « Partagés » désigne les projets reçus. Les lecteurs gardent leurs actions de lecture et de duplication. Un résultat vide permet d'effacer recherche et filtres.
+
+Le menu « Créer un projet » réunit le projet vierge, l'exemple et l'import JSON, avec les mêmes formulaires et retours de focus que précédemment. Le rédacteur est affiché une seule fois pour la galerie. L'aperçu et les actions sont rendus côté serveur ; les filtres manipulent leurs métadonnées côté client, sans requête par projet.
+
 ## Mouvement
 
 `ContentMotion` accompagne l’arrivée d’une page pendant 240 ms, sans ajouter d’attente ni remonter ses composants. Les formulaires, brouillons et gardes de modifications restent en place. Le premier focus annule le déplacement.

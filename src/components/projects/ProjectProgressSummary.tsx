@@ -24,6 +24,7 @@ export function ProjectProgressSummary({
   progress,
   role,
   writerLabel = null,
+  compact = false,
 }: {
   programId: string;
   programName: string;
@@ -31,6 +32,8 @@ export function ProjectProgressSummary({
   role: ProgramRole;
   /** Libellé du rédacteur actuel de l'utilisateur (« Mistral », « Sans IA »…) ; null : non affiché. */
   writerLabel?: string | null;
+  /** La galerie affiche l'état au-dessus du titre ; le pied garde les répétitions et actions. */
+  compact?: boolean;
 }) {
   const { doneCount, total, nextStep, rehearsalCount } = progress;
   const ready = nextStep === null;
@@ -39,7 +42,7 @@ export function ProjectProgressSummary({
   const name = <span className="sr-only"> — {programName}</span>;
   return (
     <div className="studio-progress-summary">
-      <p className="flex items-center gap-2 text-sm">
+      {compact ? <p className="num">{rehearsalCount} {rehearsalCount > 1 ? "répétitions" : "répétition"}</p> : <p className="flex items-center gap-2 text-sm">
         <span role="img" aria-label={`${doneCount} ${doneCount > 1 ? "étapes faites" : "étape faite"} sur ${total}`} className="flex gap-1">
           {Array.from({ length: total }, (_, i) => (
             <span
@@ -55,7 +58,7 @@ export function ProjectProgressSummary({
             {doneCount}/{total} étapes
           </span>
         )}
-      </p>
+      </p>}
       {canGenerate && writerLabel ? <p className="text-sm text-muted">Rédaction : {writerLabel}</p> : null}
       {!canGenerate ? (
         <ButtonLink href={projectHomeHref(programId)} variant="ghost" size="small">

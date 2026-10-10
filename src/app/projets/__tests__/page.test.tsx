@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@thomascaron/opale-ui";
 import type { ProgramSummary } from "@/server/queries";
+import { defaultBrand } from "@/domain/defaults";
 
 const list = vi.fn<(userId: string) => Promise<ProgramSummary[]>>();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }) }));
@@ -48,6 +49,7 @@ function program(
     progress: { doneCount, total: 3, nextStep, rehearsalCount: 0 },
     role,
     ownerName: role === "owner" ? null : "Alice",
+    preview: { brand: defaultBrand(), format: "16:9", slide: { layout: "title", title: name, subtitle: "", bullets: [] } },
   };
 }
 
@@ -57,12 +59,12 @@ async function renderPage() {
 }
 
 describe("Page /projets", () => {
-  it("devrait placer « Nouveau projet » à côté du titre, sans formulaire latéral", async () => {
+  it("devrait réunir les points de départ dans le menu de création à côté du titre", async () => {
     list.mockResolvedValue([program("p1", "BTS SIO", "appearance", 0)]);
     await renderPage();
     expect(list).toHaveBeenCalledWith("u1");
     expect(screen.getByRole("heading", { name: "Projets", level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nouveau projet" })).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getByRole("button", { name: "Créer un projet" })).toHaveAttribute("aria-haspopup", "menu");
     expect(screen.queryByLabelText("Nom du projet")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Nouveau projet" })).not.toBeInTheDocument();
   });
@@ -71,7 +73,8 @@ describe("Page /projets", () => {
     list.mockResolvedValue([program("p1", "BTS SIO", "appearance", 0)]);
     await renderPage();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Nouveau projet" }));
+    await user.click(screen.getByRole("button", { name: "Créer un projet" }));
+    await user.click(screen.getByRole("menuitem", { name: "Projet vierge" }));
     const dialog = await screen.findByRole("dialog", { name: "Nouveau projet" });
     await waitFor(() => expect(within(dialog).getByLabelText("Nom du projet")).toHaveFocus());
   });
@@ -113,7 +116,7 @@ describe("Page /projets", () => {
     await renderPage();
     expect(getWriter).toHaveBeenCalledTimes(1);
     expect(getWriter).toHaveBeenCalledWith("u1");
-    expect(screen.getAllByText("Rédaction : Mistral")).toHaveLength(2);
+    expect(screen.getAllByText("Rédaction : Mistral")).toHaveLength(1);
   });
 
   it("ne devrait proposer à un lecteur ni l'entraînement ni le Jour J", async () => {
@@ -123,11 +126,17 @@ describe("Page /projets", () => {
     expect(screen.getByRole("link", { name: /^Ouvrir\s*— Partagé$/ })).toHaveAttribute("href", "/projets/p1/apparence");
   });
 
-  it("devrait proposer l'import et l'exemple, discrets, à côté de « Nouveau projet »", async () => {
+  it("devrait proposer l'import et l'exemple dans le même menu, et rendre le focus après l'import annulé", async () => {
     list.mockResolvedValue([program("p1", "BTS SIO", "day", 2)]);
     await renderPage();
-    expect(screen.getByRole("button", { name: "Importer un projet (.json)" })).toHaveClass("opale-button--ghost");
-    expect(screen.getByRole("button", { name: "Partir de l'exemple" })).toHaveClass("opale-button--ghost");
+    const user = userEvent.setup();
+    const trigger = screen.getByRole("button", { name: "Créer un projet" });
+    await user.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Partir de l'exemple" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Importer un projet (.json)" }));
+    expect(await screen.findByRole("dialog", { name: "Importer un projet" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("devrait proposer de créer le premier projet quand la liste est vide", async () => {
@@ -138,11 +147,65 @@ describe("Page /projets", () => {
     const user = userEvent.setup();
     const cta = screen.getByRole("button", { name: "Créer mon premier projet" });
     await user.click(cta);
+    expect(screen.getAllByRole("menuitem", { name: "Importer un projet (.json)" })).toHaveLength(1);
+    expect(screen.getAllByRole("menuitem", { name: "Partir de l'exemple" })).toHaveLength(1);
+    await user.click(screen.getByRole("menuitem", { name: "Projet vierge" }));
     expect(await screen.findByRole("dialog", { name: "Nouveau projet" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await waitFor(() => expect(cta).toHaveFocus());
-    // L'import et l'exemple, une seule fois (dans l'encart, pas en double dans l'en-tête).
-    expect(screen.getAllByRole("button", { name: "Importer un projet (.json)" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Partir de l'exemple" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Créer un projet" })).not.toBeInTheDocument();
+  });
+
+  it("devrait montrer un aperçu fidèle et ouvrir le même projet depuis sa couverture", async () => {
+    const p = program("p1", "BTS SIO", "day", 2);
+    p.preview.brand.colors.primary = "#174B43";
+    p.preview.format = "4:3";
+    p.preview.slide.title = "Une vraie couverture";
+    list.mockResolvedValue([p]);
+    await renderPage();
+    const cover = screen.getByRole("link", { name: "Ouvrir le projet BTS SIO" });
+    expect(cover).toHaveAttribute("href", "/projets/p1/apparence");
+    expect(within(cover).getByText("Une vraie couverture")).toBeInTheDocument();
+    expect(cover.querySelector('[aria-hidden="true"]')).toHaveStyle({ aspectRatio: "4 / 3", backgroundColor: "#174B43" });
+  });
+
+  it("devrait combiner une recherche sans accents avec le filtre et permettre de les effacer", async () => {
+    list.mockResolvedValue([
+      program("p1", "Transition énergétique", "day", 2),
+      program("p2", "Énergie et PME", null, 3),
+      program("p3", "Cybersécurité", "day", 2, "viewer"),
+    ]);
+    await renderPage();
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("searchbox", { name: "Rechercher un projet" }), "ener");
+    expect(screen.getByRole("status", { name: "Nombre de projets" })).toHaveTextContent("2 projets sur 3");
+    await user.click(screen.getByRole("button", { name: "Prêts" }));
+    expect(screen.getByRole("button", { name: "Prêts" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("list", { name: "Galerie des projets" }).children).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Énergie et PME" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Partagés" }));
+    expect(screen.getByText("Aucun projet trouvé")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Réinitialiser les filtres" }));
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(screen.getByRole("status", { name: "Nombre de projets" })).toHaveTextContent("3 projets");
+    await user.click(screen.getByRole("button", { name: "Partagés" }));
+    expect(screen.getByRole("heading", { name: "Cybersécurité" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Galerie des projets" }).children).toHaveLength(1);
+  });
+
+  it("devrait trier par nom et par modification sans changer les liens ni les droits", async () => {
+    const older = program("p1", "Alpha", "day", 2);
+    const newer = program("p2", "Zèbre", null, 3, "viewer");
+    newer.updatedAt = new Date("2026-09-03");
+    list.mockResolvedValue([older, newer]);
+    await renderPage();
+    const names = () => within(screen.getByRole("list", { name: "Galerie des projets" })).getAllByRole("heading").map((heading) => heading.textContent);
+    expect(names()).toEqual(["Zèbre", "Alpha"]);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Trier les projets" }), "name");
+    expect(names()).toEqual(["Alpha", "Zèbre"]);
+    await user.click(screen.getByRole("button", { name: "En préparation" }));
+    expect(names()).toEqual(["Alpha"]);
+    expect(screen.getByRole("link", { name: /^S'entraîner/ })).toHaveAttribute("href", "/projets/p1/jour-j?mode=entrainement");
   });
 });

@@ -1,8 +1,9 @@
 import { defaultBrand, defaultTemplate } from "@/domain/defaults";
 import { computeProjectProgress } from "@/domain/progress";
-import type { Brand, PromptTemplate } from "@/domain/schemas";
+import { SlideSchema, type Brand, type PromptTemplate } from "@/domain/schemas";
 import { totalSlides } from "@/domain/slides";
 import { db, type Db } from "../db/client";
+import type { Prisma } from "../db/generated/prisma/client";
 import { ConflictError, DataIntegrityError, NotFoundError } from "../errors";
 import { createLogger, type Logger } from "../logger";
 import type { ProgramMeta } from "../validation";
@@ -42,7 +43,12 @@ interface ProgramListRow {
   themeCount: number;
   finalDeckCount: number;
   rehearsalCount: number;
+  brand: Prisma.JsonValue;
+  format: Prisma.JsonValue;
+  previewSlide: Prisma.JsonValue | null;
 }
+
+const PreviewSlideSchema = SlideSchema.pick({ layout: true, title: true, subtitle: true, bullets: true });
 
 /**
  * Projets actifs de l'utilisateur (possédés et partagés) avec leur avancement.
@@ -52,14 +58,26 @@ interface ProgramListRow {
  * (entraînement compris) et répétitions de l'utilisateur sur ces decks par
  * sous-requêtes corrélées sur les index (programId, …) et (deckId, …) : pas de
  * N+1, et pas d'agrégat de toute la table comme le `_count` de Prisma (GROUP BY
- * sans filtre).
+ * sans filtre). La même lecture extrait seulement la première diapo de l'aperçu,
+ * sans les notes ni le reste du deck, en privilégiant les diaporamas finaux actifs.
  */
-export async function listPrograms(userId: string, client: Db = db()): Promise<ProgramSummary[]> {
+export async function listPrograms(
+  userId: string,
+  client: Db = db(),
+  log: Logger = createLogger({ scope: "repo.programs" }),
+): Promise<ProgramSummary[]> {
   const shared = await accessibleProgramIds(client, userId);
   const sharedIds = [...shared.keys()];
   const rows = await client.$queryRaw<ProgramListRow[]>`
     SELECT p."id", p."ownerId", p."name", p."description", p."brandSavedAt", p."templateSavedAt",
-           p."createdAt", p."updatedAt",
+           p."createdAt", p."updatedAt", p."brand", p."template" -> 'format' AS "format",
+           (SELECT jsonb_build_object(
+               'layout', d."spec" #> '{slides,0,layout}', 'title', d."spec" #> '{slides,0,title}',
+               'subtitle', COALESCE(d."spec" #> '{slides,0,subtitle}', '""'::jsonb),
+               'bullets', COALESCE(d."spec" #> '{slides,0,bullets}', '[]'::jsonb)) FROM "Deck" d
+             WHERE d."programId" = p."id" AND d."deletedAt" IS NULL
+             ORDER BY CASE WHEN d."kind" = 'FINAL' THEN 0 ELSE 1 END, d."updatedAt" DESC, d."id" ASC
+             LIMIT 1) AS "previewSlide",
            (SELECT count(*)::int FROM "Theme" t WHERE t."programId" = p."id") AS "themeCount",
            (SELECT count(*)::int FROM "Deck" d
              WHERE d."programId" = p."id" AND d."kind" = 'FINAL' AND d."deletedAt" IS NULL) AS "finalDeckCount",
@@ -75,6 +93,15 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
     // Propriétaire d'abord ; sinon le partage lu juste avant (absent : partage retiré entre-temps).
     const share = r.ownerId === userId ? null : shared.get(r.id);
     if (share === undefined) return [];
+    const brand = readOrDefault(
+      () => readBrand(r.brand, r.id),
+      defaultBrand,
+      (error) => log.warn("program.list.invalid_brand", { programId: r.id, issues: error.issues }),
+    );
+    const parsedSlide = PreviewSlideSchema.safeParse(r.previewSlide);
+    if (r.previewSlide !== null && !parsedSlide.success) {
+      log.warn("program.list.invalid_preview", { programId: r.id, issues: parsedSlide.error.issues });
+    }
     const { doneCount, total, nextStep, rehearsalCount } = computeProjectProgress({
       subjectCount: r.themeCount,
       brandSavedAt: r.brandSavedAt?.toISOString() ?? null,
@@ -93,6 +120,13 @@ export async function listPrograms(userId: string, client: Db = db()): Promise<P
         progress: { doneCount, total, nextStep, rehearsalCount },
         role: share?.role ?? "owner",
         ownerName: share?.ownerName ?? null,
+        preview: {
+          brand: { colors: brand.colors, fonts: brand.fonts, logoDataUrl: brand.logoDataUrl },
+          format: r.format === "4:3" ? "4:3" : "16:9",
+          slide: parsedSlide.success
+            ? parsedSlide.data
+            : { layout: "title", title: r.name, subtitle: r.description.slice(0, 200), bullets: [] },
+        },
       },
     ];
   });
