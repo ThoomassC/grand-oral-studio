@@ -1,13 +1,14 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const social = vi.fn();
 const signInEmail = vi.fn();
 const signUpEmail = vi.fn();
 const replace = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, refresh: vi.fn() }) }));
+const prefetch = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, prefetch, refresh: vi.fn() }) }));
 vi.mock("@/lib/auth-client", () => ({
   signIn: { social: (...args: unknown[]) => social(...args), email: (...args: unknown[]) => signInEmail(...args) },
   signUp: { email: (...args: unknown[]) => signUpEmail(...args) },
@@ -17,12 +18,19 @@ const { AuthForm } = await import("@/components/auth/AuthForm");
 
 const MESSAGE = "La connexion avec Google a été annulée ou refusée. Réessayez.";
 
+beforeEach(() => {
+  // Ces tests portent sur l'authentification ; la chronologie animée est testée à part.
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+});
+
 afterEach(() => {
   cleanup();
   social.mockReset();
   signInEmail.mockReset();
   signUpEmail.mockReset();
   replace.mockReset();
+  prefetch.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe("AuthForm — erreur de retour OAuth", () => {
@@ -111,7 +119,7 @@ describe("AuthForm — entrée dans le studio", () => {
     await user.type(screen.getByLabelText("Mot de passe"), "mot-de-passe-1");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(replace).toHaveBeenCalledWith("/connexion/chargement?next=%2Fconfiguration-ia%3Fx%3D1");
-    expect(screen.getByRole("button", { name: "Connexion…" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Connecté" })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("devrait remplacer l'erreur OAuth par celle du nouvel essai par mot de passe", async () => {

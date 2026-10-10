@@ -2,6 +2,10 @@
 export const AUTH_TRANSITION_MS = 1100;
 export const AUTH_COMPLETION_MS = 260;
 
+/** Temps de lecture des états du bouton, supprimé en mouvement réduit. */
+export const AUTH_BUTTON_PENDING_MS = 320;
+export const AUTH_BUTTON_SUCCESS_MS = 560;
+
 export function authMotionReduced(): boolean {
   return document.documentElement.dataset.motion === "reduced"
     || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
