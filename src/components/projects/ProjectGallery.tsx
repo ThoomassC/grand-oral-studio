@@ -64,10 +64,13 @@ export function ProjectGallery({ items, writerLabel }: { items: GalleryItem[]; w
             <TextInput id={`${id}-search`} type="search" placeholder="Rechercher un projet…" value={query} onChange={(event) => setQuery(event.target.value)} shellClassName={styles.searchShell} className={styles.searchInput} autoComplete="off" />
           </div>
           <label className="sr-only" htmlFor={`${id}-sort`}>Trier les projets</label>
-          <SelectInput id={`${id}-sort`} value={sort} onChange={(event) => setSort(event.target.value)} shellClassName={styles.sort}>
-            <option value="recent">Dernière modification</option>
-            <option value="name">Nom du projet</option>
-          </SelectInput>
+          <div className={styles.sort}>
+            <SelectInput id={`${id}-sort`} value={sort} onChange={(event) => setSort(event.target.value)} shellClassName={styles.sortShell}>
+              <option value="recent">Dernière modification</option>
+              <option value="name">Nom du projet</option>
+            </SelectInput>
+            <Icon name="chevron-down" className={styles.sortArrow} aria-hidden="true" />
+          </div>
         </div>
       </div>
       <div className={styles.context}>
