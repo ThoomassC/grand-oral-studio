@@ -88,7 +88,15 @@ export function HomeLanding() {
         </div>
       </section>
 
-      <footer className={styles.footer} role="contentinfo"><HomeBrand footer /><div><Link href="/notes-de-version">Notes de version <span aria-hidden="true">↗</span></Link><span>© {new Date().getFullYear()} Grand Oral Studio</span></div></footer>
+      <footer className={styles.footer} role="contentinfo">
+        <div className={styles.footerContent}>
+          <HomeBrand footer />
+          <div className={styles.footerMeta}>
+            <Link href="/notes-de-version">Notes de version <span aria-hidden="true">↗</span></Link>
+            <span>© {new Date().getFullYear()} Grand Oral Studio</span>
+          </div>
+        </div>
+      </footer>
     </LandingMotion>
   );
 }

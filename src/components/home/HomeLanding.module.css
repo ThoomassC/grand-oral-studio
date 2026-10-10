@@ -110,7 +110,7 @@
   color: inherit;
 }
 
-.header .brand :global(svg), .discoverLink :global(.opale-icon) {
+.header .brand :global(svg), .footer .brand :global(svg), .discoverLink :global(.opale-icon) {
   color: inherit;
 }
 
@@ -668,23 +668,41 @@
 }
 
 .footer {
+  background: #18181b;
+  color: #fff;
+}
+
+.footerContent {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 2rem;
-  max-width: 78rem;
+  gap: 1.5rem;
+  max-width: var(--home-frame-width);
   margin-inline: auto;
-  padding: 2.5rem clamp(1.25rem, 4vw, 4rem);
+  padding: 2rem var(--home-gutter);
 }
 
-.footer > div {
+.footer .brand {
+  --opale-primary: #fff;
+  --opale-on-primary: #18181b;
+}
+
+.footer .brand small {
+  color: #a1a1aa;
+}
+
+.footerMeta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 1.5rem;
-  color: var(--studio-muted);
+  color: #a1a1aa;
   font-size: .6875rem;
+}
+
+.footerMeta a {
+  color: #d4d4d8;
 }
 
 .footer a {
@@ -695,6 +713,7 @@
 }
 
 .footer a:hover {
+  color: #fff;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -704,7 +723,7 @@
   outline-offset: 4px;
 }
 
-.header a:focus-visible, .hero a:focus-visible {
+.header a:focus-visible, .hero a:focus-visible, .footer a:focus-visible {
   outline-color: #fff;
 }
 
@@ -945,12 +964,12 @@
     padding: 2rem 1rem;
   }
 
-  .footer {
-    padding: 2rem 1.25rem;
+  .footerContent {
+    padding-block: 1.5rem;
     gap: 1.25rem;
   }
 
-  .footer > div {
+  .footerMeta {
     gap: .75rem;
   }
 
