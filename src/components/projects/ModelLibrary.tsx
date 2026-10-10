@@ -49,8 +49,8 @@ function previewText(model: SharedModelSummary): string {
 }
 
 /**
- * Bibliothèque de modèles de l'équipe (apparences ou trames), sous l'éditeur des
- * pages Apparence et Trame (éditeurs et propriétaire : le serveur vérifie les droits) :
+ * Bibliothèque de modèles de l'équipe (apparences ou trames). Le serveur vérifie
+ * les droits des éditeurs et du propriétaire :
  *
  *  - « Publier dans la bibliothèque » (propriétaire seul, `canPublish` ; le serveur
  *    refuse un éditeur en 403) : `Modal` d'Opale qui demande un nom, puis publie la
