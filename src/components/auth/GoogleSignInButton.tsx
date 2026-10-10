@@ -65,7 +65,7 @@ export function GoogleSignInButton({
         onClick={start}
         aria-disabled={pending || blocked || !configured || undefined}
         aria-describedby={configured ? undefined : hintId}
-        className="auth-google-button relative flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-md border border-[#dadce0] bg-white px-12 text-base font-medium text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] transition-colors duration-150 hover:border-[#d2e3fc] hover:bg-[#f8faff] active:bg-[#eef3fd] aria-disabled:cursor-not-allowed aria-disabled:hover:border-[#dadce0] aria-disabled:hover:bg-white dark:border-[#5f6368] dark:bg-[#131314] dark:text-[#e3e3e3] dark:hover:bg-[#1f1f20] dark:aria-disabled:hover:bg-[#131314]"
+        className="auth-google-button relative flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-[#dadce0] bg-white px-12 text-base font-medium text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] transition-colors duration-150 hover:border-[#d2e3fc] hover:bg-[#f8faff] active:bg-[#eef3fd] aria-disabled:cursor-not-allowed aria-disabled:hover:border-[#dadce0] aria-disabled:hover:bg-white dark:border-[#5f6368] dark:bg-[#131314] dark:text-[#e3e3e3] dark:hover:bg-[#1f1f20] dark:aria-disabled:hover:bg-[#131314]"
       >
         {/* Logo calé à gauche comme sur les boutons Google ; pendant la redirection, seul le logo est estompé. */}
         <span className="absolute left-4 flex">

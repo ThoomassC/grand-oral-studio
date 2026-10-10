@@ -2,13 +2,14 @@
 
 Référence : [Agile Sprint Board — Lovable](https://lovable.dev/templates/apps/project-management/agile-sprint-board-template), et sa [démo publique](https://agile-board-lovable.lovable.app/).
 
-L’accueil reprend le contraste entre une grande photo sombre, des titres sans empattements et des sections claires. La connexion utilise une photo à gauche et un formulaire compact à droite. Le studio utilise des surfaces neutres, des bordures fines, des coins de 6 à 8 px et un accent indigo réservé aux actions et états de progression. Inter est auto-hébergée ; les polices et couleurs choisies dans les diaporamas restent indépendantes.
+L’accueil reprend le contraste entre une grande photo sombre, des titres sans empattements et des sections claires. La connexion utilise une photo à gauche et un formulaire compact à droite. Le studio utilise des surfaces neutres, des bordures fines et un accent indigo réservé aux actions et états de progression. Les boutons et champs sur une ligne sont en pilule, les boutons d’icône sont circulaires et les champs sur plusieurs lignes ont des coins de 16 px. Les cartes gardent leurs coins de 6 à 8 px. Inter est auto-hébergée ; les polices et couleurs choisies dans les diaporamas restent indépendantes.
 
 ## Construire un écran
 
 - Utiliser les jetons de `src/app/studio.css`, reliés aux rôles publics d’Opale, dans les deux thèmes. Réserver les couleurs de succès, d’erreur et d’avertissement à leurs états.
 - Utiliser `PageHeading` et `studio-container` pour le titre, l’introduction et les actions. Dans un projet, le titre du projet reste le h1 et celui de l’étape est un h2.
 - Utiliser les composants Opale existants pour les champs, boutons, messages et dialogues. Garder des cibles d’au moins 44 px et un focus clavier visible.
+- Réutiliser `--studio-control-radius`, `--studio-icon-radius` et `--studio-multiline-radius` pour les contrôles personnalisés. Leur fond, leur bordure et leur focus doivent suivre la même forme, y compris avec l’autoremplissage du navigateur.
 - Utiliser `studio-editor-panel` et `studio-preview-panel` pour les réglages et leur aperçu. Les miniatures utilisent `SlidePreview`, avec les couleurs et les polices du projet.
 - L’aperçu public est un projet d’exemple, explicitement identifié. Il présente le parcours existant et ne propose aucun faux contrôle interactif.
 - Vérifier le mobile, les deux thèmes et le texte agrandi. Le défilement horizontal appartient aux zones qui le demandent (trame, tableaux), jamais à la page entière.

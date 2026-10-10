@@ -118,7 +118,7 @@
   --opale-primary: #fff;
   min-height: 2.75rem;
   border: 1px solid #ffffff50;
-  border-radius: 99px;
+  border-radius: var(--studio-control-radius);
   color: #fff;
   font-size: .75rem;
 }
@@ -200,7 +200,7 @@
   gap: .75rem;
   min-height: 3rem;
   padding-inline: 1.5rem;
-  border-radius: 99px;
+  border-radius: var(--studio-control-radius);
   background: #fff;
   color: #18181b;
   font-size: .8125rem;
@@ -228,7 +228,7 @@
   gap: .625rem;
   padding-inline: 1.25rem;
   border: 1px solid #ffffff40;
-  border-radius: 99px;
+  border-radius: var(--studio-control-radius);
   color: #fff;
   font-size: .8125rem;
   text-decoration: none;

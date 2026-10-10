@@ -243,7 +243,7 @@ export function BrandEditor({
                     <input
                       type="color"
                       aria-label={`${label} : sélecteur de couleur`}
-                      className="h-10 w-12 shrink-0 cursor-pointer rounded-md border border-border-strong bg-surface p-1"
+                      className="h-10 w-12 shrink-0 cursor-pointer rounded-full border border-border-strong bg-surface p-1"
                       value={HEX.test(value) ? value.toLowerCase() : "#000000"}
                       onChange={(e) => {
                         const v = e.target.value.toUpperCase();

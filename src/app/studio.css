@@ -20,6 +20,9 @@
   --studio-accent: #e0e7ff;
   --studio-font-ui: var(--font-studio), Arial, sans-serif;
   --studio-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --studio-control-radius: 999px;
+  --studio-multiline-radius: 1rem;
+  --studio-icon-radius: 50%;
 
   --opale-background: var(--studio-background);
   --opale-surface: var(--studio-surface);
@@ -228,22 +231,19 @@
 
   .studio-app .header-control {
     min-height: 2.75rem;
+    border-radius: var(--studio-control-radius);
     color: var(--studio-text);
   }
 
   .studio-app .header-control--square {
     width: 2.75rem;
+    border-radius: var(--studio-icon-radius);
   }
 
   .studio-app .header-control::before,
   .studio-app .header-control::after {
-    border-radius: 0.375rem;
+    border-radius: inherit;
     clip-path: none;
-  }
-
-  .studio-app .header-control--menu::before,
-  .studio-app .header-control--menu::after {
-    border-radius: 0.5rem;
   }
 
   .studio-app .header-control::after {
@@ -251,18 +251,23 @@
   }
 
   .studio-app .app-tab {
-    border-radius: 0.375rem;
+    border-radius: var(--studio-control-radius);
     font-size: 0.8125rem;
+  }
+
+  .studio-app .header-menu__item,
+  .studio-app .header-menu__item:focus-visible {
+    border-radius: var(--studio-control-radius);
   }
 
   .studio-app .app-tab::before,
   .studio-app .header-menu__item::before {
-    border-radius: 0.375rem;
+    border-radius: inherit;
     clip-path: none;
   }
 
   .studio-app .opale-button {
-    border-radius: 0.375rem;
+    border-radius: var(--studio-control-radius);
     font-weight: 500;
     letter-spacing: -0.01em;
   }
@@ -284,13 +289,65 @@
   }
 
   .studio-app .opale-button:focus-visible {
-    border-radius: 0.375rem;
+    border-radius: var(--studio-control-radius);
   }
 
   .studio-app .opale-input-shell {
-    border-radius: 0.375rem;
+    padding-inline: 0;
+    border-radius: var(--studio-control-radius);
     background: var(--studio-surface);
     box-shadow: none;
+  }
+
+  /* Le contrôle natif suit la coquille, y compris le fond d’autoremplissage. */
+  .studio-app .opale-input-shell > .opale-input,
+  .studio-app .opale-input-shell > .opale-select {
+    padding-inline: 1.125rem;
+    border-radius: inherit;
+  }
+
+  .studio-app .opale-input-shell:has(> .opale-icon-action-button) > .opale-input {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .studio-app .opale-input-shell--textarea,
+  .studio-app .opale-textarea-shell,
+  .studio-app .opale-input-shell--keywords,
+  .studio-app .opale-segmented,
+  .studio-app .rehearsal-slide-button {
+    border-radius: var(--studio-multiline-radius);
+  }
+
+  .studio-app .opale-input-shell--keywords {
+    padding-inline: 1rem;
+  }
+
+  .studio-app .opale-segmented__item,
+  .studio-app .opale-segmented__indicator,
+  .studio-app .engine-card__toggle {
+    border-radius: var(--studio-control-radius);
+  }
+
+  .studio-app .project-settings-trigger,
+  .studio-app .project-row-trigger,
+  .studio-app .choice-info-trigger,
+  .studio-app .opale-dialog__close {
+    border-radius: var(--studio-icon-radius);
+  }
+
+  .studio-app input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .studio-app input[type="color"]::-webkit-color-swatch {
+    border: 0;
+    border-radius: var(--studio-control-radius);
+  }
+
+  .studio-app input[type="color"]::-moz-color-swatch {
+    border: 0;
+    border-radius: var(--studio-control-radius);
   }
 
   .studio-app .opale-card {
@@ -444,7 +501,7 @@
 
   .studio-app .project-step {
     padding-block: 0.75rem;
-    border-radius: 0.375rem;
+    border-radius: var(--studio-control-radius);
     transition: color 200ms ease, background 200ms ease;
   }
 
