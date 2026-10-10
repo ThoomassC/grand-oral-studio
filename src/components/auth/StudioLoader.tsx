@@ -8,16 +8,13 @@ export function StudioLoader({ children }: { children?: ReactNode }) {
     <div className={styles.page}>
       <div className={styles.content}>
         <div className={styles.logoScene} aria-hidden="true">
-          <span className={styles.halo} />
           <span className={styles.orbit} />
           <span className={styles.logoTile}><BrandMark className={styles.logo} /></span>
         </div>
         <h1 className={styles.title}>Grand Oral <span>Studio</span></h1>
         <p className={styles.status} role="status">Ouverture de votre espace…</p>
-        <div className={styles.track} aria-hidden="true"><span /></div>
         {children}
       </div>
-      <p className={styles.signature}>Les idées prennent la parole.</p>
     </div>
   );
 }

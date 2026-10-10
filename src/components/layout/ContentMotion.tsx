@@ -21,9 +21,9 @@ export function ContentMotion({ children }: { children: ReactNode }) {
     if (!navigated || !element?.animate || media.matches || motion === "reduced" || document.documentElement.dataset.motion === "reduced" || IMMERSIVE_ROUTES.has(pathname)) return;
 
     const animation = element.animate([
-      { opacity: 0.65, transform: "translateY(8px)" },
+      { opacity: 0.8, transform: "translateY(4px)" },
       { opacity: 1, transform: "translateY(0)" },
-    ], { duration: 440, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    ], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
     const finish = () => animation.cancel();
     const onPreferenceChange = () => { if (media.matches) finish(); };
     animation.onfinish = finish;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { opaleThemeScript, ToastProvider } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -13,7 +14,12 @@ import { InlineScript } from "@/components/ui/InlineScript";
 import "./globals.css";
 import "./studio.css";
 
-// Chivo vient d’Opale ; les titres éditoriaux utilisent Georgia (studio.css).
+const inter = localFont({
+  src: "../assets/fonts/InterVariable.woff2",
+  variable: "--font-studio",
+  weight: "100 900",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -38,7 +44,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     // cookie), le nôtre `data-text-size` et `data-motion` (réglages du site).
     // React garde les attributs du DOM au lieu de signaler un écart ; l'option
     // ne porte que sur cet élément, pas sur ses enfants.
-    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className="h-full antialiased">
+    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
       <head>
         {/* Mêmes options que useOpaleTheme (ThemeProvider), sans quoi script et React divergent. */}
         <InlineScript html={opaleThemeScript({ storageKey: THEME_STORAGE_KEY, defaultTheme })} />

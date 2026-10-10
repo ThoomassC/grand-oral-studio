@@ -3,7 +3,7 @@
  * rangée dans la couche `opale`, placée avant `components` et `utilities` :
  * un utilitaire Tailwind l'emporte sur une règle d'Opale (README d'Opale,
  * « Avec Tailwind v4 : la feuille en couche »). Elle relie aussi ses polices,
- * Chivo et Bricolage Grotesque. La direction visuelle de Grand Oral Studio
+ * Chivo et Bricolage Grotesque. Inter est auto-hébergée par le layout du studio, qui
  * personnalise ses jetons publics dans studio.css, importé après cette feuille.
  */
 @layer theme, base, opale, components, utilities;
@@ -92,7 +92,7 @@
     line-height: var(--opale-leading-relaxed);
   }
 
-  /* Titres : l'échelle d'Opale — Bricolage pour le titre de page, Chivo ensuite. */
+  /* Titres et texte utilisent les rôles de police du studio (Inter). */
   h1,
   h2,
   h3 {
@@ -107,7 +107,7 @@
   }
   h2 {
     font-family: var(--opale-font-display);
-    font-weight: 400;
+    font-weight: 600;
     letter-spacing: -0.03em;
   }
   h3 {
