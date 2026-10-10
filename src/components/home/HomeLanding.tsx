@@ -25,7 +25,7 @@ const EXAMPLE_SLIDE: SlidePreviewData = {
 /** Aperçu illustratif du parcours, sans contrôles factices accessibles au clavier. */
 function StudioPreview() {
   return (
-    <figure className={styles.preview}>
+    <figure id="parcours" className={styles.preview}>
       <div className={styles.studio} aria-hidden="true">
         <div className={styles.windowBar}><span /><span /><span /><p>Grand Oral Studio</p></div>
         <div className={styles.studioToolbar}>
@@ -64,7 +64,7 @@ export function HomeLanding() {
           <p className={styles.heroIntro}>Préparez votre trame, composez vos diapos et entraînez-vous.<br className={styles.desktopBreak} /> Tout votre grand oral, dans un seul espace.</p>
           <div className={styles.heroActions}>
             <ButtonLink href="/inscription" size="large" className={styles.primaryAction}>Créer un compte <Icon name="arrow-right" /></ButtonLink>
-            <Link href="#parcours" className={styles.discoverLink}>Découvrir le parcours <Icon name="chevron-down" /></Link>
+            <a href="#parcours" className={styles.discoverLink}>Découvrir le parcours <Icon name="chevron-down" /></a>
           </div>
           <p className={styles.heroHint}>Apparence et trame sans IA <span aria-hidden="true">·</span> Exports PowerPoint et Canva</p>
         </div>
@@ -72,19 +72,6 @@ export function HomeLanding() {
       </section>
 
       <StudioPreview />
-
-      <section id="parcours" className={styles.journey} aria-labelledby="etapes" data-reveal>
-        <div className={styles.sectionHeading}>
-          <p className={styles.sectionLabel}>Le parcours</p>
-          <h2 id="etapes">Préparez maintenant.<br />Présentez le jour J.</h2>
-          <p>Commencez par votre style, puis construisez le fil de votre oral.<br className={styles.desktopBreak} /> Votre préparation vous attend quand vous en avez besoin.</p>
-        </div>
-        <ol className={styles.stepGrid}>
-          <li className={styles.stepCard}><span className={styles.stepIcon}><Icon name="palette" /></span><h3><span className="sr-only">Étape 1 : </span>Apparence</h3><p>Choisissez vos couleurs, vos polices et votre logo. Vous pouvez aussi partir d’une présentation d’exemple.</p><span className={styles.stepFoot}>Avant le jour J · Sans IA</span></li>
-          <li className={styles.stepCard}><span className={styles.stepIcon}><Icon name="layers" /></span><h3><span className="sr-only">Étape 2 : </span>Trame</h3><p>Organisez vos diapos, ajoutez vos notes d’orateur et vos sujets. Votre présentation a déjà son fil conducteur.</p><span className={styles.stepFoot}>Avant le jour J · Sans IA</span></li>
-          <li className={styles.stepCard}><span className={styles.stepIcon}><Icon name="mic" /></span><h3><span className="sr-only">Étape 3 : </span>Jour J</h3><p>Saisissez la problématique tirée au sort. Relisez, ajustez votre diaporama, puis répétez avant de prendre la parole.</p><span className={styles.stepFoot}>Le jour J · Avec ou sans IA</span></li>
-        </ol>
-      </section>
 
       <section id="jour-j" className={styles.day} aria-labelledby="jour-j-title" data-reveal>
         <div className={styles.timePanel}><PrepDial className={styles.dial} /><span className={styles.timeValue}><Duration minutes={PREP_MINUTES} /></span><p>Votre temps de préparation</p><span className={styles.timeCaption}>Relire. Ajuster. Répéter.</span></div>

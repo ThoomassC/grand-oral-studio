@@ -13,8 +13,8 @@ export function HomeHeader() {
       <header className={styles.header}>
         <HomeBrand />
         <nav aria-label="Navigation principale" className={styles.navigation}>
-          <Link href="#parcours">Le parcours</Link>
-          <Link href="#jour-j">Le jour J</Link>
+          <a href="#parcours">Le parcours</a>
+          <a href="#jour-j">Le jour J</a>
           <Link href="/notes-de-version" className={styles.releaseLink}>Quoi de neuf <span aria-hidden="true">↗</span></Link>
         </nav>
         <div className={styles.preferences}><ThemeToggle /><SiteSettingsButton /></div>

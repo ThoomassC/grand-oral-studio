@@ -18,10 +18,12 @@ test.describe("0. Accueil", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Des idées claires.Un oral qui marque.");
     await page.getByRole("link", { name: "Découvrir le parcours" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/#parcours`);
+    await expect(page.locator("#parcours")).toBeInViewport();
+    await page.keyboard.press("Home");
+    await page.getByRole("link", { name: "Découvrir le parcours" }).click();
+    await expect(page.locator("#parcours")).toBeInViewport();
     await expect(page.locator("#parcours")).toHaveCSS("opacity", "1");
-    for (const name of ["Étape 1 : Apparence", "Étape 2 : Trame", "Étape 3 : Jour J"]) {
-      await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-    }
+    await expect(page.locator("#parcours figcaption")).toBeVisible();
     await page.getByRole("banner").getByRole("link", { name: "Le jour J", exact: true }).click();
     await expect(page).toHaveURL(`${BASE_URL}/#jour-j`);
     await expect(page.locator("#jour-j")).toHaveCSS("opacity", "1");
@@ -56,7 +58,7 @@ test.describe("0. Accueil", () => {
       const page = await context.newPage();
       await page.goto("/");
       await expect(page.getByRole("banner")).toHaveCount(1);
-      await expect(page.getByRole("heading", { name: "Étape 3 : Jour J" })).toBeVisible();
+      await expect(page.locator("#parcours figcaption")).toBeVisible();
       // Activation native au clavier : le lien ne dépend pas de l’hydratation React.
       await page.getByRole("link", { name: "Créer un compte", exact: true }).first().press("Enter");
       await expect(page).toHaveURL(`${BASE_URL}/inscription`);
@@ -67,14 +69,14 @@ test.describe("0. Accueil", () => {
 
   test("montre les sections sans transition dès que le visiteur réduit les animations", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#parcours")).toHaveCSS("opacity", "0");
+    await expect(page.locator("#jour-j")).toHaveCSS("opacity", "0");
     await page.getByRole("banner").getByRole("button", { name: "Réglages" }).click();
     const panel = page.getByRole("dialog", { name: "Réglages" });
     await panel.locator("label", { hasText: "Réduire les animations" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-motion", "reduced");
     await expect(page.locator("#parcours")).toHaveCSS("opacity", "1");
     await expect(page.locator("#jour-j")).toHaveCSS("opacity", "1");
-    const transitionMs = await page.locator("#parcours").evaluate((section) => {
+    const transitionMs = await page.locator("#jour-j").evaluate((section) => {
       return Math.max(...getComputedStyle(section).transitionDuration.split(",").map((duration) => parseFloat(duration) * (duration.trim().endsWith("ms") ? 1 : 1000)));
     });
     expect(transitionMs).toBeLessThanOrEqual(1);
