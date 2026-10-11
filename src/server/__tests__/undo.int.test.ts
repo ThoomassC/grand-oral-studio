@@ -72,7 +72,8 @@ describe("projet — suppression douce et restauration", () => {
     expect(await deletedAtOf.program(s.programId)).toBeNull();
     const after = await programs.getProgram(s.owner.id, s.programId);
     expect({ ...after, updatedAt: null }).toEqual({ ...before, updatedAt: null });
-    expect((await programs.listPrograms(s.editor.id)).map((p) => p.id)).toEqual([s.programId]);
+    expect((await programs.listPrograms(s.owner.id)).map((p) => p.id)).toEqual([s.programId]);
+    expect(await programs.listPrograms(s.editor.id)).toEqual([]);
   });
 
   it("restoreProgram hors délai (> 30 s) lève NotFoundError et laisse le projet à la corbeille", async () => {
