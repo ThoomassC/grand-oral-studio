@@ -2,6 +2,30 @@
 
 <!-- Généré par `npm run changelog` depuis src/domain/releases.ts : ne pas modifier à la main. -->
 
+## 1.3.0 — 11 octobre 2026
+
+Un nouvel accueil, une galerie de projets et des transitions plus fluides.
+
+### Ajouts
+
+- Une galerie avec un aperçu de chaque projet, une recherche, un tri et des filtres de préparation.
+- Une animation avec le logo et une barre de chargement lors de la connexion et de la déconnexion.
+
+### Modifications
+
+- Un nouvel accueil et une page de connexion plus sobres, avec des boutons et des champs arrondis dans toute l'application.
+- Le bouton de connexion accompagne chaque étape jusqu'à la confirmation, avec des animations adaptées au réglage de mouvement réduit.
+- Les paramètres du profil réunissent la modification du nom, le changement de mot de passe et la suppression du compte.
+
+### Retraits
+
+- L'onglet « Partagés », les invitations et la bibliothèque d'équipe.
+- La section « Vos données » du profil et les titres introductifs répétitifs.
+
+### Corrections
+
+- Le bouton Google indique clairement qu'il est cliquable, et la flèche de tri garde un espace régulier avec le bord du champ.
+
 ## 1.2.0 — 7 octobre 2026
 
 Plus de choix pour la rédaction, un jour J fiable, l'entraînement et le travail à plusieurs.

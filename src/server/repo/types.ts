@@ -1,6 +1,6 @@
 import type { CloudProvider, EngineId, KeySource } from "@/domain/ai-providers";
 import type { ThemeRef } from "@/domain/contracts";
-import type { Brand, DeckSpec, PromptTemplate } from "@/domain/schemas";
+import type { Brand, DeckSpec, PromptTemplate, Slide } from "@/domain/schemas";
 import type { ProjectProgress, ProjectProgressSummary } from "@/domain/progress";
 import type { DeckKind } from "../db/generated/prisma/enums";
 import type { ProgramRole } from "./access";
@@ -26,6 +26,12 @@ export interface ProgramSummary {
   role: ProgramRole;
   /** Nom du propriétaire d'un projet partagé ; null quand l'utilisateur est le propriétaire. */
   ownerName: string | null;
+  /** Couverture du dernier diaporama actif, ou du projet avant sa première génération. */
+  preview: {
+    brand: Pick<Brand, "colors" | "fonts" | "logoDataUrl">;
+    format: PromptTemplate["format"];
+    slide: Pick<Slide, "layout" | "title" | "subtitle" | "bullets">;
+  };
 }
 
 /** Moteur qui a produit un deck ("free" : généré sans IA, à compléter ; "mock" : démo). */

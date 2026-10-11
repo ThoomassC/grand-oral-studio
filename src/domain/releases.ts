@@ -33,6 +33,29 @@ export interface Release {
 /** De la plus récente à la plus ancienne. RELEASES[0].version === package.json "version". */
 export const RELEASES: readonly Release[] = [
   {
+    version: "1.3.0",
+    date: "2026-10-11",
+    summary: "Un nouvel accueil, une galerie de projets et des transitions plus fluides.",
+    changes: {
+      added: [
+        "Une galerie avec un aperçu de chaque projet, une recherche, un tri et des filtres de préparation.",
+        "Une animation avec le logo et une barre de chargement lors de la connexion et de la déconnexion.",
+      ],
+      changed: [
+        "Un nouvel accueil et une page de connexion plus sobres, avec des boutons et des champs arrondis dans toute l'application.",
+        "Le bouton de connexion accompagne chaque étape jusqu'à la confirmation, avec des animations adaptées au réglage de mouvement réduit.",
+        "Les paramètres du profil réunissent la modification du nom, le changement de mot de passe et la suppression du compte.",
+      ],
+      removed: [
+        "L'onglet « Partagés », les invitations et la bibliothèque d'équipe.",
+        "La section « Vos données » du profil et les titres introductifs répétitifs.",
+      ],
+      fixed: [
+        "Le bouton Google indique clairement qu'il est cliquable, et la flèche de tri garde un espace régulier avec le bord du champ.",
+      ],
+    },
+  },
+  {
     version: "1.2.0",
     date: "2026-10-07",
     summary: "Plus de choix pour la rédaction, un jour J fiable, l'entraînement et le travail à plusieurs.",

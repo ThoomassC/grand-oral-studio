@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { signOut } from "@/lib/auth-client";
+import { AUTH_COMPLETION_MS, AUTH_TRANSITION_MS, waitForAuthMotion } from "./auth-motion";
 
 /**
  * Déconnexion (Better Auth) puis retour à l'accueil. `pending` reste vrai
@@ -11,27 +12,46 @@ import { signOut } from "@/lib/auth-client";
  */
 export function useSignOut() {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [complete, setComplete] = useState(false);
+  const operation = useRef<AbortController | null>(null);
+
+  useEffect(() => () => operation.current?.abort(), []);
 
   function run() {
-    if (pending) return;
+    if (operation.current || pending) return;
+    const controller = new AbortController();
+    operation.current = controller;
+    const started = performance.now();
     setFailed(false);
-    startTransition(async () => {
+    setComplete(false);
+    setPending(true);
+    void (async () => {
       try {
         const { error } = await signOut();
-        if (error) {
-          setFailed(true);
-          return;
-        }
+        if (controller.signal.aborted) return;
+        if (error) throw new Error("Déconnexion refusée");
+        router.prefetch("/");
+        await waitForAuthMotion(AUTH_TRANSITION_MS - AUTH_COMPLETION_MS - (performance.now() - started), controller.signal);
+        if (controller.signal.aborted) return;
+        setComplete(true);
+        await waitForAuthMotion(AUTH_COMPLETION_MS, controller.signal);
+        if (controller.signal.aborted) return;
+        startTransition(() => {
+          router.push("/");
+          router.refresh();
+        });
       } catch {
-        setFailed(true);
-        return;
+        if (!controller.signal.aborted) {
+          setFailed(true);
+          setPending(false);
+        }
+      } finally {
+        if (operation.current === controller) operation.current = null;
       }
-      router.push("/");
-      router.refresh();
-    });
+    })();
   }
 
-  return { pending, failed, signOut: run };
+  return { pending, failed, complete, signOut: run };
 }

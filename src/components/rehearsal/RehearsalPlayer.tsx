@@ -350,7 +350,7 @@ export function RehearsalPlayer({
                 type="button"
                 onClick={() => goTo(index)}
                 aria-current={index === current ? "step" : undefined}
-                className={`block w-full rounded-md border-2 p-1 text-left ${
+                className={`rehearsal-slide-button block w-full border-2 p-1 text-left ${
                   index === current ? "border-primary" : "border-transparent hover:border-border-strong"
                 }`}
               >

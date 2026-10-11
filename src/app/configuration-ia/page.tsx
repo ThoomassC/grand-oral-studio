@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AiSetup } from "@/components/settings/AiSetup";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { toAiSetupStatus } from "@/components/settings/ai-status";
 import { formatDateTime } from "@/components/ui/format";
 import { getAiSettings } from "@/server/queries";
@@ -16,11 +17,10 @@ export default async function AiConfigurationPage() {
 
   return (
     <div className={SETTINGS_CONTAINER}>
-      <h1 className="text-3xl sm:text-4xl">Rédaction IA</h1>
-      <p className="mt-2 text-muted">
+      <PageHeading title="Rédaction IA">
         L&apos;IA n&apos;intervient qu&apos;au jour J, pour rédiger le diaporama : tout le reste se prépare sans elle.
         Mode clair ou sombre, taille du texte et animations se règlent dans Réglages, depuis l&apos;en-tête.
-      </p>
+      </PageHeading>
       <div className="mt-8">
         <AiSetup status={status} />
       </div>

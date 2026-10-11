@@ -1,10 +1,5 @@
 import { getDeck as repoGetDeck, listFinalDecks as repoListFinalDecks } from "./repo/decks";
 import { getProgram as repoGetProgram, listPrograms as repoListPrograms } from "./repo/programs";
-import {
-  countSharedOwnedPrograms as repoCountSharedOwnedPrograms,
-  listMembers as repoListMembers,
-  type ProgramMembers,
-} from "./repo/members";
 import { getProfile as repoGetProfile } from "./repo/profile";
 import { getExamReadiness as repoGetExamReadiness, type ExamReadinessCounts } from "./repo/readiness";
 import type {
@@ -42,7 +37,6 @@ export type {
   WriterView,
 } from "./repo/types";
 export type { ExamReadinessCounts } from "./repo/readiness";
-export type { MemberView, ProgramMembers } from "./repo/members";
 export { ForbiddenError, NotFoundError } from "./errors";
 
 /** Profil de l'utilisateur connecté (page /profil) ; null si le compte n'existe plus. */
@@ -71,16 +65,6 @@ export function listFinalDecks(userId: string, programId: string): Promise<Final
 /** Liste « Avant l'examen » du Jour J : entraînements, répétitions de l'utilisateur, export tenté. */
 export function getExamReadiness(userId: string, programId: string): Promise<ExamReadinessCounts> {
   return repoGetExamReadiness(userId, programId);
-}
-
-/** Propriétaire et membres d'un projet (page Partage), pour tout membre. */
-export function listMembers(userId: string, programId: string): Promise<ProgramMembers> {
-  return repoListMembers(userId, programId);
-}
-
-/** Projets actifs de l'utilisateur partagés avec au moins un membre (avertissement avant la suppression du compte). */
-export function countSharedOwnedPrograms(userId: string): Promise<number> {
-  return repoCountSharedOwnedPrograms(userId);
 }
 
 /** Réglages IA de l'utilisateur (page Rédaction IA). Ne contient jamais la clé. */

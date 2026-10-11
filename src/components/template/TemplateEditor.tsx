@@ -256,7 +256,7 @@ export function TemplateEditor({
   };
 
   return (
-    <form ref={formRef} noValidate onSubmit={save} className="flex flex-col gap-8">
+    <form ref={formRef} noValidate onSubmit={save} className="studio-editor-panel flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {/* Sous-bloc de la page Trame (h2) : h3. */}

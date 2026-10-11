@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { AuthCard } from "@/components/auth/AuthCard";
+import { LoginExperience } from "@/components/auth/LoginExperience";
 import { AuthForm } from "@/components/auth/AuthForm";
-import { safeNextPath } from "@/components/auth/next-path";
+import { postLoginDestination, postLoginPath } from "@/components/auth/next-path";
 import { oauthErrorMessage } from "@/components/auth/oauth-error";
 import { googleButtonState, isEmailDeliveryEnabled } from "@/lib/auth-options";
 import { getUser } from "@/server/session";
@@ -14,18 +14,19 @@ export async function generateMetadata({ searchParams }: PageProps<"/connexion">
 
 export default async function LoginPage({ searchParams }: PageProps<"/connexion">) {
   const params = await searchParams;
-  const next = safeNextPath(params.next);
-  if (await getUser()) redirect(next);
+  const next = postLoginDestination(params.next);
+  if (await getUser()) redirect(postLoginPath(next));
 
   return (
-    <AuthCard title="Connexion" intro="Retrouvez vos projets, leur trame et vos diaporamas.">
+    <LoginExperience>
       <AuthForm
         mode="signin"
+        appearance="studio"
         next={next}
         google={googleButtonState(process.env)}
         initialError={oauthErrorMessage(params.error)}
         verifyEmail={isEmailDeliveryEnabled(process.env)}
       />
-    </AuthCard>
+    </LoginExperience>
   );
 }

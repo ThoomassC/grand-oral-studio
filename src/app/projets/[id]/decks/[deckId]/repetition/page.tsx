@@ -42,7 +42,7 @@ export default async function RehearsalPage({ params }: Params) {
     <div className="flex flex-col gap-10">
       <section aria-labelledby="repetition-titre" className="flex flex-col gap-5">
         <div>
-          <h2 id="repetition-titre" className="text-2xl">
+          <h2 id="repetition-titre" className="studio-page-heading__title">
             Répétition
           </h2>
           <p className="text-muted">

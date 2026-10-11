@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { test, expect, BASE_URL, expectNoHorizontalScroll } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
-import { createProject, dialog, importThemeList, openNewProjectDialog, projectRowAction, waitForHydration } from "./support/app";
+import { createProject, dialog, importThemeList, openNewProjectDialog, openProjectStartMenu, projectRowAction, waitForHydration } from "./support/app";
 
 test.afterAll(async () => {
   await deleteE2eUsers();
@@ -17,6 +17,7 @@ test.describe("4. Projets — création et carte", () => {
     const cta = page.getByRole("button", { name: "Créer mon premier projet" });
     await waitForHydration(cta);
     await cta.click();
+    await page.getByRole("menuitem", { name: "Projet vierge" }).click();
     const modal = dialog(page, "Nouveau projet");
     await expect(modal.getByLabel("Nom du projet")).toBeFocused();
     await page.keyboard.press("Escape");
@@ -33,7 +34,7 @@ test.describe("4. Projets — création et carte", () => {
     await modal.getByLabel("Nom du projet").fill("Brouillon abandonné");
     await modal.getByRole("button", { name: "Annuler" }).click();
     await expect(modal).toBeHidden();
-    await expect(page.getByRole("main").getByRole("button", { name: "Nouveau projet" })).toBeFocused();
+    await expect(page.getByRole("main").getByRole("button", { name: "Créer mon premier projet" })).toBeFocused();
     await expect(page.getByText("Aucun projet pour l'instant")).toBeVisible();
   });
 
@@ -65,7 +66,7 @@ test.describe("4. Projets — création et carte", () => {
     await expect(page.getByRole("main").getByRole("heading", { name: "Projet double clic", level: 3 })).toHaveCount(1);
   });
 
-  test("devrait créer le projet sur l'étape Apparence puis le montrer en carte à 2/3 (apparence et trame par défaut) avec « S'entraîner » et « Jour J »", async ({
+  test("devrait créer le projet sur l'étape Apparence puis le montrer en préparation avec « S'entraîner » et « Jour J »", async ({
     page,
     account,
   }) => {
@@ -77,10 +78,10 @@ test.describe("4. Projets — création et carte", () => {
 
     await page.goto("/projets");
     const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Master Management 2027" }) });
-    await expect(card.getByRole("img", { name: "2 étapes faites sur 3" })).toBeVisible();
+    await expect(card.getByText("En préparation", { exact: true })).toBeVisible();
     await expect(card).toContainText("Grand oral de fin d'études");
     await expect(card).toContainText("Sujets :0");
-    await expect(card.getByText(/^Rédaction : /)).toBeVisible();
+    await expect(page.getByRole("main").getByText(/^Rédaction : /)).toBeVisible();
     await expect(card.getByRole("link", { name: "S'entraîner — Master Management 2027" })).toHaveAttribute(
       "href",
       `/projets/${id}/jour-j?mode=entrainement`,
@@ -172,7 +173,7 @@ test.describe("4. Projets — menu du projet", () => {
     await modal.getByRole("button", { name: "Enregistrer" }).click();
     await expect(page.getByText("Description enregistrée.")).toBeVisible();
     await page.goto("/projets");
-    await expect(page.getByText("Master 2 — jury de trois personnes")).toBeVisible();
+    await expect(page.getByRole("main").getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Projet description" }) })).toContainText("Master 2 — jury de trois personnes");
   });
 });
 
@@ -180,15 +181,14 @@ test.describe("4. Projets — import, exemple et export", () => {
   test("devrait proposer l'import et l'exemple dans la liste vide, puis créer le projet d'exemple", async ({ page, account }) => {
     void account;
     await page.goto("/projets");
-    const example = page.getByRole("button", { name: "Partir de l'exemple" });
-    await expect(page.getByRole("button", { name: "Importer un projet (.json)" })).toBeVisible();
-    await waitForHydration(example);
-    await example.click();
+    const menu = await openProjectStartMenu(page);
+    await expect(menu.getByRole("menuitem", { name: "Importer un projet (.json)" })).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Partir de l'exemple" }).click();
     await page.waitForURL(/\/projets\/[a-z0-9]+\/apparence$/);
     await page.goto("/projets");
-    // Une fois la liste non vide, les deux actions restent à côté de « Nouveau projet ».
-    await expect(page.getByRole("button", { name: "Importer un projet (.json)" })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Partir de l'exemple" })).toHaveCount(1);
+    const populatedMenu = await openProjectStartMenu(page);
+    await expect(populatedMenu.getByRole("menuitem", { name: "Importer un projet (.json)" })).toHaveCount(1);
+    await expect(populatedMenu.getByRole("menuitem", { name: "Partir de l'exemple" })).toHaveCount(1);
   });
 
   test("devrait exporter un projet en JSON puis le réimporter comme nouveau projet", async ({ page, account }) => {
@@ -207,9 +207,8 @@ test.describe("4. Projets — import, exemple et export", () => {
     const file = { name: download.suggestedFilename(), mimeType: "application/json", buffer: fs.readFileSync(await download.path()) };
 
     await page.goto("/projets");
-    const trigger = page.getByRole("button", { name: "Importer un projet (.json)" });
-    await waitForHydration(trigger);
-    await trigger.click();
+    const menu = await openProjectStartMenu(page);
+    await menu.getByRole("menuitem", { name: "Importer un projet (.json)" }).click();
     const modal = dialog(page, "Importer un projet");
     await modal.getByLabel(/Déposez le fichier d'export/).setInputFiles(file);
     await page.waitForURL((url) => /\/projets\/[a-z0-9]+\/apparence$/.test(url.pathname) && !url.pathname.includes(id));

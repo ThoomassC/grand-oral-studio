@@ -1,0 +1,174 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  flex: 1;
+  min-height: 100svh;
+  overflow: hidden;
+  place-items: center;
+  padding: 2rem;
+  background: #111113;
+  color: #fff;
+}
+
+.background {
+  position: absolute;
+  z-index: -2;
+  inset: -2rem;
+  filter: blur(20px);
+}
+
+.photo {
+  object-fit: cover;
+  object-position: center 45%;
+}
+
+.shade {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(9 10 16 / 58%), rgb(9 10 16 / 72%));
+}
+
+.content {
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.logoScene {
+  display: grid;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+  animation: arrive 360ms var(--studio-ease) both;
+}
+
+.logo {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 60%;
+  animation: float 1800ms ease-in-out infinite;
+}
+
+.progress {
+  width: 10rem;
+  max-width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--studio-control-radius);
+  background: rgb(255 255 255 / 20%);
+}
+
+.progressFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  transform: translateX(0);
+  transition: transform var(--auth-completion-duration) cubic-bezier(.22, .5, .35, 1);
+}
+
+/* Deux déplacements se composent : le remplissage final ne relance pas la barre. */
+.progressFill::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transform: translateX(-92%);
+  animation: progress var(--auth-fill-duration) cubic-bezier(.35, .1, .45, .95) both;
+}
+
+.page[data-state="complete"] .progressFill {
+  transform: translateX(14%);
+}
+
+/* Le raccourci reste accessible au clavier sans ajouter de texte à l’écran. */
+.skipLink {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.skipLink:focus-visible {
+  position: relative;
+  width: auto;
+  height: auto;
+  min-height: 2.75rem;
+  overflow: visible;
+  clip-path: none;
+  padding: .625rem 1rem;
+  border-radius: var(--studio-control-radius);
+  color: #fff;
+  font-size: .75rem;
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+  text-underline-offset: 4px;
+}
+
+/* La modale Opale conserve le focus et l’inertie du fond pendant la sortie. */
+.signOutPanel {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #111113;
+  box-shadow: none;
+  outline: none;
+  animation: none;
+  transform: none;
+}
+
+.signOutPanel :global(.opale-modal__body) {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(6px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes progress {
+  from { transform: translateX(-92%); }
+  to { transform: translateX(-14%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-4px) rotate(4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logoScene, .logo, .page[data-state] .progressFill, .progressFill::before {
+    animation: none;
+    transition: none;
+  }
+
+  .page[data-state] .progressFill, .progressFill::before { transform: none; }
+}
+
+:global([data-motion="reduced"]) .logoScene,
+:global([data-motion="reduced"]) .logo,
+:global([data-motion="reduced"]) .page[data-state] .progressFill,
+:global([data-motion="reduced"]) .progressFill::before {
+  animation: none;
+  transition: none;
+}
+
+:global([data-motion="reduced"]) .page[data-state] .progressFill,
+:global([data-motion="reduced"]) .progressFill::before { transform: none; }

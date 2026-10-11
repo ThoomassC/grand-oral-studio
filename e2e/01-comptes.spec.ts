@@ -100,6 +100,9 @@ test.describe("1. Comptes — connexion", () => {
     const google = page.getByRole("button", { name: "Continuer avec Google" });
     await expect(google).toBeVisible();
     await expect(google).not.toHaveAttribute("aria-disabled", "true");
+    await google.hover();
+    await expect(google).toHaveCSS("cursor", "pointer");
+    await expect(page.getByText("VOTRE ESPACE DE PRÉPARATION", { exact: true })).toHaveCount(0);
     await page.goto("/inscription");
     await expect(page.getByRole("button", { name: "Continuer avec Google" })).toBeVisible();
   });
@@ -113,8 +116,37 @@ test.describe("1. Comptes — connexion", () => {
     await page.goto("/connexion?next=%2Fconfiguration-ia");
     await page.getByLabel("Adresse e-mail").fill(user.email);
     await page.getByLabel("Mot de passe", { exact: true }).fill(user.password);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    const submit = page.getByRole("button", { name: "Se connecter" });
+    const before = await submit.boundingBox();
+    await submit.click();
+    await expect(page.getByRole("button", { name: "Connexion…", exact: true })).toBeVisible();
+    const connected = page.getByRole("button", { name: "Connecté", exact: true });
+    await expect(connected).toBeVisible();
+    await expect(connected).toHaveAttribute("aria-disabled", "true");
+    await expect(connected).toBeFocused();
+    await expect(connected.locator("[data-verified] svg path")).toHaveCount(2);
+    const after = await connected.boundingBox();
+    expect(after?.width).toBe(before?.width);
+    expect(after?.height).toBe(before?.height);
+    await expect(page).toHaveURL(`${BASE_URL}/connexion/chargement?next=%2Fconfiguration-ia`);
+    await expect(page.getByRole("progressbar", { name: "Ouverture de votre espace…" })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("status")).toHaveText("Ouverture de votre espace…");
+    await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page).toHaveURL(`${BASE_URL}/configuration-ia`);
+  });
+
+  test("devrait poursuivre immédiatement en mouvement réduit et sans retour à une entrée d'authentification", async ({ page, account }) => {
+    void account;
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/connexion/chargement?next=%2Fconnexion%2Fchargement");
+    await expect(page).toHaveURL(`${BASE_URL}/projets`);
+    await expect(page.getByRole("heading", { name: "Projets", level: 1 })).toBeVisible();
+  });
+
+  test("devrait vérifier la session avant d'ouvrir le studio", async ({ page }) => {
+    await page.goto("/connexion/chargement?next=%2Fconfiguration-ia");
+    await expect(page).toHaveURL(`${BASE_URL}/connexion?next=%2Fconfiguration-ia`);
+    await expect(page.getByRole("heading", { name: "Heureux de vous revoir." })).toBeVisible();
   });
 
   for (const next of ["//evil.example", "/%09/evil.example", "https://evil.example/", "/\\evil.example"]) {
@@ -180,10 +212,62 @@ test.describe("1. Comptes — connexion", () => {
     await page.goto("/projets");
     await page.getByRole("button", { name: `Compte : ${account.email}` }).click();
     await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page.getByRole("dialog", { name: "Déconnexion", exact: true })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Déconnexion en cours…" })).toBeVisible();
     await expect(page).toHaveURL(`${BASE_URL}/`);
     await expect(page.getByRole("banner").getByRole("link", { name: "Connexion" })).toBeVisible();
     await page.goto("/projets");
     await expect(page).toHaveURL(/\/connexion\?next=%2Fprojets$/);
+  });
+
+  test("garde le logo et la barre à l’écran tant que la déconnexion attend le serveur", async ({ page, account }) => {
+    let release!: () => void;
+    const response = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/api/auth/sign-out", async (route) => {
+      await response;
+      await route.continue();
+    });
+    await page.goto("/projets");
+    await page.getByRole("button", { name: `Compte : ${account.email}` }).click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    const dialog = page.getByRole("dialog", { name: "Déconnexion", exact: true });
+    try {
+      await expect(dialog.getByRole("progressbar")).toBeVisible();
+      await expect(dialog.getByRole("status")).toHaveText("Déconnexion en cours…");
+      await page.keyboard.press("Tab");
+      await expect(dialog).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+      await page.waitForTimeout(1200);
+      await expect(page).toHaveURL(`${BASE_URL}/projets`);
+      await expect(dialog).toBeVisible();
+      const dimensions = await dialog.boundingBox();
+      expect(dimensions?.width).toBe(page.viewportSize()?.width);
+      expect(dimensions?.height).toBe(page.viewportSize()?.height);
+      expect(await dialog.locator("[data-state]").boundingBox()).toEqual(dimensions);
+    } finally {
+      release();
+    }
+    await expect(page).toHaveURL(`${BASE_URL}/`);
+  });
+
+  test("rend le focus au compte en cas d’échec de déconnexion puis permet de réessayer", async ({ page, account }) => {
+    await page.route("**/api/auth/sign-out", (route) => route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ code: "FORBIDDEN", message: "Déconnexion refusée" }),
+    }));
+    await page.goto("/projets");
+    const accountButton = page.getByRole("button", { name: `Compte : ${account.email}` });
+    await accountButton.click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page.getByText("La déconnexion a échoué. Réessayez.")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Déconnexion", exact: true })).toHaveCount(0);
+    await expect(accountButton).toBeFocused();
+    await page.unroute("**/api/auth/sign-out");
+    await accountButton.click();
+    await page.getByRole("menuitem", { name: "Se déconnecter" }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/`);
   });
 });
 
@@ -192,7 +276,7 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
     test(`devrait rediriger ${path} vers /connexion?next= sans session`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(`${BASE_URL}/connexion?next=${encodeURIComponent(path)}`);
-      await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Heureux de vous revoir." })).toBeVisible();
     });
   }
 
@@ -226,11 +310,11 @@ test.describe("1. Comptes — pages protégées et anciennes URL", () => {
 });
 
 test.describe("1. Comptes — notes de version", () => {
-  test("devrait ouvrir les notes de version sans session depuis le seul onglet de l'en-tête", async ({ page }) => {
+  test("devrait ouvrir les notes de version sans session depuis l’en-tête de l’accueil", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Navigation principale" });
-    await expect(nav.getByRole("link")).toHaveText(["Notes de version"]);
-    await nav.getByRole("link", { name: "Notes de version" }).click();
+    await expect(nav.getByRole("link")).toHaveText(["Le parcours", "Le jour J", "Quoi de neuf ↗"]);
+    await nav.getByRole("link", { name: "Quoi de neuf" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/notes-de-version`);
     await expect(page.getByRole("heading", { name: "Notes de version", level: 1 })).toBeVisible();
     await expect(page.getByRole("main").getByRole("heading", { name: "1.2.0", level: 2 })).toBeVisible();

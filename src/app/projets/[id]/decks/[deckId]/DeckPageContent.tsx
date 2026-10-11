@@ -54,7 +54,7 @@ export async function DeckPageContent({
           id="titre-deck"
           tabIndex={-1}
           aria-describedby={isNew ? "deck-pret" : undefined}
-          className="text-2xl focus:outline-none sm:text-3xl">
+          className="studio-page-heading__title focus:outline-none">
           {deck.spec.title}
         </h2>
         <p className="mt-1 text-sm text-muted">

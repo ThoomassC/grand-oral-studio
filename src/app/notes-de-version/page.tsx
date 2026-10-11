@@ -1,5 +1,6 @@
 import { Badge } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { formatReleaseDate } from "@/domain/changelog";
 import { RELEASES, RELEASE_SECTION_LABELS, RELEASE_SECTION_ORDER, type ReleaseSection } from "@/domain/releases";
 
@@ -23,9 +24,8 @@ const SECTION_TONE: Record<ReleaseSection, string> = {
  */
 export default function ReleaseNotesPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-3xl sm:text-4xl">Notes de version</h1>
-      <p className="mt-2 text-muted">Ce qui change à chaque version, de la plus récente à la plus ancienne.</p>
+    <div className="studio-container studio-container--narrow">
+      <PageHeading title="Notes de version">Ce qui change à chaque version, de la plus récente à la plus ancienne.</PageHeading>
 
       <ol className="mt-8 flex flex-col">
         {RELEASES.map((release, index) => {
@@ -36,7 +36,7 @@ export default function ReleaseNotesPage() {
           });
           return (
             <li key={release.version} className={index > 0 ? "border-t border-border py-6" : "pb-6"}>
-              <article aria-labelledby={headingId} className="grid gap-x-6 gap-y-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+              <article aria-labelledby={headingId} className="studio-release grid gap-x-6 gap-y-3 p-5 sm:grid-cols-[8rem_minmax(0,1fr)] sm:p-7">
                 <header className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-start">
                   <h2 id={headingId} className="num text-2xl">
                     {release.version}

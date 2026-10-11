@@ -1,18 +1,22 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
 const replace = vi.fn();
 const refresh = vi.fn();
+const prefetch = vi.fn();
 const signOut = vi.fn();
-vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/charte", useRouter: () => ({ push, replace, refresh }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/projets/p1/charte", useRouter: () => ({ push, replace, refresh, prefetch }) }));
 vi.mock("@/lib/auth-client", () => ({ signOut: (...args: unknown[]) => signOut(...args) }));
+vi.mock("next/image", () => ({ default: () => <span aria-hidden="true" /> }));
 
 const { AccountMenu } = await import("@/components/layout/AccountMenu");
 const { UnsavedChangesBanner, UnsavedChangesProvider, useUnsavedChanges } = await import("@/components/layout/UnsavedChanges");
 
 const USER = { name: "Alice Martin", email: "alice@example.test" };
+
+beforeEach(() => vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true }))));
 
 afterEach(async () => {
   cleanup();
@@ -21,7 +25,9 @@ afterEach(async () => {
   replace.mockReset();
   push.mockReset();
   refresh.mockReset();
+  prefetch.mockReset();
   signOut.mockReset();
+  vi.unstubAllGlobals();
 });
 
 function trigger() {
@@ -80,7 +86,9 @@ describe("AccountMenu", () => {
     await user.click(trigger());
     await user.click(screen.getByRole("menuitem", { name: "Se déconnecter" }));
     expect(signOut).toHaveBeenCalled();
-    expect(await screen.findByRole("menuitem", { name: "Déconnexion…" })).toHaveAttribute("aria-disabled", "true");
+    expect(await screen.findByRole("dialog", { name: "Déconnexion" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAccessibleName("Déconnexion en cours…");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     resolve({ error: null });
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
@@ -92,6 +100,8 @@ describe("AccountMenu", () => {
     await user.click(trigger());
     await user.click(screen.getByRole("menuitem", { name: "Se déconnecter" }));
     expect(await screen.findByText("La déconnexion a échoué. Réessayez.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Déconnexion" })).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger()).toHaveFocus());
     expect(push).not.toHaveBeenCalled();
   });
 

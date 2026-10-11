@@ -1,0 +1,140 @@
+.button {
+  position: relative;
+  overflow: hidden;
+  padding-inline: 3rem;
+}
+
+.button[data-phase="loading"], .button[data-phase="success"] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.labels {
+  display: inline-grid;
+  min-height: 1.5em;
+  overflow: hidden;
+  vertical-align: middle;
+  transition: transform 220ms var(--studio-ease);
+}
+
+.label {
+  grid-area: 1 / 1;
+  align-self: center;
+  opacity: 0;
+  transform: translateY(65%);
+  transition: transform 300ms cubic-bezier(.22, .8, .2, 1), opacity 180ms ease;
+}
+
+.idle,
+.button[data-phase="loading"] .loading,
+.button[data-phase="success"] .success {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.button[data-phase="loading"] .idle,
+.button[data-phase="success"] .idle,
+.button[data-phase="success"] .loading {
+  opacity: 0;
+  transform: translateY(-65%);
+}
+
+.icons {
+  position: absolute;
+  top: 50%;
+  right: 1.125rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  transform: translateY(-50%);
+}
+
+.icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 180ms ease, transform 300ms cubic-bezier(.22, .8, .2, 1);
+}
+
+.icon :global(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.arrow { opacity: 1; }
+
+.button[data-phase="idle"]:not([aria-disabled="true"]):hover .arrow {
+  transform: translateX(2px);
+}
+
+.button[data-phase="idle"]:not([aria-disabled="true"]):active .labels {
+  transform: translateY(1px);
+}
+
+.button[data-phase="loading"] .arrow,
+.button[data-phase="success"] .arrow {
+  opacity: 0;
+  transform: translateX(6px);
+}
+
+.spinner {
+  opacity: 0;
+  stroke-dasharray: 16 54;
+  transform-origin: center;
+  animation: spin 950ms linear infinite;
+}
+
+.button[data-phase="loading"] .spinner { opacity: 1; }
+
+.verified {
+  opacity: 0;
+  transform: scale(.72);
+}
+
+.verified :global(path:first-child) {
+  stroke-dasharray: 54;
+  stroke-dashoffset: 54;
+  transition: stroke-dashoffset 340ms cubic-bezier(.22, .8, .2, 1);
+}
+
+.verified :global(path:nth-child(2)) {
+  stroke-dasharray: 12;
+  stroke-dashoffset: 12;
+  transition: stroke-dashoffset 230ms cubic-bezier(.22, .8, .2, 1) 140ms;
+}
+
+.button[data-phase="success"] .verified {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.button[data-phase="success"] .verified :global(path) { stroke-dashoffset: 0; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .button, .labels, .label, .icon, .verified :global(path) {
+    animation: none;
+    transition: none;
+  }
+
+  .button[data-phase="idle"]:not([aria-disabled="true"]):hover .arrow,
+  .button[data-phase="idle"]:not([aria-disabled="true"]):active .labels {
+    transform: none;
+  }
+}
+
+:global([data-motion="reduced"]) .button,
+:global([data-motion="reduced"]) .labels,
+:global([data-motion="reduced"]) .label,
+:global([data-motion="reduced"]) .icon,
+:global([data-motion="reduced"]) .verified :global(path) {
+  animation: none;
+  transition: none;
+}
+
+:global([data-motion="reduced"]) .button[data-phase="idle"]:not([aria-disabled="true"]):hover .arrow,
+:global([data-motion="reduced"]) .button[data-phase="idle"]:not([aria-disabled="true"]):active .labels {
+  transform: none;
+}

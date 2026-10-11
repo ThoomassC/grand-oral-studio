@@ -228,13 +228,13 @@ describe("listPrograms — progression résumée", () => {
     expect(listA[0]!.progress).toEqual({ doneCount: 2, total: 3, nextStep: "day", rehearsalCount: 0 });
   });
 
-  it("devrait compter les répétitions de l'utilisateur seul, hors diaporamas supprimés, projet partagé compris", async () => {
+  it("devrait compter les répétitions du propriétaire seul, hors diaporamas supprimés et anciens membres", async () => {
     const [a, b] = [await createUser("a"), await createUser("b")];
-    const shared = await seedProgram(a.id, "Partagé");
-    await seedMember(shared, b.id, "VIEWER");
-    const d1 = await seedDeck(shared, null, "FINAL");
-    const d2 = await seedDeck(shared, null, "FINAL");
-    const gone = await seedDeck(shared, null, "FINAL");
+    const projectId = await seedProgram(a.id, "Projet personnel");
+    await seedMember(projectId, b.id, "VIEWER");
+    const d1 = await seedDeck(projectId, null, "FINAL");
+    const d2 = await seedDeck(projectId, null, "FINAL");
+    const gone = await seedDeck(projectId, null, "FINAL");
     await rehearse(d1, a.id);
     await rehearse(d1, b.id);
     await rehearse(d2, b.id);
@@ -243,9 +243,8 @@ describe("listPrograms — progression résumée", () => {
     await db().deck.update({ where: { id: gone }, data: { deletedAt: new Date() }, select: { id: true } });
 
     const [forA] = await programs.listPrograms(a.id);
-    const [forB] = await programs.listPrograms(b.id);
     expect(forA!.progress).toEqual({ doneCount: 2, total: 3, nextStep: "day", rehearsalCount: 1 });
-    expect(forB!.progress).toEqual({ doneCount: 3, total: 3, nextStep: null, rehearsalCount: 2 });
+    expect(await programs.listPrograms(b.id)).toEqual([]);
   });
 
   it("devrait lire la liste en un nombre de requêtes constant (pas de N+1)", async () => {

@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { signIn } from "@/lib/auth-client";
 import { ButtonLabel } from "@/components/ui/ButtonLabel";
 import { LiveRegion } from "@/components/ui/LiveRegion";
+import { postLoginPath } from "./next-path";
 
 const START_ERROR = "La connexion avec Google n'a pas pu démarrer. Réessayez.";
 
@@ -20,10 +21,14 @@ const START_ERROR = "La connexion avec Google n'a pas pu démarrer. Réessayez."
 export function GoogleSignInButton({
   next,
   onStart,
+  onPendingChange,
+  blocked = false,
   configured = true,
 }: {
   next: string;
   onStart?: () => void;
+  onPendingChange?: (pending: boolean) => void;
+  blocked?: boolean;
   /** Faux : bouton visible mais inactif (identifiants Google absents, en développement). */
   configured?: boolean;
 }) {
@@ -32,15 +37,16 @@ export function GoogleSignInButton({
   const [error, setError] = useState<string | null>(null);
 
   async function start() {
-    if (pending || !configured) return;
+    if (pending || blocked || !configured) return;
     setPending(true);
+    onPendingChange?.(true);
     setError(null);
     onStart?.();
     try {
       const { error: failure } = await signIn.social({
         provider: "google",
-        callbackURL: next,
-        newUserCallbackURL: next,
+        callbackURL: postLoginPath(next),
+        newUserCallbackURL: postLoginPath(next),
         errorCallbackURL: `/connexion?next=${encodeURIComponent(next)}`,
       });
       if (!failure) return;
@@ -49,6 +55,7 @@ export function GoogleSignInButton({
     }
     setError(START_ERROR);
     setPending(false);
+    onPendingChange?.(false);
   }
 
   return (
@@ -56,9 +63,9 @@ export function GoogleSignInButton({
       <button
         type="button"
         onClick={start}
-        aria-disabled={pending || !configured || undefined}
+        aria-disabled={pending || blocked || !configured || undefined}
         aria-describedby={configured ? undefined : hintId}
-        className="relative flex h-12 w-full items-center justify-center gap-3 rounded-md border border-[#dadce0] bg-white px-12 text-base font-medium text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] transition-colors duration-150 hover:border-[#d2e3fc] hover:bg-[#f8faff] active:bg-[#eef3fd] aria-disabled:cursor-not-allowed aria-disabled:hover:border-[#dadce0] aria-disabled:hover:bg-white dark:border-[#5f6368] dark:bg-[#131314] dark:text-[#e3e3e3] dark:hover:bg-[#1f1f20] dark:aria-disabled:hover:bg-[#131314]"
+        className="auth-google-button relative flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-[#dadce0] bg-white px-12 text-base font-medium text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] transition-colors duration-150 hover:border-[#d2e3fc] hover:bg-[#f8faff] active:bg-[#eef3fd] aria-disabled:cursor-not-allowed aria-disabled:hover:border-[#dadce0] aria-disabled:hover:bg-white dark:border-[#5f6368] dark:bg-[#131314] dark:text-[#e3e3e3] dark:hover:bg-[#1f1f20] dark:aria-disabled:hover:bg-[#131314]"
       >
         {/* Logo calé à gauche comme sur les boutons Google ; pendant la redirection, seul le logo est estompé. */}
         <span className="absolute left-4 flex">
@@ -68,7 +75,7 @@ export function GoogleSignInButton({
       </button>
       {configured ? null : (
         <p id={hintId} className="text-center text-sm text-muted">
-          Connexion Google pas encore configurée : renseignez GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET (voir README).
+          La connexion Google est indisponible pour le moment. Utilisez votre adresse e-mail.
         </p>
       )}
       <LiveRegion className="sr-only">{pending ? "Redirection vers Google…" : null}</LiveRegion>

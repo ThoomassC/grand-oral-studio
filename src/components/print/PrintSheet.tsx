@@ -26,7 +26,7 @@ export function PrintSheet({
     <article className="print-sheet flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-2xl">{heading}</h2>
+          <h2 className="studio-page-heading__title">{heading}</h2>
           {intro ? <div className="mt-1 text-muted">{intro}</div> : null}
         </div>
         <div className="flex flex-wrap items-center gap-3 print:hidden">

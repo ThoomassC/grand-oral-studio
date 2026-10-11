@@ -9,9 +9,7 @@ import {
 } from "@thomascaron/opale-ui";
 import { useRef, useState, useTransition } from "react";
 import type { ProgramRole } from "@/server/repo/access";
-import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
 import { downloadJson } from "@/components/projects/download";
-import { shareHref } from "@/components/projects/steps";
 import { LiveRegion } from "@/components/ui/LiveRegion";
 import { ProgramMetaDialog, type ProgramMetaField as Field } from "./ProgramMetaDialog";
 
@@ -23,9 +21,7 @@ import { ProgramMetaDialog, type ProgramMetaField as Field } from "./ProgramMeta
  * Focus : sur le champ à l'ouverture, rendu à l'engrenage à la fermeture
  * (l'entrée de menu qui a ouvert la modale n'existe plus à ce moment-là).
  *
- * « Partager » (propriétaire) ou « Membres du projet » (éditeur, lecteur) mène à
- * la page Partage, par la garde « modifications non enregistrées ».
- * « Exporter le projet (JSON) » (tout membre) télécharge le fichier d'export.
+ * « Exporter le projet (JSON) » télécharge le fichier d'export.
  * Un lecteur n'a ni « Renommer » ni « Modifier la description » (le serveur
  * refuse de toute façon).
  */
@@ -38,11 +34,10 @@ export function ProjectSettingsMenu({
   programId: string;
   name: string;
   description: string;
-  /** Rôle de l'utilisateur : la gestion des membres est réservée au propriétaire. */
+  /** Les actions de modification restent protégées par le rôle de l'utilisateur. */
   role: ProgramRole;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const { go } = useGuardedNavigation();
   const [editing, setEditing] = useState<Field | null>(null);
   /** Change à chaque ouverture : le formulaire repart des valeurs en cours. */
   const [session, setSession] = useState(0);
@@ -101,13 +96,6 @@ export function ProjectSettingsMenu({
               </DropdownMenuItem>
             </>
           ) : null}
-          <DropdownMenuItem
-            className="header-menu__item"
-            value="partage"
-            onSelect={() => go(shareHref(programId), triggerRef.current)}
-          >
-            {role === "owner" ? "Partager" : "Membres du projet"}
-          </DropdownMenuItem>
           <DropdownMenuItem className="header-menu__item" value="exporter" onSelect={exportProject}>
             Exporter le projet (JSON)
           </DropdownMenuItem>

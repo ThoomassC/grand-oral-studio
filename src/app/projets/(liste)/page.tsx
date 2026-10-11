@@ -1,12 +1,9 @@
-import { Badge } from "@thomascaron/opale-ui";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { CreateProgramDialog } from "@/components/programs/CreateProgramDialog";
-import { ProgramActions } from "@/components/programs/ProgramActions";
-import { ProjectListActions } from "@/components/programs/ProjectListActions";
-import { ProjectProgressSummary } from "@/components/projects/ProjectProgressSummary";
-import { projectHomeHref } from "@/components/projects/steps";
-import { formatDate, plural } from "@/components/ui/format";
+import { BrandMark } from "@/components/layout/BrandMark";
+import { PageHeading } from "@/components/layout/PageHeading";
+import { ProjectStartMenu } from "@/components/programs/ProjectStartMenu";
+import { ProjectGallery } from "@/components/projects/ProjectGallery";
+import { ProjectGalleryCard } from "@/components/projects/ProjectGalleryCard";
 import { engineLabel } from "@/domain/ai-providers";
 import { getWriter, listPrograms } from "@/server/queries";
 import { requireUser } from "@/server/session";
@@ -15,107 +12,47 @@ export const metadata: Metadata = { title: "Projets" };
 
 export default async function ProgramsPage() {
   const user = await requireUser();
-  // Lectures indépendantes en parallèle ; le rédacteur (celui de l'utilisateur) est lu une fois pour toute la liste.
   const [programs, writer] = await Promise.all([listPrograms(user.id), getWriter(user.id)]);
-  const writerLabel = engineLabel(writer.engine);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <h1 className="text-3xl sm:text-4xl">Projets</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Dans l'état vide, l'import et l'exemple sont proposés dans l'encart, une seule fois. */}
-          {programs.length > 0 ? <ProjectListActions /> : null}
-          <CreateProgramDialog />
-        </div>
-      </div>
-      <p className="mt-2 max-w-2xl text-muted">
-        Un projet réunit l&apos;apparence de vos diaporamas, leur trame et, si besoin, les sujets possibles de l&apos;oral.
-      </p>
+    <div className="studio-container">
+      <PageHeading title="Projets" actions={programs.length ? <ProjectStartMenu /> : null}>
+        Vos présentations, en un coup d&apos;œil.
+      </PageHeading>
 
       <section aria-labelledby="liste-programmes" className="mt-8">
         <h2 id="liste-programmes" tabIndex={-1} className="sr-only">
           Liste des projets
         </h2>
         {programs.length === 0 ? (
-          <div className="opale-card opale-card--e0 border-dashed border-border-strong flex flex-col items-start gap-2 p-6">
-            <p className="font-display text-lg font-bold">Aucun projet pour l&apos;instant</p>
-            <p className="text-muted">
-              Créez votre premier projet, puis choisissez son apparence et sa trame. Vous pouvez aussi importer un
-              projet exporté (.json) ou partir d&apos;un projet d&apos;exemple.
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <CreateProgramDialog label="Créer mon premier projet" variant="secondary" />
-              <ProjectListActions />
+          <div className="studio-empty">
+            <div className="studio-empty__artwork" aria-hidden="true"><BrandMark /></div>
+            <div>
+              <h2 className="text-2xl">Aucun projet pour l&apos;instant</h2>
+              <p className="mt-3 max-w-2xl text-muted">
+                Créez votre première présentation, partez d&apos;un exemple ou importez un projet existant.
+                Vous pourrez ensuite choisir son apparence et préparer votre oral.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <ProjectStartMenu label="Créer mon premier projet" />
+              </div>
             </div>
           </div>
         ) : (
-          <>
-            {/* Le nombre de projets, en haut à droite de la liste. */}
-            <p className="num mb-3 text-right text-sm text-muted">{plural(programs.length, "projet")}</p>
-            <ul className="flex flex-col gap-3">
-            {programs.map((p, i) => {
+          <ProjectGallery
+            writerLabel={engineLabel(writer.engine)}
+            items={programs.map((p, i) => {
               const neighbour = programs[i + 1] ?? programs[i - 1];
-              return (
-                // Ligne : contenu (infos, puis avancement à droite dès sm) | bouton « ⋮ » toujours en fin de ligne.
-                // `flex-row` : la carte Opale impose `flex-direction: column`. `flex-wrap` : l'annonce de la duplication (dans ProgramActions) passe dessous, sur toute la largeur.
-                <li
-                  key={p.id}
-                  className="opale-card opale-card--e1 flex flex-row flex-wrap items-start gap-x-2 gap-y-3 p-5 pt-7 sm:gap-x-3 sm:p-6 sm:pt-8"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-xl">
-                        <Link
-                          id={`programme-${p.id}`}
-                          href={projectHomeHref(p.id)}
-                          className="underline-offset-4 hover:underline"
-                        >
-                          {p.name}
-                        </Link>
-                      </h3>
-                      {/* Projet dont l'utilisateur est membre (éditeur ou lecteur), pas propriétaire. */}
-                      {p.ownerName !== null ? (
-                        <Badge tone="neutral" className="mt-1">
-                          Partagé par {p.ownerName}
-                        </Badge>
-                      ) : null}
-                      {p.description ? <p className="mt-1 line-clamp-2 text-muted">{p.description}</p> : null}
-                      <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                        <div className="flex gap-1 whitespace-nowrap">
-                          <dt className="text-muted">Sujets :</dt>
-                          <dd className="num font-bold">{p.themeCount}</dd>
-                        </div>
-                        <div className="flex gap-1 whitespace-nowrap">
-                          <dt className="text-muted">Modifié le</dt>
-                          <dd>{formatDate(p.updatedAt)}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                    <div className="shrink-0">
-                      <ProjectProgressSummary
-                        programId={p.id}
-                        programName={p.name}
-                        progress={p.progress}
-                        role={p.role}
-                        writerLabel={writerLabel}
-                      />
-                    </div>
-                  </div>
-                  <ProgramActions
-                    programId={p.id}
-                    programName={p.name}
-                    programDescription={p.description}
-                    role={p.role}
-                    focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter(
-                      (x): x is string => x !== null,
-                    )}
-                  />
-                </li>
-              );
+              return {
+                id: p.id,
+                name: p.name,
+                searchText: `${p.name} ${p.description}`,
+                updatedAt: p.updatedAt.getTime(),
+                ready: p.progress.nextStep === null,
+                card: <ProjectGalleryCard key={p.id} program={p} focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter((id): id is string => id !== null)} />,
+              };
             })}
-            </ul>
-          </>
+          />
         )}
       </section>
     </div>

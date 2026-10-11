@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { opaleThemeScript, ToastProvider } from "@thomascaron/opale-ui";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { HeaderVisibility } from "@/components/layout/HeaderVisibility";
+import { HomeHeader } from "@/components/home/HomeHeader";
+import { ContentMotion } from "@/components/layout/ContentMotion";
 import { UnsavedChangesBanner, UnsavedChangesProvider } from "@/components/layout/UnsavedChanges";
 import { preferencesScript } from "@/components/preferences/preferences";
 import { parseExplicitTheme, THEME_COOKIE, THEME_STORAGE_KEY } from "@/components/theme/theme";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { InlineScript } from "@/components/ui/InlineScript";
 import "./globals.css";
+import "./studio.css";
 
-// Polices : celles d'Opale (Chivo, Bricolage Grotesque), reliées par sa feuille.
+const inter = localFont({
+  src: "../assets/fonts/InterVariable.woff2",
+  variable: "--font-studio",
+  weight: "100 900",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -34,14 +44,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     // cookie), le nôtre `data-text-size` et `data-motion` (réglages du site).
     // React garde les attributs du DOM au lieu de signaler un écart ; l'option
     // ne porte que sur cet élément, pas sur ses enfants.
-    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className="h-full antialiased">
+    <html lang="fr" data-theme={cookieTheme ?? undefined} suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
       <head>
         {/* Mêmes options que useOpaleTheme (ThemeProvider), sans quoi script et React divergent. */}
         <InlineScript html={opaleThemeScript({ storageKey: THEME_STORAGE_KEY, defaultTheme })} />
         {/* Taille du texte et animations (panneau Réglages), posées avant la première peinture. */}
         <InlineScript html={preferencesScript()} />
       </head>
-      <body className="opale-root flex min-h-full flex-col">
+      <body className="opale-root studio-app flex min-h-full flex-col" data-opale-glass-ink="page">
         <ThemeProvider defaultTheme={defaultTheme}>
           <a
             href="#contenu"
@@ -53,9 +63,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <ToastProvider>
             {/* La garde « modifications non enregistrées » englobe l'en-tête : logo, onglets et menu du compte. */}
             <UnsavedChangesProvider>
-              <SiteHeader />
+              <HeaderVisibility homeHeader={<HomeHeader />}>
+                <SiteHeader />
+              </HeaderVisibility>
               <main id="contenu" tabIndex={-1} className="flex flex-1 flex-col focus:outline-none">
-                {children}
+                <ContentMotion>{children}</ContentMotion>
               </main>
               <UnsavedChangesBanner />
             </UnsavedChangesProvider>

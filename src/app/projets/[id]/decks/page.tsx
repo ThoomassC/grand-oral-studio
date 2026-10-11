@@ -1,5 +1,6 @@
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import type { Metadata } from "next";
+import { PageHeading } from "@/components/layout/PageHeading";
 import Link from "next/link";
 import { DeleteDeckButton } from "@/components/decks/DeckActions";
 import { EngineBadge } from "@/components/decks/EngineBadge";
@@ -38,12 +39,9 @@ export default async function DecksPage({ params }: PageProps<"/projets/[id]/dec
   return (
     <div className="flex flex-col gap-10">
       <section aria-labelledby="decks-title" className="flex flex-col gap-6">
-        <div>
-          <h2 id="decks-title" tabIndex={-1} className="text-2xl focus:outline-none">
-            Diaporamas du jour J
-          </h2>
-          <p className="text-sm text-muted">Les diaporamas complets générés à partir d&apos;une problématique.</p>
-        </div>
+        <PageHeading title="Diaporamas du jour J" level={2} id="decks-title" tabIndex={-1}>
+          Les diaporamas complets générés à partir d&apos;une problématique.
+        </PageHeading>
         {decks.length === 0 ? (
           <div className="opale-card opale-card--e0 block border-dashed border-border-strong p-6">
             <p className="font-display text-lg font-semibold">Aucun diaporama pour l&apos;instant</p>
