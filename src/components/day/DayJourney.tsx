@@ -465,7 +465,7 @@ function DayJourneyInner({
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="studio-day-journey mx-auto flex w-full max-w-3xl flex-col gap-6">
       {/* Qui rédigera, annoncé avant la saisie (et rappelé à la dernière étape). */}
       <Notice tone={writer.ready ? "info" : "warning"} title={`Rédaction : ${writer.label}`}>
         <p>

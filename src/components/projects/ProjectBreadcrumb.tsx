@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useGuardedNavigation } from "@/components/layout/useGuardedNavigation";
 import { projectCrumbs, type Crumb } from "./crumbs";
 import type { StepId } from "@/domain/progress";
-import { decksHref, pageHref, projectBase, shareHref, stepHref, stepMeta, stepOfPath, templateTabOfPath } from "./steps";
+import { decksHref, pageHref, projectBase, stepHref, stepMeta, stepOfPath, templateTabOfPath } from "./steps";
 
 /**
  * Le deck ouvert, quand la page en affiche un (fourni par le slot `@crumbs` de ses
@@ -34,7 +34,6 @@ function leafOf(programId: string, pathname: string, deck: OpenDeck | undefined)
     if (deckHref && page) return [decksCrumb, { id: "deck", href: deckHref, label: deck.title }, { id: "deck-page", label: page }];
     return [decksCrumb, { id: "deck", label: deck.title }];
   }
-  if (pathname === shareHref(programId)) return [{ id: "partage", label: "Partage" }];
   const base = projectBase(programId);
   if (pathname.startsWith(`${base}/`) && /^\/sujets\/[^/]+\/fiche$/.test(pathname.slice(base.length))) {
     return [
@@ -59,7 +58,7 @@ function leafOf(programId: string, pathname: string, deck: OpenDeck | undefined)
  * Fil d'Ariane (`Breadcrumb` d'Opale) des pages d'un projet, rendu par le
  * layout au même endroit sur toutes les pages (slot `@crumbs`) :
  * « Projets / {projet} / Étape 1 · Apparence », « … / Étape 2 · Trame /
- * Sujets [/ Fiche de révision] », « … / Partage » ou « … / Decks / {deck}
+ * Sujets [/ Fiche de révision] » ou « … / Decks / {deck}
  * [/ Répétition | Questions du jury | Notes d'orateur] ».
  * Les clics passent par le routeur (`onNavigate`) et par la garde
  * « modifications non enregistrées ».

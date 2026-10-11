@@ -2,7 +2,7 @@
 
 import { Button, Dropzone, FileCard, Modal } from "@thomascaron/opale-ui";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode, type RefObject } from "react";
 import { PROJECT_FILE_MAX_BYTES, PROJECT_FILE_TOO_LARGE_MESSAGE } from "@/domain/project-export";
 import { createExampleProject, importProject } from "@/server/actions/transfer";
 import { projectHomeHref } from "@/components/projects/steps";
@@ -26,7 +26,14 @@ type ImportPhase =
  * un NOUVEAU projet de l'utilisateur, puis l'ouvre. Le serveur est rejouable
  * sans doublon dans la minute (double clic, nouvel essai).
  */
-export function ProjectListActions() {
+export function ProjectListActions({ renderActions, returnFocusRef }: {
+  renderActions?: (actions: {
+    showImport: () => void;
+    startFromExample: () => void;
+    creating: boolean;
+  }) => ReactNode;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
+} = {}) {
   const router = useRouter();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -44,7 +51,7 @@ export function ProjectListActions() {
     if (importing) return;
     setOpen(false);
     // Après le démontage de la modale : le bouton qui l'a ouverte.
-    window.setTimeout(() => triggerRef.current?.focus(), 0);
+    window.setTimeout(() => (returnFocusRef ?? triggerRef).current?.focus(), 0);
   }
 
   function upload(files: FileList) {
@@ -93,14 +100,14 @@ export function ProjectListActions() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      {renderActions ? renderActions({ showImport: show, startFromExample, creating }) : <div className="flex flex-wrap items-center gap-2">
         <Button ref={triggerRef} variant="ghost" size="small" aria-haspopup="dialog" onClick={show}>
           Importer un projet (.json)
         </Button>
         <Button variant="ghost" size="small" onClick={startFromExample} aria-disabled={creating || undefined}>
           <ButtonLabel idle="Partir de l'exemple" busy="Création de l'exemple…" isBusy={creating} />
         </Button>
-      </div>
+      </div>}
       <LiveRegion role="alert" className="basis-full">
         {exampleError ? <Notice tone="error">Le projet d&apos;exemple n&apos;a pas été créé : {exampleError}</Notice> : null}
       </LiveRegion>

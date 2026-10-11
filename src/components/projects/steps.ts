@@ -85,11 +85,6 @@ export function revisionSheetHref(programId: string, themeId: string): string {
   return hrefOf(programId, `sujets/${themeId}/fiche`);
 }
 
-/** Page Partage (membres du projet). */
-export function shareHref(programId: string): string {
-  return hrefOf(programId, "partage");
-}
-
 function under(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }

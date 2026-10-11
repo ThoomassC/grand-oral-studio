@@ -246,7 +246,7 @@ describe("Éditeur de trame — concurrence optimiste", () => {
     render(<TemplateEditor programId="p1" initialTemplate={TIMED} savedAt={V0} />);
     await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
     await screen.findByText("Trame enregistrée.");
-    await user.click(screen.getByRole("button", { name: "Enregistrer la trame" }));
+    await user.click(await screen.findByRole("button", { name: "Enregistrer la trame" }));
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
     expect(update.mock.calls.map((call) => call[2])).toEqual([V0, V1]);
   });

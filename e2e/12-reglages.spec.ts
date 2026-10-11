@@ -1,5 +1,6 @@
 import { test, expect, BASE_URL } from "./support/fixtures";
 import { deleteE2eUsers } from "./support/db";
+import { createProject } from "./support/app";
 import type { Locator, Page } from "@playwright/test";
 import { PREFERENCES_STORAGE_KEY } from "../src/components/preferences/preferences";
 
@@ -33,6 +34,28 @@ async function openSettings(page: Page) {
 }
 
 test.describe("12. Réglages — panneau", () => {
+  test("devrait conserver l’éditeur en cours quand les préférences de mouvement changent", async ({ page, account }) => {
+    void account;
+    await createProject(page, "Mouvement et brouillon");
+    const main = page.getByRole("main");
+    const name = main.getByLabel("Nom de l'apparence", { exact: true });
+    await name.fill("Mon apparence à conserver");
+    const dialog = await openSettings(page);
+    await clickReduceMotion(dialog);
+    await expect(html(page)).toHaveAttribute("data-motion", "reduced");
+    await clickReduceMotion(dialog);
+    await expect(html(page)).toHaveAttribute("data-motion", "system");
+    // Activer de nouveau les mouvements ne doit pas rejouer l’arrivée de la page pendant l’édition.
+    const moving = await page.locator(".studio-content").evaluate((content) => content.getAnimations().some((animation) => animation.playState === "running"));
+    expect(moving).toBe(false);
+    await dialog.getByRole("button", { name: "Fermer" }).click();
+    await expect(name).toHaveValue("Mon apparence à conserver");
+    await main.getByRole("button", { name: "Enregistrer l'apparence", exact: true }).click();
+    await expect(main.getByRole("status").filter({ hasText: "Apparence enregistrée." })).toBeVisible();
+    await page.reload();
+    await expect(name).toHaveValue("Mon apparence à conserver");
+  });
+
   test("devrait s'ouvrir depuis l'en-tête, se fermer sur Échap et rendre le focus au bouton", async ({ page, account }) => {
     void account;
     await page.goto("/projets");

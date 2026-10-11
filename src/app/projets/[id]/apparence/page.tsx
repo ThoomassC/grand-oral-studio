@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BrandImport } from "@/components/brand/BrandImport";
 import { BrandWorkspace } from "@/components/brand/BrandWorkspace";
+import { PageHeading } from "@/components/layout/PageHeading";
 import { loadProgram } from "../../_lib/load";
 
 export async function generateMetadata({ params }: PageProps<"/projets/[id]/apparence">): Promise<Metadata> {
@@ -15,13 +16,10 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
   const readOnly = program.role === "viewer";
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h2 className="text-2xl">Apparence</h2>
-        <p className="max-w-3xl text-sm text-muted">
+      <PageHeading title="Apparence" level={2}>
           Les couleurs, les polices et le logo de vos diaporamas. L&apos;apparence par défaut convient : vous pouvez
           passer directement à la suite.
-        </p>
-      </div>
+      </PageHeading>
       {readOnly ? null : (
         <BrandImport
           programId={program.id}
@@ -36,8 +34,6 @@ export default async function AppearancePage({ params }: PageProps<"/projets/[id
         savedAt={program.brandSavedAt}
         format={program.template.format}
         readOnly={readOnly}
-        // Publier dans la bibliothèque : propriétaire seul (le serveur refuse un éditeur).
-        canPublish={program.role === "owner"}
       />
     </div>
   );

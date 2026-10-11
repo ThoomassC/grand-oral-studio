@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath, verificationCallbackPath } from "@/components/auth/next-path";
+import { postLoginDestination, postLoginPath, safeNextPath, verificationCallbackPath } from "@/components/auth/next-path";
 
 describe("safeNextPath", () => {
   it("conserve un chemin interne avec sa requête", () => {
@@ -25,6 +25,22 @@ describe("safeNextPath", () => {
   it("prend la première valeur d'un paramètre répété", () => {
     expect(safeNextPath(["/projets/a", "//evil.example"])).toBe("/projets/a");
   });
+});
+
+describe("destination après la transition du logo", () => {
+  it("conserve la requête et l'ancre d'une destination interne", () => {
+    const destination = "/projets/abc/jour-j?mode=entrainement#contenu";
+    expect(postLoginDestination(destination)).toBe(destination);
+    expect(postLoginPath(destination)).toBe(`/connexion/chargement?next=${encodeURIComponent(destination)}`);
+  });
+
+  it.each([undefined, "//evil.example", "https://evil.example", "/connexion", "/inscription?next=/connexion", "/connexion/chargement/?next=/connexion", "/connexion/%63hargement", "/connexion/%"])(
+    "évite une redirection externe ou une boucle pour %s",
+    (destination) => {
+      expect(postLoginDestination(destination)).toBe("/projets");
+      expect(postLoginPath(destination ?? "/projets")).toBe("/connexion/chargement");
+    },
+  );
 });
 
 describe("verificationCallbackPath", () => {

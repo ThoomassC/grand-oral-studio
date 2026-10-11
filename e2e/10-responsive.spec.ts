@@ -164,6 +164,17 @@ async function expectHeaderWithoutOverlap(p: Page): Promise<void> {
         if (a.r.left < b.r.right - 1 && b.r.left < a.r.right - 1 && a.r.top < b.r.bottom - 1 && b.r.top < a.r.bottom - 1) found.push(`${a.el} / ${b.el}`);
       }),
     );
+    // Le texte peut déborder de son lien sans que les boîtes des contrôles se
+    // touchent : à 320 px en « Très grand », la marque passait sous le thème.
+    const brand = banner.querySelector(".studio-brand");
+    if (brand?.lastElementChild) {
+      const range = document.createRange();
+      range.selectNodeContents(brand.lastElementChild);
+      const bounds = brand.getBoundingClientRect();
+      if ([...range.getClientRects()].some((r) => r.left < bounds.left - 1 || r.right > bounds.right + 1)) {
+        found.push("le texte de la marque déborde de son lien");
+      }
+    }
     return found;
   });
   expect(overlaps, "éléments de l'en-tête qui se chevauchent").toEqual([]);
@@ -197,6 +208,14 @@ test.describe("10. Texte très grand, 375 px", () => {
       await expectHeaderWithoutOverlap(page);
     });
   }
+
+  test("garde la marque lisible au-dessus des contrôles à 320 px", async () => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(paths.Projets!);
+    await expect(page.locator("html")).toHaveAttribute("data-text-size", "xlarge");
+    await expectNoHorizontalScroll(page);
+    await expectHeaderWithoutOverlap(page);
+  });
 
   test("pages publiques et panneau Réglages ouvert : pas de défilement horizontal", async ({ browser }) => {
     const anon = await browser.newContext({ viewport: { width: 375, height: 800 } });

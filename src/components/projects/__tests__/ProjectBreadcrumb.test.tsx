@@ -105,13 +105,6 @@ describe("ProjectBreadcrumb", () => {
     expect(screen.getByText("Diaporamas")).toHaveAttribute("aria-current", "page");
   });
 
-  it("devrait finir par « Partage » sur la page Partage", () => {
-    pathname = "/projets/p1/partage";
-    render(<ProjectBreadcrumb programId="p1" programName="Master" />);
-    expect(screen.getByText("Partage")).toHaveAttribute("aria-current", "page");
-    expect(hrefs()).toEqual(["/projets", "/projets/p1/apparence"]);
-  });
-
   it.each([
     ["repetition", "Répétition"],
     ["questions", "Questions du jury"],

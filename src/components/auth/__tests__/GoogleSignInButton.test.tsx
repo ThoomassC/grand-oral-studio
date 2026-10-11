@@ -22,8 +22,8 @@ describe("GoogleSignInButton", () => {
 
     expect(social).toHaveBeenCalledWith({
       provider: "google",
-      callbackURL: "/projets/abc?x=1",
-      newUserCallbackURL: "/projets/abc?x=1",
+      callbackURL: "/connexion/chargement?next=%2Fprojets%2Fabc%3Fx%3D1",
+      newUserCallbackURL: "/connexion/chargement?next=%2Fprojets%2Fabc%3Fx%3D1",
       errorCallbackURL: "/connexion?next=%2Fprojets%2Fabc%3Fx%3D1",
     });
   });
@@ -56,7 +56,7 @@ describe("GoogleSignInButton", () => {
 
     const button = screen.getByRole("button", { name: "Continuer avec Google" });
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveAccessibleDescription(/pas encore configurée/);
+    expect(button).toHaveAccessibleDescription(/indisponible pour le moment/);
     await user.click(button);
     expect(social).not.toHaveBeenCalled();
   });

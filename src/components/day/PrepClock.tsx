@@ -68,13 +68,14 @@ export function PrepDial({
         const a = (i / ticks.length) * 2 * Math.PI;
         const major = i % 3 === 0;
         const r1 = major ? 36 : 39.5;
+        // Éviter les différences de précision de sin/cos entre le serveur et le navigateur à l’hydratation.
         return (
           <line
             key={i}
-            x1={50 + r1 * Math.sin(a)}
-            y1={50 - r1 * Math.cos(a)}
-            x2={50 + 43 * Math.sin(a)}
-            y2={50 - 43 * Math.cos(a)}
+            x1={(50 + r1 * Math.sin(a)).toFixed(4)}
+            y1={(50 - r1 * Math.cos(a)).toFixed(4)}
+            x2={(50 + 43 * Math.sin(a)).toFixed(4)}
+            y2={(50 - 43 * Math.cos(a)).toFixed(4)}
             stroke="currentColor"
             strokeWidth={major ? 2.5 : 1.2}
             strokeLinecap="round"
@@ -82,7 +83,7 @@ export function PrepDial({
           />
         );
       })}
-      <line x1="50" y1="50" x2={end.x} y2={end.y} stroke={angle > 0 ? "var(--opale-on-accent)" : "currentColor"} strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="50" y1="50" x2={end.x.toFixed(4)} y2={end.y.toFixed(4)} stroke={angle > 0 ? "var(--opale-on-accent)" : "currentColor"} strokeWidth="2.5" strokeLinecap="round" />
       <rect x="44" y="0" width="12" height="5" rx="1.5" fill="currentColor" />
       <circle cx="50" cy="50" r="3.2" fill="currentColor" />
     </svg>

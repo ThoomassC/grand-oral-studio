@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Icon, Modal } from "@thomascaron/opale-ui";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { CreateProgramForm } from "./CreateProgramForm";
 
 /**
@@ -16,10 +16,15 @@ import { CreateProgramForm } from "./CreateProgramForm";
 export function CreateProgramDialog({
   label = "Nouveau projet",
   variant = "primary",
+  renderTrigger,
+  returnFocusRef,
 }: {
   /** Libellé du bouton (ex. « Créer mon premier projet » dans l'état vide). */
   label?: string;
   variant?: "primary" | "secondary";
+  /** Permet de proposer la création dans un menu, en gardant la même modale et le retour de focus. */
+  renderTrigger?: (show: () => void) => ReactNode;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -37,12 +42,12 @@ export function CreateProgramDialog({
     if (busy) return;
     setOpen(false);
     // Après le démontage de la modale : le bouton qui l'a ouverte, toujours.
-    window.setTimeout(() => triggerRef.current?.focus(), 0);
+    window.setTimeout(() => (returnFocusRef ?? triggerRef).current?.focus(), 0);
   }
 
   return (
     <>
-      <Button
+      {renderTrigger ? renderTrigger(show) : <Button
         ref={triggerRef}
         variant={variant}
         size="small"
@@ -51,7 +56,7 @@ export function CreateProgramDialog({
         onClick={show}
       >
         {label}
-      </Button>
+      </Button>}
       <Modal
         open={open}
         title="Nouveau projet"

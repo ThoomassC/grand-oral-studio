@@ -19,6 +19,27 @@ export function safeNextPath(raw: string | string[] | undefined, fallback = "/pr
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+/** Évite de revenir à une entrée d'authentification après la transition. */
+export function postLoginDestination(raw: string | string[] | undefined): string {
+  const safe = safeNextPath(raw);
+  let pathname = new URL(safe, ORIGIN).pathname;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    return "/projets";
+  }
+  pathname = pathname.replace(/\/+$/, "");
+  return pathname === "/connexion" || pathname === "/connexion/chargement" || pathname === "/inscription"
+    ? "/projets"
+    : safe;
+}
+
+/** Point d'arrivée commun au mot de passe, à Google et à la confirmation d'adresse. */
+export function postLoginPath(next: string): string {
+  const safe = postLoginDestination(next);
+  return safe === "/projets" ? "/connexion/chargement" : `/connexion/chargement?next=${encodeURIComponent(safe)}`;
+}
+
 /**
  * Destination du lien de confirmation d'adresse (Better Auth y ajoute
  * `?error=TOKEN_EXPIRED` en cas d'échec) : la page de connexion, qui affiche

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  },
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "grand-oral-studio-.+\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://grand-oral-studio.vercel.app/:path*",
+      "permanent": true
+    }
+  ]
+}

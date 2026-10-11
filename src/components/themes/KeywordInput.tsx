@@ -67,7 +67,7 @@ export function KeywordInput({
   return (
     <div>
       <div
-        className={`opale-input-shell flex-wrap gap-1.5 py-1.5 focus-within:outline-[length:var(--opale-focus-ring-width)] focus-within:outline-solid focus-within:outline-offset-[var(--opale-focus-ring-offset)] focus-within:outline-ring ${
+        className={`opale-input-shell opale-input-shell--keywords flex-wrap gap-1.5 py-1.5 focus-within:outline-[length:var(--opale-focus-ring-width)] focus-within:outline-solid focus-within:outline-offset-[var(--opale-focus-ring-offset)] focus-within:outline-ring ${
           invalid ? "border-danger" : ""
         }`}
       >
@@ -76,12 +76,12 @@ export function KeywordInput({
             {value.map((kw, i) => (
               <li
                 key={`${kw}-${i}`}
-                className="inline-flex items-center gap-1 rounded-md bg-accent-soft py-0.5 pl-2 pr-0.5 text-sm text-accent-strong"
+                className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 pl-2 pr-0.5 text-sm text-accent-strong"
               >
                 <span>{kw}</span>
                 <button
                   type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-surface"
+                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full hover:bg-surface"
                   onClick={() => remove(i)}
                   aria-label={`Retirer le mot-clé ${kw}`}
                 >
