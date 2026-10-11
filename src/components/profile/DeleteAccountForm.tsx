@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { ConfirmAction, ConfirmActionDialog } from "@/components/ui/ConfirmAction";
 import type { ActionResult } from "@/server/actions/result";
 import type { DeleteAccountInput } from "./schema";
 
@@ -15,33 +15,52 @@ import type { DeleteAccountInput } from "./schema";
  */
 export const SHARED_PROJECTS_WARNING = "Les projets que vous partagez seront supprimés pour vos collègues aussi.";
 
-export function DeleteAccountForm({
-  email,
-  action,
-  sharesProjects = false,
-}: {
+interface DeleteAccountProps {
   email: string;
   action: (input: DeleteAccountInput) => Promise<ActionResult<null>>;
   sharesProjects?: boolean;
-}) {
+}
+
+function useAccountDeletion({
+  email,
+  action,
+  sharesProjects = false,
+}: DeleteAccountProps) {
   const router = useRouter();
+  return {
+    title: "Supprimer votre compte ?",
+    question: `Votre compte, vos projets, leurs sujets et leurs diaporamas, ainsi que vos réglages IA seront supprimés.${
+      sharesProjects ? ` ${SHARED_PROJECTS_WARNING}` : ""
+    } Cette action est définitive.`,
+    confirmLabel: "Supprimer définitivement",
+    requireText: email,
+    onConfirm: async () => {
+      const result = await action({ confirmEmail: email });
+      return result.ok ? null : result.error;
+    },
+    onDone: () => {
+      router.push("/");
+      router.refresh();
+    },
+  };
+}
+
+export function DeleteAccountForm(props: DeleteAccountProps) {
+  const confirmation = useAccountDeletion(props);
+  return <ConfirmAction {...confirmation} triggerLabel="Supprimer mon compte" size="medium" />;
+}
+
+/** Même confirmation, ouverte directement depuis les paramètres du profil. */
+export function DeleteAccountDialog({ open, onCancel, ...props }: DeleteAccountProps & { open: boolean; onCancel: () => void }) {
+  const confirmation = useAccountDeletion(props);
   return (
-    <ConfirmAction
-      triggerLabel="Supprimer mon compte"
-      title="Supprimer votre compte ?"
-      question={`Votre compte, vos projets, leurs sujets et leurs diaporamas, ainsi que vos réglages IA seront supprimés.${
-        sharesProjects ? ` ${SHARED_PROJECTS_WARNING}` : ""
-      } Cette action est définitive.`}
-      confirmLabel="Supprimer définitivement"
-      size="medium"
-      requireText={email}
-      onConfirm={async () => {
-        const result = await action({ confirmEmail: email });
-        return result.ok ? null : result.error;
-      }}
+    <ConfirmActionDialog
+      {...confirmation}
+      open={open}
+      onCancel={onCancel}
       onDone={() => {
-        router.push("/");
-        router.refresh();
+        onCancel();
+        confirmation.onDone();
       }}
     />
   );

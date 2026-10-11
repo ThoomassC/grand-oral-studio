@@ -168,9 +168,10 @@ test.describe("14. Partage d'un projet entre collègues", () => {
       await expect(owner.page.getByRole("main").getByText(/Bruno Petit a désormais accès/)).toBeVisible();
 
       await owner.page.goto("/profil");
-      const trigger = owner.page.getByRole("button", { name: "Supprimer mon compte" });
+      const trigger = owner.page.getByRole("button", { name: "Paramètres" });
       await waitForHydration(trigger);
       await trigger.click();
+      await owner.page.getByRole("menuitem", { name: "Supprimer votre compte" }).click();
       await expect(owner.page.getByRole("dialog", { name: "Supprimer votre compte ?" })).toContainText(
         "Les projets que vous partagez seront supprimés pour vos collègues aussi.",
       );
