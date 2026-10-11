@@ -245,12 +245,6 @@
 .metadata dd {
   color: var(--studio-text);
 }
-.shared {
-  margin-top: 0.75rem;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
 .footer {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--studio-divider);

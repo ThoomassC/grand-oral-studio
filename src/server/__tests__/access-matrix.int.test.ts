@@ -202,23 +202,23 @@ describe("matrice d'accès — chaque fonction de repo, chaque rôle", () => {
 });
 
 describe("lectures sans exception — rôle exposé, corbeille exclue", () => {
-  it("listPrograms expose le rôle et le nom du propriétaire (null pour soi)", async () => {
+  it("listPrograms ne présente que les projets possédés, même avec d'anciens accès membres", async () => {
     const s = await sharedSetup();
     const view = async (who: Who) =>
       (await programs.listPrograms(s.users[who].id)).map((p) => ({ id: p.id, role: p.role, ownerName: p.ownerName }));
     expect(await view("owner")).toEqual([{ id: s.programId, role: "owner", ownerName: null }]);
-    expect(await view("editor")).toEqual([{ id: s.programId, role: "editor", ownerName: "owner" }]);
-    expect(await view("viewer")).toEqual([{ id: s.programId, role: "viewer", ownerName: "owner" }]);
+    expect(await view("editor")).toEqual([]);
+    expect(await view("viewer")).toEqual([]);
     expect(await view("stranger")).toEqual([]);
   });
 
-  it("listPrograms liste ses projets et les projets partagés, une seule fois chacun, ligne parasite ignorée", async () => {
+  it("listPrograms liste uniquement ses projets, une seule fois chacun, ligne membre parasite ignorée", async () => {
     const s = await sharedSetup();
     const own = await seedProgram(s.users.editor.id, "À moi");
     await seedMember(s.programId, s.users.owner.id, "VIEWER");
     await seedMember(own, s.users.editor.id, "VIEWER");
     const list = await programs.listPrograms(s.users.editor.id);
-    expect(list.map((p) => [p.id, p.role]).sort()).toEqual([[own, "owner"], [s.programId, "editor"]].sort());
+    expect(list.map((p) => [p.id, p.role])).toEqual([[own, "owner"]]);
     expect((await programs.listPrograms(s.users.owner.id)).map((p) => [p.id, p.role])).toEqual([[s.programId, "owner"]]);
   });
 

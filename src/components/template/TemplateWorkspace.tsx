@@ -1,50 +1,30 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import type { PromptTemplate } from "@/domain/schemas";
 import { formatSeconds, totalSlides } from "@/domain/slides";
-import { ModelLibrary } from "@/components/projects/ModelLibrary";
 import { plural } from "@/components/ui/format";
 import { TemplateEditor, type TemplateEditorHandle } from "./TemplateEditor";
 import { TemplatePromptImport } from "./TemplatePromptImport";
 
 /**
- * Page Trame : le préremplissage par prompt (facultatif) au-dessus de l'éditeur,
- * qu'il remplit sans enregistrer, puis la bibliothèque de l'équipe (publier cette
- * trame, en appliquer une autre).
- *
- * Un modèle appliqué remplace la trame ENREGISTRÉE : l'éditeur, qui ne reprend
- * pas de lui-même une trame venue du serveur, est remonté (`key`) dès que la page
- * rafraîchie apporte la nouvelle version (`savedAt` différent de celle d'avant
- * l'application). Un enregistrement fait dans l'éditeur, lui, ne le remonte pas.
- *
- * `readOnly` (lecteur d'un projet partagé) : la trame en lecture seule, sans
- * import, éditeur ni bibliothèque (le serveur refuse de toute façon).
- * `canPublish` (propriétaire seul) : propose de publier dans la bibliothèque.
+ * Page Trame : préremplissage par prompt (facultatif), puis éditeur.
+ * L'import remplit l'éditeur sans enregistrer et conserve sa garde de saisie.
+ * `readOnly` affiche uniquement la trame enregistrée.
  */
 export function TemplateWorkspace({
   programId,
   initialTemplate,
   savedAt,
   readOnly = false,
-  canPublish = false,
 }: {
   programId: string;
   initialTemplate: PromptTemplate;
   /** templateSavedAt (ISO ; null = jamais enregistrée) : jeton de concurrence de l'éditeur. */
   savedAt?: string | null;
   readOnly?: boolean;
-  /** Propriétaire du projet : seul autorisé à publier la trame dans la bibliothèque. */
-  canPublish?: boolean;
 }) {
   const editorRef = useRef<TemplateEditorHandle>(null);
-  const [editorKey, setEditorKey] = useState(0);
-  /** Version de la trame au moment d'une application de modèle, en attente du rafraîchissement. */
-  const [applyingFrom, setApplyingFrom] = useState<{ version: string | null | undefined } | null>(null);
-  if (applyingFrom && savedAt !== applyingFrom.version) {
-    setApplyingFrom(null);
-    setEditorKey((k) => k + 1);
-  }
 
   if (readOnly) return <TemplateReadOnly template={initialTemplate} />;
 
@@ -52,17 +32,10 @@ export function TemplateWorkspace({
     <div className="flex flex-col gap-8">
       <TemplatePromptImport programId={programId} onApply={(template) => editorRef.current?.applyImport(template)} />
       <TemplateEditor
-        key={editorKey}
         ref={editorRef}
         programId={programId}
         initialTemplate={initialTemplate}
         savedAt={savedAt}
-      />
-      <ModelLibrary
-        programId={programId}
-        kind="template"
-        canPublish={canPublish}
-        onApplied={() => setApplyingFrom({ version: savedAt })}
       />
     </div>
   );

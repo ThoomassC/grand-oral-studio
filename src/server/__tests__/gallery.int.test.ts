@@ -40,17 +40,19 @@ describe("Galerie — aperçus des projets accessibles", () => {
     expect(project!.progress.nextStep).toBe("day");
   });
 
-  it("devrait limiter les aperçus aux projets possédés ou partagés, hors corbeille", async () => {
+  it("devrait limiter les aperçus aux projets possédés, hors corbeille et anciens accès membres", async () => {
     const [owner, viewer] = [await createUser("owner"), await createUser("viewer")];
     const shared = await seedProgram(owner.id, "Projet partagé");
     await seedMember(shared, viewer.id, "VIEWER");
     await seedDeck(shared, null, "FINAL");
     await seedProgram(owner.id, "Projet privé");
+    const own = await seedProgram(viewer.id, "Mon projet");
+    await seedDeck(own, null, "FINAL");
     const gone = await seedProgram(viewer.id, "Projet supprimé");
     await db().program.update({ where: { id: gone }, data: { deletedAt: new Date() } });
     const list = await listPrograms(viewer.id);
     expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ id: shared, role: "viewer", ownerName: "owner" });
+    expect(list[0]).toMatchObject({ id: own, role: "owner", ownerName: null });
     expect(list[0]!.preview.slide.title).toBe(makeConformingDeck().slides[0]!.title);
   });
 

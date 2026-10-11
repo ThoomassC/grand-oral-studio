@@ -15,7 +15,6 @@ const props = {
   email: EMAIL,
   hasPassword: true,
   canResetPassword: true,
-  sharesProjects: false,
   updateNameAction,
   deleteAccountAction,
 };
@@ -72,11 +71,11 @@ describe("Paramètres du profil", () => {
 
   it("ouvre directement la confirmation de suppression, conserve la recopie de l'e-mail et permet d'annuler", async () => {
     const user = userEvent.setup();
-    render(<ProfileSettings {...props} sharesProjects />);
+    render(<ProfileSettings {...props} />);
     await user.click(screen.getByRole("button", { name: "Paramètres" }));
     await user.click(screen.getByRole("menuitem", { name: "Supprimer votre compte" }));
     const dialog = await screen.findByRole("dialog", { name: "Supprimer votre compte ?" });
-    expect(dialog).toHaveTextContent("Les projets que vous partagez seront supprimés pour vos collègues aussi.");
+    expect(dialog).toHaveAccessibleDescription(/Votre compte, vos projets.*Cette action est définitive\./);
     const confirm = within(dialog).getByRole("button", { name: "Supprimer définitivement" });
     expect(confirm).toHaveAttribute("aria-disabled", "true");
     await user.click(confirm);

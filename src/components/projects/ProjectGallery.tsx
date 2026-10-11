@@ -10,7 +10,6 @@ const FILTERS = [
   { value: "all", label: "Tous" },
   { value: "preparing", label: "En préparation" },
   { value: "ready", label: "Prêts" },
-  { value: "shared", label: "Partagés" },
 ] as const;
 type Filter = typeof FILTERS[number]["value"];
 
@@ -20,7 +19,6 @@ export interface GalleryItem {
   searchText: string;
   updatedAt: number;
   ready: boolean;
-  shared: boolean;
   /** Aperçu et actions rendus par le serveur ; seules les métadonnées sont filtrées côté client. */
   card: ReactNode;
 }
@@ -37,7 +35,7 @@ export function ProjectGallery({ items, writerLabel }: { items: GalleryItem[]; w
   const terms = searchable(query).split(/\s+/).filter(Boolean);
   const visible = items.filter((item) => {
     const matchesFilter = filter === "all" || (filter === "ready" && item.ready)
-      || (filter === "preparing" && !item.ready) || (filter === "shared" && item.shared);
+      || (filter === "preparing" && !item.ready);
     const text = searchable(item.searchText);
     return matchesFilter && terms.every((term) => text.includes(term));
   }).sort((a, b) => {

@@ -1,4 +1,3 @@
-import { Feedback } from "@thomascaron/opale-ui";
 import { Meter } from "@/components/ui/Meter";
 import { ProjectSettingsMenu } from "@/components/programs/ProjectSettingsMenu";
 import { ProjectSteps } from "@/components/layout/ProjectSteps";
@@ -13,8 +12,6 @@ import { loadProgram } from "../_lib/load";
  * la barre précédent / suivant. `/projets/<id>` n'a pas de page : il redirige
  * (307, next.config.ts) vers l'apparence.
  * La garde « modifications non enregistrées » est posée dans le layout racine.
- * Pour un lecteur, un bandeau rappelle que le projet est partagé en lecture seule
- * (le serveur refuse de toute façon ses modifications).
  */
 export default async function ProgramLayout({ children, crumbs, params }: LayoutProps<"/projets/[id]">) {
   const { id } = await params;
@@ -23,8 +20,6 @@ export default async function ProgramLayout({ children, crumbs, params }: Layout
   // Decks du jour J, avec ou sans sujet (les anciens squelettes ne sont pas comptés).
   const deckCount = program.finalDeckCount;
   const label = `${doneCount}/${total} étapes`;
-  // Nom du propriétaire lu avec le projet (une seule requête) : bandeau du lecteur seulement.
-  const sharedBy = program.role === "viewer" ? program.ownerName : null;
 
   return (
     <div className="studio-project flex flex-1 flex-col">
@@ -57,11 +52,6 @@ export default async function ProgramLayout({ children, crumbs, params }: Layout
         </div>
       </div>
       <div className="studio-container studio-project__content">
-        {sharedBy !== null ? (
-          <Feedback tone="neutral" title={`Projet partagé par ${sharedBy} · lecture seule`} className="mb-5">
-            Vous pouvez consulter, exporter et répéter les diaporamas, sans modifier le projet.
-          </Feedback>
-        ) : null}
         <TemplateTabs programId={program.id} tabs={templateTabs} />
         {children}
         <StepNav programId={program.id} />

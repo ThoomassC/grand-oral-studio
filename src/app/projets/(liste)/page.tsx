@@ -40,16 +40,15 @@ export default async function ProgramsPage() {
           </div>
         ) : (
           <ProjectGallery
-            writerLabel={programs.some((p) => p.role !== "viewer") ? engineLabel(writer.engine) : null}
+            writerLabel={engineLabel(writer.engine)}
             items={programs.map((p, i) => {
               const neighbour = programs[i + 1] ?? programs[i - 1];
               return {
                 id: p.id,
                 name: p.name,
-                searchText: `${p.name} ${p.description} ${p.ownerName ?? ""}`,
+                searchText: `${p.name} ${p.description}`,
                 updatedAt: p.updatedAt.getTime(),
                 ready: p.progress.nextStep === null,
-                shared: p.role !== "owner",
                 card: <ProjectGalleryCard key={p.id} program={p} focusAfterDelete={[neighbour ? `programme-${neighbour.id}` : null, "liste-programmes"].filter((id): id is string => id !== null)} />,
               };
             })}

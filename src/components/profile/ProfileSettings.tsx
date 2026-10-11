@@ -16,7 +16,6 @@ export function ProfileSettings({
   email,
   hasPassword,
   canResetPassword,
-  sharesProjects,
   updateNameAction,
   deleteAccountAction,
 }: {
@@ -24,7 +23,6 @@ export function ProfileSettings({
   email: string;
   hasPassword: boolean;
   canResetPassword: boolean;
-  sharesProjects: boolean;
   updateNameAction: (input: ProfileNameInput) => Promise<ActionResult<{ name: string }>>;
   deleteAccountAction: (input: DeleteAccountInput) => Promise<ActionResult<null>>;
 }) {
@@ -89,7 +87,6 @@ export function ProfileSettings({
         onCancel={close}
         email={email}
         action={deleteAccountAction}
-        sharesProjects={sharesProjects}
       />
     </>
   );

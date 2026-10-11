@@ -10,28 +10,20 @@ import type { DeleteAccountInput } from "./schema";
  * e-mail du compte (comme la suppression d'un projet recopie son nom). Le
  * serveur revérifie l'adresse contre la session. Après succès, retour à
  * l'accueil (comme la déconnexion) : la session n'existe plus.
- * `sharesProjects` : l'utilisateur possède des projets partagés, que ses
- * collègues perdront aussi (suppression en cascade).
  */
-export const SHARED_PROJECTS_WARNING = "Les projets que vous partagez seront supprimés pour vos collègues aussi.";
-
 interface DeleteAccountProps {
   email: string;
   action: (input: DeleteAccountInput) => Promise<ActionResult<null>>;
-  sharesProjects?: boolean;
 }
 
 function useAccountDeletion({
   email,
   action,
-  sharesProjects = false,
 }: DeleteAccountProps) {
   const router = useRouter();
   return {
     title: "Supprimer votre compte ?",
-    question: `Votre compte, vos projets, leurs sujets et leurs diaporamas, ainsi que vos réglages IA seront supprimés.${
-      sharesProjects ? ` ${SHARED_PROJECTS_WARNING}` : ""
-    } Cette action est définitive.`,
+    question: "Votre compte, vos projets, leurs sujets et leurs diaporamas, ainsi que vos réglages IA seront supprimés. Cette action est définitive.",
     confirmLabel: "Supprimer définitivement",
     requireText: email,
     onConfirm: async () => {

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/layout/PageHeading";
 import { ProfileSettings } from "@/components/profile/ProfileSettings";
 import { formatDate, plural } from "@/components/ui/format";
-import { countSharedOwnedPrograms, getProfile, type SignInMethod } from "@/server/queries";
+import { getProfile, type SignInMethod } from "@/server/queries";
 import { isEmailDeliveryEnabled } from "@/lib/auth-options";
 import { requireUser } from "@/server/session";
 import { deleteAccount, updateProfileName } from "./actions";
@@ -18,7 +18,7 @@ const METHOD_LABEL: Record<SignInMethod, string> = {
 
 export default async function ProfilePage() {
   const user = await requireUser();
-  const [profile, sharedOwned] = await Promise.all([getProfile(user.id), countSharedOwnedPrograms(user.id)]);
+  const profile = await getProfile(user.id);
   if (!profile) notFound();
 
   const methods = profile.signInMethods.map((m) => METHOD_LABEL[m]).join(" ; ") || "—";
@@ -32,7 +32,6 @@ export default async function ProfilePage() {
           email={profile.email}
           hasPassword={hasPassword}
           canResetPassword={isEmailDeliveryEnabled(process.env)}
-          sharesProjects={sharedOwned > 0}
           updateNameAction={updateProfileName}
           deleteAccountAction={deleteAccount}
         />

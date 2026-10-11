@@ -173,24 +173,26 @@ describe("Page /projets", () => {
     list.mockResolvedValue([
       program("p1", "Transition énergétique", "day", 2),
       program("p2", "Énergie et PME", null, 3),
-      program("p3", "Cybersécurité", "day", 2, "viewer"),
+      program("p3", "Cybersécurité", "day", 2),
     ]);
     await renderPage();
     const user = userEvent.setup();
+    expect(within(screen.getByRole("group", { name: "Filtrer les projets" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Tous", "En préparation", "Prêts"]);
     await user.type(screen.getByRole("searchbox", { name: "Rechercher un projet" }), "ener");
     expect(screen.getByRole("status", { name: "Nombre de projets" })).toHaveTextContent("2 projets sur 3");
     await user.click(screen.getByRole("button", { name: "Prêts" }));
     expect(screen.getByRole("button", { name: "Prêts" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("list", { name: "Galerie des projets" }).children).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "Énergie et PME" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Partagés" }));
+    await user.clear(screen.getByRole("searchbox", { name: "Rechercher un projet" }));
+    await user.type(screen.getByRole("searchbox", { name: "Rechercher un projet" }), "aucun résultat");
     expect(screen.getByText("Aucun projet trouvé")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Réinitialiser les filtres" }));
     expect(screen.getByRole("searchbox")).toHaveValue("");
     expect(screen.getByRole("status", { name: "Nombre de projets" })).toHaveTextContent("3 projets");
-    await user.click(screen.getByRole("button", { name: "Partagés" }));
+    await user.click(screen.getByRole("button", { name: "En préparation" }));
     expect(screen.getByRole("heading", { name: "Cybersécurité" })).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Galerie des projets" }).children).toHaveLength(1);
+    expect(screen.getByRole("list", { name: "Galerie des projets" }).children).toHaveLength(2);
   });
 
   it("devrait trier par nom et par modification sans changer les liens ni les droits", async () => {

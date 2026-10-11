@@ -28,7 +28,7 @@ async function openEntry(user: ReturnType<typeof userEvent.setup>, label: string
 }
 
 describe("Menu des paramètres du projet", () => {
-  it("devrait proposer Renommer, Modifier la description, Partager et l'export derrière l'engrenage", async () => {
+  it("devrait proposer uniquement Renommer, Modifier la description et l'export derrière l'engrenage", async () => {
     const user = userEvent.setup();
     render(<ProjectSettingsMenu {...PROPS} />);
     expect(gear()).toHaveAttribute("aria-haspopup", "menu");
@@ -36,27 +36,8 @@ describe("Menu des paramètres du projet", () => {
     expect(within(screen.getByRole("menu")).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Renommer",
       "Modifier la description",
-      "Partager",
       "Exporter le projet (JSON)",
     ]);
-  });
-
-  it("devrait ouvrir la page Partage depuis le menu", async () => {
-    const user = userEvent.setup();
-    render(<ProjectSettingsMenu {...PROPS} />);
-    await user.click(gear());
-    await user.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Partager" }));
-    expect(push).toHaveBeenCalledWith("/projets/p1/partage");
-  });
-
-  it("devrait proposer « Membres du projet » à un membre qui n'est pas propriétaire", async () => {
-    const user = userEvent.setup();
-    render(<ProjectSettingsMenu {...PROPS} role="viewer" />);
-    await user.click(gear());
-    const menu = within(screen.getByRole("menu"));
-    expect(menu.queryByRole("menuitem", { name: "Partager" })).not.toBeInTheDocument();
-    await user.click(menu.getByRole("menuitem", { name: "Membres du projet" }));
-    expect(push).toHaveBeenCalledWith("/projets/p1/partage");
   });
 
   it("devrait renommer le projet dans une modale, puis rendre le focus à l'engrenage", async () => {
@@ -169,7 +150,6 @@ describe("Menu des paramètres du projet — export et lecteur", () => {
     render(<ProjectSettingsMenu {...PROPS} role="viewer" />);
     await user.click(gear());
     expect(within(screen.getByRole("menu")).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
-      "Membres du projet",
       "Exporter le projet (JSON)",
     ]);
   });

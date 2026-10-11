@@ -1,4 +1,4 @@
-import { Badge, Icon } from "@thomascaron/opale-ui";
+import { Icon } from "@thomascaron/opale-ui";
 import Link from "next/link";
 import { ProgramActions } from "@/components/programs/ProgramActions";
 import { SlidePreview } from "@/components/slides/SlidePreview";
@@ -33,7 +33,6 @@ export function ProjectGalleryCard({ program: p, focusAfterDelete }: { program: 
           <div><dt>Sujets :</dt><dd className="num">{p.themeCount}</dd></div>
           <div><dt>Modifié le</dt><dd><time dateTime={p.updatedAt.toISOString()}>{formatDate(p.updatedAt)}</time></dd></div>
         </dl>
-        {p.ownerName !== null ? <Badge tone="neutral" className={styles.shared}>Partagé par {p.ownerName}{p.role === "viewer" ? " · Lecture seule" : ""}</Badge> : null}
       </div>
       <div className={styles.footer}>
         <ProjectProgressSummary programId={p.id} programName={p.name} progress={p.progress} role={p.role} compact />
