@@ -40,9 +40,11 @@ Les tests E2E (`npm run test:e2e`, serveur de dev lancé) tournent la nuit en CI
 
 Le dépôt est connecté à Vercel :
 
-- chaque PR et chaque branche ont un **aperçu** (URL dans la PR) ;
+- les déploiements automatiques sont limités à **`main`** (`vercel.json`) : les branches de travail, les PR et `develop` ne créent pas de preview ;
 - un merge dans **`main`** déploie la production : https://grand-oral-studio.vercel.app ;
 - les migrations Prisma sont appliquées au build (`vercel-build`).
+
+L'application utilise uniquement https://grand-oral-studio.vercel.app. Vercel conserve une adresse technique par déploiement ; sur les nouveaux déploiements, elle redirige vers l'adresse officielle, avec le chemin et les paramètres de la page. La protection Vercel des adresses techniques reste active.
 
 Les variables de production sont dans le projet Vercel ; ne pas les recopier ailleurs. Les nouvelles variables d'une version (pour la 1.2.0 : `RESEND_API_KEY` et `EMAIL_FROM` ensemble ou aucune, `ALLOWED_EMAIL_DOMAINS`, `MISTRAL_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_GENERATION_DEADLINE_MS`) sont toutes facultatives : les ajouter dans Vercel **avant** le déploiement si on veut les fonctions correspondantes.
 
